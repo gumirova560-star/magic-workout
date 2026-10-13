@@ -1,0 +1,66 @@
+name: workout_tracker
+description: "Magic Workout — фитнес-трекер"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ═══ База данных ═══
+  sqflite: ^2.3.0
+  sqflite_common_ffi: ^2.3.3
+  sqflite_common_ffi_web: ^0.4.5
+  path: ^1.8.3
+  path_provider: ^2.1.1
+  shared_preferences: ^2.3.2
+
+  # ═══ Дизайн ═══
+  google_fonts: ^6.1.0
+  flutter_animate: ^4.5.0
+  shimmer: ^3.0.0
+
+  # ═══ Графики ═══
+  fl_chart: ^0.68.0
+
+  # ═══ Экспорт ═══
+  excel: ^4.0.2
+  pdf: ^3.10.7
+  printing: ^5.11.1
+  share_plus: ^10.1.1
+
+  # ═══ Утилиты ═══
+  intl: ^0.19.0
+  uuid: ^4.3.3
+  cupertino_icons: ^1.0.8
+
+  # ═══ Web: URL без # ═══
+  url_strategy: ^0.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icon/
+    - assets/exercises/
+    - assets/stretches/
+    - assets/yoga/
+    - assets/fairy/
+
+# ═══ ИКОНКА ПРИЛОЖЕНИЯ ═══
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/icon.png"
+  adaptive_icon_background: "#6C5CE7"
+  adaptive_icon_foreground: "assets/icon/icon.png"

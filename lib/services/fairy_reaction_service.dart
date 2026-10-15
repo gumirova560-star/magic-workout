@@ -14,12 +14,100 @@ class FairyReactionService {
 
   static const _keyActiveProfile = 'active_profile_id';
 
-  /// Колбэк — показать сообщение феи.
-  void Function(String message, FairyMood mood)? onEvent;
+  // ═══════════════════════════════════════════════════════════
+  //  СЛУШАТЕЛИ СОБЫТИЙ ФЕИ (замена одиночного onEvent)
+  // ═══════════════════════════════════════════════════════════
+  //
+  // ⚠️ Раньше был один `onEvent` — при пересоздании FairyBubble он
+  //    терялся (оставался замкнутым на disposed state). Теперь —
+  //    список подписчиков, каждый добавляется в initState и
+  //    удаляется в dispose.
 
-  /// Колбэк — активный профиль изменился.
-  /// Вызывается из setActiveProfile, если id или name поменялись.
-  void Function()? onProfileChanged;
+  final List<void Function(String message, FairyMood mood)> _eventListeners = [];
+
+  void addEventListener(void Function(String, FairyMood) listener) {
+    if (!_eventListeners.contains(listener)) {
+      _eventListeners.add(listener);
+    }
+  }
+
+  void removeEventListener(void Function(String, FairyMood) listener) {
+    _eventListeners.remove(listener);
+  }
+
+  /// ⚠️ Оставлено для совместимости со старым кодом — оборачивает
+  ///    колбэк в список. Не использовать в новом коде.
+  @Deprecated('Используйте addEventListener/removeEventListener')
+  set onEvent(void Function(String, FairyMood)? listener) {
+    _eventListeners.clear();
+    if (listener != null) _eventListeners.add(listener);
+  }
+
+  void _emit(String message, FairyMood mood) {
+    for (final l in List.of(_eventListeners)) {
+      try {
+        l(message, mood);
+      } catch (e) {
+        debugPrint('❌ eventListener error: $e');
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  СЛУШАТЕЛИ СМЕНЫ ПРОФИЛЯ
+  // ═══════════════════════════════════════════════════════════
+
+  final List<VoidCallback> _profileListeners = [];
+
+  void addProfileListener(VoidCallback listener) {
+    if (!_profileListeners.contains(listener)) {
+      _profileListeners.add(listener);
+    }
+  }
+
+  void removeProfileListener(VoidCallback listener) {
+    _profileListeners.remove(listener);
+  }
+
+  void notifyProfileChanged() {
+    for (final l in List<VoidCallback>.from(_profileListeners)) {
+      try {
+        l();
+      } catch (e) {
+        debugPrint('❌ profileListener error: $e');
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  СЛУШАТЕЛИ ЗАВЕРШЕНИЯ ТРЕНИРОВКИ
+  // ═══════════════════════════════════════════════════════════
+
+  final List<VoidCallback> _workoutListeners = [];
+
+  void addWorkoutListener(VoidCallback listener) {
+    if (!_workoutListeners.contains(listener)) {
+      _workoutListeners.add(listener);
+    }
+  }
+
+  void removeWorkoutListener(VoidCallback listener) {
+    _workoutListeners.remove(listener);
+  }
+
+  void notifyWorkoutCompleted() {
+    for (final l in List<VoidCallback>.from(_workoutListeners)) {
+      try {
+        l();
+      } catch (e) {
+        debugPrint('❌ workoutListener error: $e');
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  АКТИВНЫЙ ПРОФИЛЬ
+  // ═══════════════════════════════════════════════════════════
 
   String? _profileName;
   String? _profileGender;
@@ -30,8 +118,6 @@ class FairyReactionService {
   String? get profileGender => _profileGender;
   int? get activeProfileId => _activeProfileId;
   FairyMood get currentMood => _currentMood;
-
-  // ═══ Активный профиль ═══
 
   Future<void> setActiveProfile(
     int? id,
@@ -51,9 +137,8 @@ class FairyReactionService {
       await prefs.setInt(_keyActiveProfile, id);
     }
 
-    // ═══ Сообщаем подписчикам (фее), что профиль сменился ═══
     if (changed) {
-      onProfileChanged?.call();
+      notifyProfileChanged();
     }
   }
 
@@ -92,13 +177,33 @@ class FairyReactionService {
     await loadActiveProfile();
   }
 
-  // ═══ Эмоция ═══
+  // ═══════════════════════════════════════════════════════════
+  //  ЭМОЦИЯ
+  // ═══════════════════════════════════════════════════════════
 
   void setMood(FairyMood mood) {
     _currentMood = mood;
   }
 
-  // ═══ События ═══
+  // ═══════════════════════════════════════════════════════════
+  //  HOLD SCREEN PHRASES
+  // ═══════════════════════════════════════════════════════════
+
+  bool _holdScreenPhrases = false;
+
+  bool get isHoldingScreenPhrases => _holdScreenPhrases;
+
+  void holdScreenPhrases() {
+    _holdScreenPhrases = true;
+  }
+
+  void releaseScreenPhrases() {
+    _holdScreenPhrases = false;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  СОБЫТИЯ
+  // ═══════════════════════════════════════════════════════════
 
   Future<void> trigger(
     String eventKey, {
@@ -120,6 +225,9 @@ class FairyReactionService {
       );
     }
 
+    debugPrint('🧚 trigger: key=$eventKey, isEmpty=${message.isEmpty}, '
+        'listeners=${_eventListeners.length}');
+
     if (message.isEmpty) return;
 
     final usedMood = mood ?? FairyPhrases.eventMood(eventKey);
@@ -127,9 +235,27 @@ class FairyReactionService {
 
     if (eventKey == 'workout_completed') {
       await FairyStatsService.recordWorkout();
+      notifyWorkoutCompleted();
     }
 
-    onEvent?.call(message, usedMood);
+    _emit(message, usedMood);
+  }
+
+  Future<void> saySituation(String situationKey) async {
+    final phrases = FairyPhrases.forSituationWithMood(
+      situationKey,
+      name: _profileName,
+      gender: _profileGender,
+    );
+
+    if (phrases.isEmpty) return;
+
+    final pick = phrases[
+      DateTime.now().millisecondsSinceEpoch % phrases.length
+    ];
+
+    _currentMood = pick.mood;
+    _emit(pick.text, pick.mood);
   }
 
   void say(String message, {FairyMood? mood}) {
@@ -140,6 +266,6 @@ class FairyReactionService {
       _profileName,
       gender: _profileGender,
     );
-    onEvent?.call(m, usedMood);
+    _emit(m, usedMood);
   }
 }

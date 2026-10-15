@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../models/user_profile.dart';
+import '../../models/workout_day.dart';
 import '../../services/database_helper.dart';
+import '../../services/fairy_reaction_service.dart';
 import '../../widgets/weight_chart.dart';
 import '../../widgets/weekly_bar_chart.dart';
+import '../../widgets/training_calendar.dart';
+import 'exercise_analysis_screen.dart';
 
 class ProgressScreen extends StatefulWidget {
   const ProgressScreen({super.key});
@@ -12,37 +16,62 @@ class ProgressScreen extends StatefulWidget {
 }
 
 class _ProgressScreenState extends State<ProgressScreen> {
-  List<UserProfile> _profiles = [];
   UserProfile? _activeProfile;
   bool _loading = true;
 
-  // Выбранное упражнение для графика веса
   int? _selectedExerciseId;
   String _selectedExerciseName = '';
 
-  // Данные
   List<Map<String, dynamic>> _weightData = [];
   Map<int, int> _weeklyData = {};
   int _totalWorkouts = 0;
   int _totalMinutes = 0;
   double _totalVolume = 0;
 
-  // Список упражнений (для выпадающего списка)
   List<Map<String, dynamic>> _availableExercises = [];
+  List<WorkoutDay> _monthWorkouts = [];
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    FairyReactionService().addProfileListener(_onProfileChanged);
+    FairyReactionService().addWorkoutListener(_onWorkoutCompleted);
+  }
+
+  void _onProfileChanged() {
+    if (!mounted) return;
+    _loadData();
+  }
+
+  void _onWorkoutCompleted() {
+    if (!mounted) return;
+    _loadData();
+  }
+
+  @override
+  void dispose() {
+    FairyReactionService().removeProfileListener(_onProfileChanged);
+    FairyReactionService().removeWorkoutListener(_onWorkoutCompleted);
+    super.dispose();
   }
 
   Future<void> _loadData() async {
     setState(() => _loading = true);
-    final profiles = await DatabaseHelper.instance.getProfiles();
+
+    var profiles = await DatabaseHelper.instance.getProfiles();
 
     if (profiles.isEmpty) {
+      for (int attempt = 0; attempt < 5; attempt++) {
+        await Future.delayed(const Duration(milliseconds: 300));
+        profiles = await DatabaseHelper.instance.getProfiles();
+        if (profiles.isNotEmpty) break;
+      }
+    }
+
+    if (profiles.isEmpty) {
+      if (!mounted) return;
       setState(() {
-        _profiles = [];
         _activeProfile = null;
         _loading = false;
       });
@@ -51,7 +80,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
     final active = profiles.first;
 
-    // История тренировок за последние 30 дней
     final history = await DatabaseHelper.instance.getWorkoutDays(
       profileId: active.id!,
       limit: 100,
@@ -60,7 +88,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
     final completed =
         history.where((w) => w.status == 'completed').toList();
 
-    // ═══ Статистика ═══
     int totalMin = 0;
     for (final w in completed) {
       totalMin += w.durationMinutes ?? 0;
@@ -78,11 +105,19 @@ class _ProgressScreenState extends State<ProgressScreen> {
       }
     }
 
+    // ═══ Тренировки за текущий месяц (для календаря) ═══
+    final monthWorkouts = await DatabaseHelper.instance
+        .getWorkoutDaysForMonth(
+      profileId: active.id!,
+      year: now.year,
+      month: now.month,
+    );
+
     // ═══ Объём ═══
     double volume = 0;
     for (final w in completed) {
-      final exercises = await DatabaseHelper.instance
-          .getWorkoutExercises(w.id!);
+      final exercises =
+          await DatabaseHelper.instance.getWorkoutExercises(w.id!);
       for (final we in exercises) {
         final sets =
             await DatabaseHelper.instance.getWorkoutSets(we.id!);
@@ -94,12 +129,12 @@ class _ProgressScreenState extends State<ProgressScreen> {
       }
     }
 
-    // ═══ Доступные упражнения (для графика) ═══
+    // ═══ Упражнения для графика ═══
     final availableExercises = <Map<String, dynamic>>[];
     final seenIds = <int>{};
     for (final w in completed) {
-      final exercises = await DatabaseHelper.instance
-          .getWorkoutExercises(w.id!);
+      final exercises =
+          await DatabaseHelper.instance.getWorkoutExercises(w.id!);
       for (final we in exercises) {
         if (we.itemType != 'exercise' || we.isCoolDown) continue;
         final id = we.replacedByItemId ?? we.itemId;
@@ -115,18 +150,18 @@ class _ProgressScreenState extends State<ProgressScreen> {
       }
     }
 
+    if (!mounted) return;
     setState(() {
-      _profiles = profiles;
       _activeProfile = active;
       _totalWorkouts = completed.length;
       _totalMinutes = totalMin;
       _totalVolume = volume;
       _weeklyData = weekly;
       _availableExercises = availableExercises;
+      _monthWorkouts = monthWorkouts;
       _loading = false;
     });
 
-    // Если есть упражнения — загрузить первое
     if (availableExercises.isNotEmpty) {
       _loadWeightFor(availableExercises.first['id'],
           availableExercises.first['name']);
@@ -141,11 +176,67 @@ class _ProgressScreenState extends State<ProgressScreen> {
       exerciseId: exerciseId,
     );
 
+    if (!mounted) return;
     setState(() {
       _selectedExerciseId = exerciseId;
       _selectedExerciseName = exerciseName;
       _weightData = data.reversed.toList();
     });
+  }
+
+  void _openAnalysis() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const ExerciseAnalysisScreen(),
+      ),
+    );
+  }
+
+  /// Загрузка тренировок за конкретный месяц (для листания календаря).
+  Future<List<WorkoutDay>> _loadMonthWorkouts(int year, int month) async {
+    if (_activeProfile == null) return [];
+
+    final workouts = await DatabaseHelper.instance.getWorkoutDaysForMonth(
+      profileId: _activeProfile!.id!,
+      year: year,
+      month: month,
+    );
+
+    // Если это текущий отображаемый месяц — синхронизируем с состоянием
+    final now = DateTime.now();
+    if (year == now.year && month == now.month && mounted) {
+      setState(() => _monthWorkouts = workouts);
+    }
+
+    return workouts;
+  }
+
+  /// Тап на день календаря — SnackBar с деталями.
+  void _onCalendarDayTap(WorkoutDay workout) {
+    final status = workout.status == 'completed'
+        ? '✅ Завершена'
+        : '⏳ В процессе';
+    final minutes = workout.durationMinutes != null
+        ? ' · ${workout.durationMinutes} мин'
+        : '';
+
+    final months = [
+      'янв', 'фев', 'мар', 'апр', 'мая', 'июн',
+      'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'
+    ];
+    final dateStr = '${workout.date.day} '
+        '${months[workout.date.month - 1]}';
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '$dateStr — ${workout.name}\n$status$minutes',
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   @override
@@ -169,26 +260,96 @@ class _ProgressScreenState extends State<ProgressScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // ═══ Статистика ═══
             _buildStatsRow(context),
             const SizedBox(height: 16),
 
-            // ═══ График за неделю ═══
+            // ═══ Кнопка «Анализ упражнений» ═══
+            _buildAnalysisButton(context),
+            const SizedBox(height: 16),
+
+            // ═══ Календарь ═══
+            TrainingCalendar(
+              workouts: _monthWorkouts,
+              onDayTap: _onCalendarDayTap,
+              onLoadMonth: _loadMonthWorkouts,
+            ),
+            const SizedBox(height: 16),
+
             WeeklyBarChart(data: _weeklyData),
             const SizedBox(height: 16),
 
-            // ═══ Выбор упражнения ═══
             if (_availableExercises.isNotEmpty) ...[
               _buildExerciseDropdown(context),
               const SizedBox(height: 16),
-
-              // ═══ График веса ═══
               WeightChart(data: _weightData),
             ] else
               _buildNoDataCard(context),
 
             const SizedBox(height: 32),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAnalysisButton(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _openAnalysis,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF6C5CE7), Color(0xFFA29BFE)],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF6C5CE7).withOpacity(0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: const Row(
+            children: [
+              Icon(
+                Icons.insights_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
+              SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Анализ упражнений',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Тренды весов — растёт / стагнация / падает',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: Colors.white70,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -361,11 +522,11 @@ class _ProgressScreenState extends State<ProgressScreen> {
                 color: theme.colorScheme.primary.withOpacity(0.5),
               ),
               const SizedBox(height: 24),
-              Text('Нет профилей',
+              Text('Нет профиля',
                   style: theme.textTheme.displaySmall),
               const SizedBox(height: 8),
               Text(
-                'Создайте профиль во вкладке «Профили»',
+                'Создайте профиль во вкладке «Профиль»',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyLarge?.copyWith(
                   color: theme.colorScheme.onSurface.withOpacity(0.6),

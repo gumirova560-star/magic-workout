@@ -11,6 +11,10 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # ═══ Локализация (для DatePicker и др.) ═══
+  flutter_localizations:
+    sdk: flutter
+
   # ═══ База данных ═══
   sqflite: ^2.3.0
   sqflite_common_ffi: ^2.3.3
@@ -34,7 +38,7 @@ dependencies:
   share_plus: ^10.1.1
 
   # ═══ Утилиты ═══
-  intl: ^0.19.0
+  intl: ^0.20.3
   uuid: ^4.3.3
   cupertino_icons: ^1.0.8
 

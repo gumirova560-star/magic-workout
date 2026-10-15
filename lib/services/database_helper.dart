@@ -20,7 +20,7 @@ class DatabaseHelper {
 
   DatabaseHelper._init();
 
-  static const int _dbVersion = 2;
+  static const int _dbVersion = 4;
   static const String _dbName = 'workout_tracker.db';
 
   Future<Database> get database async {
@@ -158,7 +158,8 @@ class DatabaseHelper {
         type TEXT NOT NULL,
         estimatedMinutes INTEGER NOT NULL,
         notes TEXT,
-        createdAt TEXT NOT NULL
+        createdAt TEXT NOT NULL,
+        isCustom INTEGER DEFAULT 0
       )
     ''');
 
@@ -213,6 +214,7 @@ class DatabaseHelper {
         durationSeconds INTEGER DEFAULT 30,
         isCoolDown INTEGER DEFAULT 0,
         notes TEXT,
+        blockNumber INTEGER,
         FOREIGN KEY (workoutDayId) REFERENCES workout_days (id) ON DELETE CASCADE
       )
     ''');
@@ -264,6 +266,20 @@ class DatabaseHelper {
       await db.execute(
           'ALTER TABLE template_items ADD COLUMN replacementPermanent INTEGER DEFAULT 0');
     }
+
+    if (oldVersion < 3) {
+      try {
+        await db.execute(
+            'ALTER TABLE workout_templates ADD COLUMN isCustom INTEGER DEFAULT 0');
+      } catch (_) {}
+    }
+
+    if (oldVersion < 4) {
+      try {
+        await db.execute(
+            'ALTER TABLE workout_exercises ADD COLUMN blockNumber INTEGER');
+      } catch (_) {}
+    }
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -312,6 +328,9 @@ class DatabaseHelper {
     );
   }
 
+// ╔═══════════════════════════════════════════════════════════╗
+// ║  ⚠️ ЧАСТЬ 1 ЗАКОНЧИЛАСЬ — ЖДИТЕ ЧАСТЬ 2                  ║
+// ╚═══════════════════════════════════════════════════════════╝
   // ═══════════════════════════════════════════════════════════
   //  УПРАЖНЕНИЯ
   // ═══════════════════════════════════════════════════════════
@@ -441,7 +460,7 @@ class DatabaseHelper {
       'workout_templates',
       where: 'profileId = ?',
       whereArgs: [profileId],
-      orderBy: 'createdAt DESC',
+      orderBy: 'createdAt ASC',
     );
     return maps.map((m) => WorkoutTemplate.fromMap(m)).toList();
   }
@@ -539,6 +558,33 @@ class DatabaseHelper {
   }
 
   // ═══════════════════════════════════════════════════════════
+  //  ТРЕНИРОВКИ ЗА МЕСЯЦ (для календаря)
+  // ═══════════════════════════════════════════════════════════
+
+  Future<List<WorkoutDay>> getWorkoutDaysForMonth({
+    required int profileId,
+    required int year,
+    required int month,
+  }) async {
+    final db = await database;
+
+    final start = DateTime(year, month, 1);
+    final end = DateTime(year, month + 1, 1);
+
+    final maps = await db.query(
+      'workout_days',
+      where: 'profileId = ? AND date >= ? AND date < ?',
+      whereArgs: [
+        profileId,
+        start.toIso8601String(),
+        end.toIso8601String(),
+      ],
+      orderBy: 'date ASC',
+    );
+    return maps.map((m) => WorkoutDay.fromMap(m)).toList();
+  }
+
+  // ═══════════════════════════════════════════════════════════
   //  УПРАЖНЕНИЯ В ТРЕНИРОВКЕ
   // ═══════════════════════════════════════════════════════════
 
@@ -578,6 +624,50 @@ class DatabaseHelper {
     return maps.map((m) => WorkoutSet.fromMap(m)).toList();
   }
 
+  /// ⚠️ Обновить номер блока для упражнения.
+  Future<int> updateWorkoutExerciseBlock({
+    required int id,
+    int? blockNumber,
+  }) async {
+    final db = await database;
+    return await db.update(
+      'workout_exercises',
+      {'blockNumber': blockNumber},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// ⚠️ Сбросить все блоки для дня (blockNumber = null).
+  Future<int> clearBlocksForWorkoutDay(int workoutDayId) async {
+    final db = await database;
+    return await db.update(
+      'workout_exercises',
+      {'blockNumber': null},
+      where: 'workoutDayId = ?',
+      whereArgs: [workoutDayId],
+    );
+  }
+
+  Future<int> updateWorkoutSet(WorkoutSet set) async {
+    final db = await database;
+    return await db.update(
+      'workout_sets',
+      set.toMap(),
+      where: 'id = ?',
+      whereArgs: [set.id],
+    );
+  }
+
+  Future<int> deleteWorkoutSet(int id) async {
+    final db = await database;
+    return await db.delete(
+      'workout_sets',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   // ═══════════════════════════════════════════════════════════
   //  ПРОВЕРКА ПУСТОЙ БАЗЫ
   // ═══════════════════════════════════════════════════════════
@@ -614,6 +704,238 @@ class DatabaseHelper {
     ''', [profileId, exerciseId, limit]);
 
     return result;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  АНАЛИЗ НЕДЕЛИ
+  // ═══════════════════════════════════════════════════════════
+
+  Future<List<WorkoutDay>> getWorkoutDaysBetween({
+    required int profileId,
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final db = await database;
+    final maps = await db.query(
+      'workout_days',
+      where: 'profileId = ? AND date >= ? AND date < ?',
+      whereArgs: [
+        profileId,
+        from.toIso8601String(),
+        to.toIso8601String(),
+      ],
+      orderBy: 'date DESC',
+    );
+    return maps.map((m) => WorkoutDay.fromMap(m)).toList();
+  }
+
+  Future<Set<String>> getCompletedNamesInWindow({
+    required int profileId,
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final db = await database;
+    final maps = await db.query(
+      'workout_days',
+      columns: ['name'],
+      where: 'profileId = ? AND status = ? AND date >= ? AND date < ?',
+      whereArgs: [
+        profileId,
+        'completed',
+        from.toIso8601String(),
+        to.toIso8601String(),
+      ],
+    );
+    return maps.map((m) => m['name'] as String).toSet();
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  ПОЛЬЗОВАТЕЛЬСКИЕ ШАБЛОНЫ (isCustom = 1)
+  // ═══════════════════════════════════════════════════════════
+
+  /// Получить ТОЛЬКО пользовательские шаблоны (isCustom = 1).
+  Future<List<WorkoutTemplate>> getCustomTemplates(int profileId) async {
+    final db = await database;
+    final maps = await db.query(
+      'workout_templates',
+      where: 'profileId = ? AND isCustom = 1',
+      whereArgs: [profileId],
+      orderBy: 'createdAt DESC',
+    );
+    return maps.map((m) => WorkoutTemplate.fromMap(m)).toList();
+  }
+
+  /// Получить ТОЛЬКО авто-шаблоны (isCustom = 0).
+  Future<List<WorkoutTemplate>> getAutoTemplates(int profileId) async {
+    final db = await database;
+    final maps = await db.query(
+      'workout_templates',
+      where: 'profileId = ? AND isCustom = 0',
+      whereArgs: [profileId],
+      orderBy: 'createdAt ASC',
+    );
+    return maps.map((m) => WorkoutTemplate.fromMap(m)).toList();
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  СОЗДАНИЕ ШАБЛОНА ИЗ ЗАВЕРШЁННОЙ ТРЕНИРОВКИ
+  // ═══════════════════════════════════════════════════════════
+
+  Future<int> createTemplateFromWorkoutDay({
+    required int profileId,
+    required int workoutDayId,
+    required String templateName,
+    required String type,
+    required int estimatedMinutes,
+  }) async {
+    final db = await database;
+
+    final templateId = await db.insert('workout_templates', {
+      'profileId': profileId,
+      'name': templateName,
+      'type': type,
+      'estimatedMinutes': estimatedMinutes,
+      'notes': null,
+      'createdAt': DateTime.now().toIso8601String(),
+      'isCustom': 1,
+    });
+
+    final workoutExs = await getWorkoutExercises(workoutDayId);
+
+    for (final we in workoutExs) {
+      final sets = await getWorkoutSets(we.id!);
+
+      String repsStr = we.reps;
+      if (sets.isNotEmpty) {
+        final r = sets.first.reps;
+        if (r != null) repsStr = '$r';
+      }
+
+      await db.insert('template_items', {
+        'templateId': templateId,
+        'itemType': we.itemType,
+        'itemId': we.itemId,
+        'order': we.order,
+        'sets': we.sets,
+        'reps': repsStr,
+        'restSeconds': we.restSeconds,
+        'durationSeconds': we.durationSeconds,
+        'isCoolDown': we.isCoolDown ? 1 : 0,
+        'replacedByItemId': we.replacedByItemId,
+        'replacementReason': we.replacementReason,
+        'replacementPermanent': we.replacementPermanent ? 1 : 0,
+      });
+    }
+
+    return templateId;
+  }
+
+  Future<int> deletePlannedWorkoutDays(int profileId) async {
+    final db = await database;
+    return await db.delete(
+      'workout_days',
+      where: 'profileId = ? AND status = ?',
+      whereArgs: [profileId, 'planned'],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  ИСТОРИЯ ПО УПРАЖНЕНИЮ (для прогрессии)
+  // ═══════════════════════════════════════════════════════════
+
+  Future<WorkoutSet?> getLastCompletedSetForExercise({
+    required int profileId,
+    required int exerciseId,
+    int daysLimit = 60,
+  }) async {
+    final db = await database;
+
+    final from = DateTime.now()
+        .subtract(Duration(days: daysLimit))
+        .toIso8601String();
+
+    final result = await db.rawQuery('''
+      SELECT ws.*
+      FROM workout_sets ws
+      JOIN workout_exercises we ON we.id = ws.workoutExerciseId
+      JOIN workout_days wd ON wd.id = we.workoutDayId
+      WHERE wd.profileId = ?
+        AND wd.status = 'completed'
+        AND wd.date >= ?
+        AND (we.replacedByItemId = ? OR we.itemId = ?)
+        AND we.itemType = 'exercise'
+        AND we.isCoolDown = 0
+        AND ws.completed = 1
+        AND ws.weight IS NOT NULL
+      ORDER BY wd.date DESC, ws."order" ASC
+      LIMIT 1
+    ''', [profileId, from, exerciseId, exerciseId]);
+
+    if (result.isEmpty) return null;
+    return WorkoutSet.fromMap(result.first);
+  }
+
+  Future<Set<int>> getRecentExerciseIds({
+    required int profileId,
+    int daysLimit = 14,
+  }) async {
+    final db = await database;
+
+    final from = DateTime.now()
+        .subtract(Duration(days: daysLimit))
+        .toIso8601String();
+
+    final maps = await db.rawQuery('''
+      SELECT DISTINCT
+        COALESCE(we.replacedByItemId, we.itemId) AS exId
+      FROM workout_exercises we
+      JOIN workout_days wd ON wd.id = we.workoutDayId
+      WHERE wd.profileId = ?
+        AND wd.date >= ?
+        AND we.itemType = 'exercise'
+        AND we.isCoolDown = 0
+    ''', [profileId, from]);
+
+    return maps
+        .map((m) => m['exId'] as int?)
+        .whereType<int>()
+        .toSet();
+  }
+
+  /// Получить ВСЕ подходы последней завершённой тренировки
+  /// для указанного упражнения (для прогрессии).
+  Future<List<WorkoutSet>> getLastWorkoutExerciseSets({
+    required int profileId,
+    required int exerciseId,
+    int daysLimit = 60,
+  }) async {
+    final db = await database;
+
+    final from = DateTime.now()
+        .subtract(Duration(days: daysLimit))
+        .toIso8601String();
+
+    final weResult = await db.rawQuery('''
+      SELECT we.id
+      FROM workout_exercises we
+      JOIN workout_days wd ON wd.id = we.workoutDayId
+      WHERE wd.profileId = ?
+        AND wd.status = 'completed'
+        AND wd.date >= ?
+        AND (we.replacedByItemId = ? OR we.itemId = ?)
+        AND we.itemType = 'exercise'
+        AND we.isCoolDown = 0
+      ORDER BY wd.date DESC, wd.id DESC
+      LIMIT 1
+    ''', [profileId, from, exerciseId, exerciseId]);
+
+    if (weResult.isEmpty) return [];
+
+    final weId = weResult.first['id'] as int?;
+    if (weId == null) return [];
+
+    final sets = await getWorkoutSets(weId);
+    return sets;
   }
 
   // ═══════════════════════════════════════════════════════════

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/stretch.dart';
 import '../../services/database_helper.dart';
+import 'stretch_practice_screen.dart';
 
 class StretchListScreen extends StatefulWidget {
   const StretchListScreen({super.key});
@@ -14,6 +15,7 @@ class _StretchListScreenState extends State<StretchListScreen> {
   List<Stretch> _filtered = [];
   bool _loading = true;
   String _filter = 'all';
+  final Set<int> _selectedIds = {};
 
   @override
   void initState() {
@@ -40,6 +42,42 @@ class _StretchListScreenState extends State<StretchListScreen> {
         _filtered = _all.where((s) => s.category == filter).toList();
       }
     });
+  }
+
+  void _toggleSelect(Stretch stretch) {
+    final id = stretch.id;
+    if (id == null) return;
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  void _startSingle(Stretch stretch) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StretchPracticeScreen(stretches: [stretch]),
+      ),
+    );
+  }
+
+  void _startSeries() {
+    final selected = _all.where((s) {
+      final id = s.id;
+      return id != null && _selectedIds.contains(id);
+    }).toList();
+    if (selected.isEmpty) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StretchPracticeScreen(stretches: selected),
+      ),
+    );
   }
 
   String _groupLabel(String code) {
@@ -106,6 +144,15 @@ class _StretchListScreenState extends State<StretchListScreen> {
                 ),
               ],
             ),
+      floatingActionButton: _selectedIds.isEmpty
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _startSeries,
+              icon: const Icon(Icons.play_arrow_rounded),
+              label: Text('Начать (${_selectedIds.length})'),
+              backgroundColor: const Color(0xFF00B894),
+              foregroundColor: Colors.white,
+            ),
     );
   }
 
@@ -123,118 +170,108 @@ class _StretchListScreenState extends State<StretchListScreen> {
     final isYoga = stretch.category == 'yoga';
     final color =
         isYoga ? const Color(0xFF00B894) : const Color(0xFF6C5CE7);
+    final id = stretch.id;
+    final isSelected = id != null && _selectedIds.contains(id);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
-      child: InkWell(
-        onTap: () => _openStretch(stretch),
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [color, color.withOpacity(0.6)],
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  isYoga
-                      ? Icons.self_improvement_rounded
-                      : Icons.accessibility_new_rounded,
-                  color: Colors.white,
-                  size: 22,
-                ),
+      child: Row(
+        children: [
+          // ═══ Чекбокс — отдельная зона тапа ═══
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: Checkbox(
+              value: isSelected,
+              onChanged: (_) => _toggleSelect(stretch),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              activeColor: color,
+            ),
+          ),
+
+          // ═══ Строка — тап = пуск ═══
+          Expanded(
+            child: InkWell(
+              onTap: () => _startSingle(stretch),
+              borderRadius: BorderRadius.circular(20),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    vertical: 12, horizontal: 4),
+                child: Row(
                   children: [
-                    Text(
-                      stretch.name,
-                      style: theme.textTheme.headlineMedium,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _groupLabel(stretch.muscleGroup),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color:
-                            theme.colorScheme.onSurface.withOpacity(0.6),
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [color, color.withOpacity(0.6)],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
                       ),
+                      child: Icon(
+                        isYoga
+                            ? Icons.self_improvement_rounded
+                            : Icons.accessibility_new_rounded,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            stretch.name,
+                            style: theme.textTheme.headlineMedium,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _groupLabel(stretch.muscleGroup),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurface
+                                  .withOpacity(0.6),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            isYoga ? 'Йога' : 'Растяжка',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: color,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${stretch.durationSeconds} сек',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color:
+                                theme.colorScheme.onSurface.withOpacity(0.6),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      isYoga ? 'Йога' : 'Растяжка',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: color,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${stretch.durationSeconds} сек',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withOpacity(0.6),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _openStretch(Stretch stretch) {
-    // Создаём «одиночную» сессию для плеера
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(stretch.name),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (stretch.description.isNotEmpty) ...[
-              Text(stretch.description,
-                  style: const TextStyle(fontSize: 14)),
-              const SizedBox(height: 12),
-            ],
-            Text('Длительность: ${stretch.durationSeconds} сек',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-            if (stretch.bothSides) ...[
-              const SizedBox(height: 4),
-              const Text('Делать на 2 стороны',
-                  style: TextStyle(fontSize: 12, color: Colors.grey)),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Закрыть'),
+            ),
           ),
         ],
       ),

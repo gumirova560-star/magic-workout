@@ -129,6 +129,9 @@ class WorkoutExercise {
   bool isCoolDown;              // заминка?
   String? notes;
 
+  // ⚠️ НОВОЕ: номер блока (1, 2, 3...)
+  int? blockNumber;
+
   WorkoutExercise({
     this.id,
     required this.workoutDayId,
@@ -144,6 +147,7 @@ class WorkoutExercise {
     this.durationSeconds = 30,
     this.isCoolDown = false,
     this.notes,
+    this.blockNumber,             // ⚠️ НОВОЕ
   });
 
   Map<String, dynamic> toMap() {
@@ -162,6 +166,7 @@ class WorkoutExercise {
       'durationSeconds': durationSeconds,
       'isCoolDown': isCoolDown ? 1 : 0,
       'notes': notes,
+      'blockNumber': blockNumber,     // ⚠️ НОВОЕ
     };
   }
 
@@ -181,6 +186,7 @@ class WorkoutExercise {
       durationSeconds: map['durationSeconds'] ?? 30,
       isCoolDown: map['isCoolDown'] == 1,
       notes: map['notes'],
+      blockNumber: map['blockNumber'],  // ⚠️ НОВОЕ
     );
   }
 
@@ -199,6 +205,7 @@ class WorkoutExercise {
     int? durationSeconds,
     bool? isCoolDown,
     String? notes,
+    int? blockNumber,               // ⚠️ НОВОЕ
   }) {
     return WorkoutExercise(
       id: id ?? this.id,
@@ -216,6 +223,7 @@ class WorkoutExercise {
       durationSeconds: durationSeconds ?? this.durationSeconds,
       isCoolDown: isCoolDown ?? this.isCoolDown,
       notes: notes ?? this.notes,
+      blockNumber: blockNumber ?? this.blockNumber,  // ⚠️ НОВОЕ
     );
   }
 

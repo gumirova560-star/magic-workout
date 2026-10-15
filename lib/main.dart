@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_strategy/url_strategy.dart';
 import 'services/data_initializer.dart';
@@ -67,6 +68,19 @@ class _MyAppState extends State<MyApp> {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: _themeMode,
+
+      // ═══ ЛОКАЛИЗАЦИЯ (для DatePicker и др.) ═══
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('ru', 'RU'),
+        Locale('en', 'US'),
+      ],
+      locale: const Locale('ru', 'RU'),
+
       home: _showOnboarding
           ? OnboardingScreen(onFinish: _finishOnboarding)
           : const MainScreen(),

@@ -1,13 +1,21 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../data/fairy_mood.dart';
 import '../../models/stretch.dart';
 import '../../models/yoga_session.dart';
+import '../../models/workout_day.dart';
 import '../../services/database_helper.dart';
+import '../../services/fairy_reaction_service.dart';
 
 class YogaPlayerScreen extends StatefulWidget {
   final YogaSession session;
+  final int? profileId;
 
-  const YogaPlayerScreen({super.key, required this.session});
+  const YogaPlayerScreen({
+    super.key,
+    required this.session,
+    this.profileId,
+  });
 
   @override
   State<YogaPlayerScreen> createState() => _YogaPlayerScreenState();
@@ -23,6 +31,11 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
   bool _playing = false;
   Timer? _timer;
   bool _finished = false;
+  bool _saved = false;
+
+  // ═══ Для сохранения ═══
+  int? _workoutDayId;
+  DateTime? _startedAt;
 
   @override
   void initState() {
@@ -57,9 +70,68 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
     });
   }
 
+  // ═══════════════════════════════════════════════════════════
+  //  СОХРАНЕНИЕ В WORKOUT DAY
+  // ═══════════════════════════════════════════════════════════
+
+  Future<int?> _getActiveProfileId() async {
+    if (widget.profileId != null) return widget.profileId;
+    final profiles = await DatabaseHelper.instance.getProfiles();
+    return profiles.isNotEmpty ? profiles.first.id : null;
+  }
+
+  Future<void> _saveToHistory() async {
+    if (_saved) return;
+    _saved = true;
+
+    try {
+      final profileId = await _getActiveProfileId();
+      if (profileId == null) return;
+
+      final startedAt = _startedAt ?? DateTime.now().subtract(
+        Duration(seconds: widget.session.durationMinutes * 60),
+      );
+      final minutes = DateTime.now().difference(startedAt).inMinutes;
+
+      final day = WorkoutDay(
+        profileId: profileId,
+        name: widget.session.name,
+        type: 'yoga',
+        date: DateTime.now(),
+        status: 'completed',
+        durationMinutes: minutes > 0 ? minutes : 1,
+        startedAt: startedAt,
+        completedAt: DateTime.now(),
+      );
+
+      _workoutDayId = await DatabaseHelper.instance.createWorkoutDay(day);
+
+      // ═══ Реакция феи + уведомляем слушателей ═══
+      await FairyReactionService().setActiveProfile(
+        profileId,
+        null, // имя уже есть в сервисе
+      );
+
+      FairyReactionService().trigger(
+        'workout_completed',
+        mood: FairyMood.party,
+      );
+    } catch (e) {
+      debugPrint('❌ Ошибка сохранения йоги: $e');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  ТАЙМЕР
+  // ═══════════════════════════════════════════════════════════
+
   void _startTimer() {
     _timer?.cancel();
     setState(() => _playing = true);
+
+    if (_startedAt == null) {
+      _startedAt = DateTime.now();
+    }
 
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (_remaining > 1) {
@@ -82,6 +154,7 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
         _playing = false;
         _finished = true;
       });
+      _saveToHistory(); // ═══ Сохраняем ═══
       return;
     }
 
@@ -102,11 +175,24 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
     });
   }
 
+  void _finishEarly() {
+    _timer?.cancel();
+    setState(() {
+      _playing = false;
+      _finished = true;
+    });
+    _saveToHistory();
+  }
+
   String _format(int total) {
     final m = total ~/ 60;
     final s = total % 60;
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
+
+  // ═══════════════════════════════════════════════════════════
+  //  BUILD
+  // ═══════════════════════════════════════════════════════════
 
   @override
   Widget build(BuildContext context) {
@@ -136,7 +222,6 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-          // ═══ Прогресс ═══
           Row(
             children: [
               Text(
@@ -150,7 +235,8 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
               Expanded(
                 child: LinearProgressIndicator(
                   value: (_currentIndex + 1) / _steps.length,
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.15),
+                  backgroundColor:
+                      theme.colorScheme.primary.withOpacity(0.15),
                   color: theme.colorScheme.primary,
                   minHeight: 6,
                   borderRadius: BorderRadius.circular(4),
@@ -161,7 +247,6 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
 
           const Spacer(),
 
-          // ═══ Круговой таймер ═══
           SizedBox(
             width: 220,
             height: 220,
@@ -191,10 +276,9 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
                     const SizedBox(height: 8),
                     Text(
                       _format(_remaining),
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 42,
                         fontWeight: FontWeight.w800,
-                        color: theme.colorScheme.onSurface,
                         letterSpacing: 2,
                       ),
                     ),
@@ -206,7 +290,6 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
 
           const SizedBox(height: 32),
 
-          // ═══ Название позы ═══
           if (stretch != null) ...[
             Text(
               stretch.name,
@@ -243,18 +326,17 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
 
           const Spacer(),
 
-          // ═══ Кнопки ═══
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              // Назад
-              _controlButton(
-                context,
-                icon: Icons.skip_previous_rounded,
-                onTap: _currentIndex > 0 ? _prevStep : null,
+              IconButton(
+                onPressed: _currentIndex > 0 ? _prevStep : null,
+                icon: const Icon(Icons.skip_previous_rounded, size: 36),
+                color: _currentIndex > 0
+                    ? theme.colorScheme.onSurface
+                    : theme.colorScheme.onSurface.withOpacity(0.2),
               ),
 
-              // Play/Pause
               GestureDetector(
                 onTap: _playing ? _pauseTimer : _startTimer,
                 child: Container(
@@ -283,46 +365,23 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
                 ),
               ),
 
-              // Вперёд
-              _controlButton(
-                context,
-                icon: Icons.skip_next_rounded,
-                onTap: _nextStep,
+              IconButton(
+                onPressed: _nextStep,
+                icon: const Icon(Icons.skip_next_rounded, size: 36),
+                color: theme.colorScheme.onSurface,
               ),
             ],
           ),
 
           const SizedBox(height: 16),
 
-          // ═══ Пропустить ═══
           TextButton.icon(
-            onPressed: () {
-              _timer?.cancel();
-              setState(() {
-                _playing = false;
-                _finished = true;
-              });
-            },
+            onPressed: _finishEarly,
             icon: const Icon(Icons.stop_rounded),
             label: const Text('Завершить'),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _controlButton(
-    BuildContext context, {
-    required IconData icon,
-    VoidCallback? onTap,
-  }) {
-    final theme = Theme.of(context);
-    return IconButton(
-      onPressed: onTap,
-      icon: Icon(icon, size: 36),
-      color: onTap != null
-          ? theme.colorScheme.onSurface
-          : theme.colorScheme.onSurface.withOpacity(0.2),
     );
   }
 
@@ -340,10 +399,8 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
               color: theme.colorScheme.primary.withOpacity(0.4),
             ),
             const SizedBox(height: 16),
-            Text(
-              'Сессия пуста',
-              style: theme.textTheme.displaySmall,
-            ),
+            Text('Сессия пуста',
+                style: theme.textTheme.displaySmall),
             const SizedBox(height: 8),
             Text(
               'В этой практике ещё нет упражнений',
@@ -403,7 +460,7 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
             ),
             const SizedBox(height: 32),
             ElevatedButton.icon(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(context, true),
               icon: const Icon(Icons.done_rounded),
               label: const Text('Готово'),
             ),

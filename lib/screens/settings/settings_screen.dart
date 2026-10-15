@@ -78,13 +78,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _clearAllProfiles() async {
+  Future<void> _deleteProfile() async {
+    final profiles = await DatabaseHelper.instance.getProfiles();
+    if (profiles.isEmpty) return;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить все профили?'),
+        title: const Text('Удалить профиль?'),
         content: const Text(
-            'Все профили, тренировки и история будут удалены. Это действие нельзя отменить.'),
+            'Профиль, тренировки и история будут удалены. Это действие нельзя отменить.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -92,8 +95,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Удалить всё',
-                style: TextStyle(color: Colors.red)),
+            child: const Text(
+              'Удалить',
+              style: TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
@@ -101,14 +106,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (confirmed != true) return;
 
-    final profiles = await DatabaseHelper.instance.getProfiles();
     for (final p in profiles) {
       await DatabaseHelper.instance.deleteProfile(p.id!);
     }
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Все профили удалены')),
+      const SnackBar(content: Text('Профиль удалён')),
     );
   }
 
@@ -200,6 +204,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             context,
             children: [
               ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -216,6 +223,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const Divider(height: 1),
               ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -225,10 +235,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Icon(Icons.delete_forever_rounded,
                       color: theme.colorScheme.error, size: 20),
                 ),
-                title: const Text('Удалить все профили'),
-                subtitle: const Text('Полный сброс данных'),
+                title: const Text('Удалить профиль'),
+                subtitle: const Text('Удалить профиль и все данные'),
                 trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: _clearAllProfiles,
+                onTap: _deleteProfile,
               ),
             ],
           ),
@@ -241,6 +251,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             context,
             children: [
               ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -302,13 +315,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// ═══ Карточка-обёртка с Material ═══
+  /// Material внутри Container решает проблему с ListTile/RadioListTile:
+  /// ripple-эффект работает, фон не перекрывает ink splash.
   Widget _buildCard(BuildContext context, {required List<Widget> children}) {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Column(children: children),
+      clipBehavior: Clip.antiAlias,           // ← обрезает ripple по краям
+      child: Material(
+        color: Colors.transparent,            // ← прозрачный Material
+        child: Column(children: children),
+      ),
     );
   }
 }

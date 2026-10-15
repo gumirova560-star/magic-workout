@@ -11,6 +11,9 @@ import '../widgets/fairy_bubble.dart';
 ///
 /// Активный таб сохраняется в SharedPreferences — при F5 (Web)
 /// или перезапуске приложения возвращаемся на тот же таб.
+///
+/// KeyedSubtree — при переключении таба экран ПЕРЕСОЗДАЁТСЯ,
+/// поэтому данные (прогресс, история, тренировки) обновляются сразу.
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -83,9 +86,10 @@ class _MainScreenState extends State<MainScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          IndexedStack(
-            index: _currentIndex,
-            children: _screens,
+          // ═══ KeyedSubtree — пересоздание экрана при смене таба ═══
+          KeyedSubtree(
+            key: ValueKey('screen_$_currentIndex'),
+            child: _screens[_currentIndex],
           ),
           FairyBubble(screenKey: _screenKeys[_currentIndex]),
         ],
@@ -112,7 +116,7 @@ class _MainScreenState extends State<MainScreen> {
                   index: 0,
                   icon: Icons.person_outline_rounded,
                   activeIcon: Icons.person_rounded,
-                  label: 'Профили',
+                  label: 'Профиль',
                 ),
                 _buildNavItem(
                   context,

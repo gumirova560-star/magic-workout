@@ -4,6 +4,10 @@ import '../../services/database_helper.dart';
 import '../../services/fairy_reaction_service.dart';
 import 'profile_edit_screen.dart';
 
+/// Экран «Профили».
+///
+/// Один профиль — без списка, без «+ Создать», без удаления.
+/// Доступно только редактирование.
 class ProfilesScreen extends StatefulWidget {
   const ProfilesScreen({super.key});
 
@@ -12,16 +16,16 @@ class ProfilesScreen extends StatefulWidget {
 }
 
 class _ProfilesScreenState extends State<ProfilesScreen> {
-  List<UserProfile> _profiles = [];
+  UserProfile? _profile;
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadProfiles();
+    _loadProfile();
   }
 
-  Future<void> _loadProfiles() async {
+  Future<void> _loadProfile() async {
     setState(() => _loading = true);
 
     var profiles = await DatabaseHelper.instance.getProfiles();
@@ -35,139 +39,93 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
       }
     }
 
-    // ═══ Сообщаем фее, кто активный ═══
-    if (profiles.isNotEmpty) {
-      await FairyReactionService().loadActiveProfile();
-      final activeId = FairyReactionService().activeProfileId;
+    if (!mounted) return;
 
-      final active = profiles.firstWhere(
-        (p) => p.id == activeId,
-        orElse: () => profiles.first,
-      );
-
-      await FairyReactionService().setActiveProfile(
-        active.id,
-        active.name,
-        gender: active.gender,
-      );
-    } else {
+    if (profiles.isEmpty) {
+      setState(() {
+        _profile = null;
+        _loading = false;
+      });
       await FairyReactionService().setActiveProfile(null, null);
+      return;
     }
 
-    if (!mounted) return;
+    final active = profiles.first;
+
+    // ═══ Сообщаем фее, кто активный ═══
+    await FairyReactionService().setActiveProfile(
+      active.id,
+      active.name,
+      gender: active.gender,
+    );
+
     setState(() {
-      _profiles = profiles;
+      _profile = active;
       _loading = false;
     });
   }
 
-  Future<void> _openEditor({UserProfile? profile}) async {
+  Future<void> _openEditor() async {
+    if (_profile == null) return;
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ProfileEditScreen(profile: profile),
+        builder: (_) => ProfileEditScreen(profile: _profile),
       ),
     );
-    if (result == true) {
-      await _loadProfiles();
 
-      // ═══ Реакция феи с правильным именем и родом ═══
+    if (result == true) {
+      await _loadProfile();
+
+      // ═══ Реакция феи ═══
       final profiles = await DatabaseHelper.instance.getProfiles();
       if (profiles.isEmpty) return;
 
-      if (profile != null) {
-        final updated = profiles.firstWhere(
-          (p) => p.id == profile.id,
-          orElse: () => profiles.first,
-        );
-        await FairyReactionService().setActiveProfile(
-          updated.id,
-          updated.name,
-          gender: updated.gender,
-        );
-        FairyReactionService().trigger(
-          'profile_updated',
-          nameOverride: updated.name,
-        );
-      } else {
-        final newProfile = profiles.first;
-        await FairyReactionService().setActiveProfile(
-          newProfile.id,
-          newProfile.name,
-          gender: newProfile.gender,
-        );
-        FairyReactionService().trigger(
-          'profile_created',
-          nameOverride: newProfile.name,
-        );
-      }
-    }
-  }
-
-  Future<void> _deleteProfile(UserProfile profile) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Удалить профиль?'),
-        content: Text('Профиль «${profile.name}» будет удалён.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              'Удалить',
-              style: TextStyle(color: Colors.red),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      await DatabaseHelper.instance.deleteProfile(profile.id!);
-      await _loadProfiles();
+      final updated = profiles.first;
+      await FairyReactionService().setActiveProfile(
+        updated.id,
+        updated.name,
+        gender: updated.gender,
+      );
+      FairyReactionService().trigger(
+        'profile_updated',
+        nameOverride: updated.name,
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Профили'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_rounded),
-            tooltip: 'Создать профиль',
-            onPressed: () => _openEditor(),
-          ),
-        ],
+        title: const Text('Профиль'),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _profiles.isEmpty
+          : _profile == null
               ? _buildEmptyState(context)
               : RefreshIndicator(
-                  onRefresh: _loadProfiles,
-                  child: ListView.builder(
+                  onRefresh: _loadProfile,
+                  child: ListView(
                     padding: const EdgeInsets.all(16),
-                    itemCount: _profiles.length,
-                    itemBuilder: (_, i) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _buildProfileCard(context, _profiles[i]),
-                    ),
+                    children: [
+                      _buildProfileCard(context, _profile!),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _openEditor,
+                          icon: const Icon(Icons.edit_rounded),
+                          label: const Text('Редактировать профиль'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-      floatingActionButton: _profiles.isEmpty
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: () => _openEditor(),
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Профиль'),
-            ),
     );
   }
 
@@ -198,10 +156,10 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            Text('Нет профилей', style: theme.textTheme.displaySmall),
+            Text('Нет профиля', style: theme.textTheme.displaySmall),
             const SizedBox(height: 8),
             Text(
-              'Создайте первый профиль,\nчтобы начать тренировки',
+              'Создайте профиль,\nчтобы начать тренировки',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: theme.colorScheme.onSurface.withOpacity(0.6),
@@ -209,7 +167,15 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
             ),
             const SizedBox(height: 32),
             ElevatedButton.icon(
-              onPressed: () => _openEditor(),
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ProfileEditScreen(),
+                  ),
+                );
+                if (result == true) _loadProfile();
+              },
               icon: const Icon(Icons.add_rounded),
               label: const Text('Создать профиль'),
             ),
@@ -222,72 +188,71 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
   Widget _buildProfileCard(BuildContext context, UserProfile profile) {
     final theme = Theme.of(context);
     return Card(
-      child: InkWell(
-        onTap: () => _openEditor(profile: profile),
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      theme.colorScheme.primary,
-                      theme.colorScheme.primary.withOpacity(0.7),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Center(
-                  child: Text(
-                    profile.name.isNotEmpty
-                        ? profile.name[0].toUpperCase()
-                        : '?',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      profile.name,
-                      style: theme.textTheme.headlineMedium,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${profile.genderLabel} · ${profile.age} лет · ${profile.goalLabel}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurface.withOpacity(0.6),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${profile.equipmentLabel} · ${profile.daysPerWeek} дн/нед',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withOpacity(0.5),
-                      ),
-                    ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    theme.colorScheme.primary,
+                    theme.colorScheme.primary.withOpacity(0.7),
                   ],
                 ),
+                borderRadius: BorderRadius.circular(24),
               ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline_rounded),
-                color: theme.colorScheme.error,
-                onPressed: () => _deleteProfile(profile),
+              child: Center(
+                child: Text(
+                  profile.name.isNotEmpty
+                      ? profile.name[0].toUpperCase()
+                      : '?',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              profile.name,
+              style: theme.textTheme.displaySmall,
+            ),
+            const SizedBox(height: 12),
+            _infoRow(context, Icons.person_rounded, profile.genderLabel),
+            _infoRow(context, Icons.cake_rounded, '${profile.age} лет'),
+            _infoRow(context, Icons.flag_rounded, profile.goalLabel),
+            _infoRow(context, Icons.fitness_center_rounded,
+                profile.equipmentLabel),
+            _infoRow(context, Icons.calendar_today_rounded,
+                '${profile.daysPerWeek} дней в неделю'),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget _infoRow(BuildContext context, IconData icon, String text) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: theme.colorScheme.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.8),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

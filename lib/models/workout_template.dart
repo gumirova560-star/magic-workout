@@ -7,6 +7,9 @@ class WorkoutTemplate {
   String? notes;
   DateTime createdAt;
 
+  /// ⚠️ НОВОЕ: 0 — авто-шаблон, 1 — сохранён пользователем.
+  bool isCustom;
+
   WorkoutTemplate({
     this.id,
     required this.profileId,
@@ -15,6 +18,7 @@ class WorkoutTemplate {
     this.estimatedMinutes = 45,
     this.notes,
     DateTime? createdAt,
+    this.isCustom = false,
   }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toMap() {
@@ -26,6 +30,7 @@ class WorkoutTemplate {
       'estimatedMinutes': estimatedMinutes,
       'notes': notes,
       'createdAt': createdAt.toIso8601String(),
+      'isCustom': isCustom ? 1 : 0,
     };
   }
 
@@ -40,6 +45,7 @@ class WorkoutTemplate {
       createdAt: map['createdAt'] != null
           ? DateTime.parse(map['createdAt'])
           : DateTime.now(),
+      isCustom: (map['isCustom'] ?? 0) == 1,
     );
   }
 
@@ -50,6 +56,8 @@ class WorkoutTemplate {
     String? type,
     int? estimatedMinutes,
     String? notes,
+    DateTime? createdAt,
+    bool? isCustom,
   }) {
     return WorkoutTemplate(
       id: id ?? this.id,
@@ -58,7 +66,8 @@ class WorkoutTemplate {
       type: type ?? this.type,
       estimatedMinutes: estimatedMinutes ?? this.estimatedMinutes,
       notes: notes ?? this.notes,
-      createdAt: this.createdAt,
+      createdAt: createdAt ?? this.createdAt,
+      isCustom: isCustom ?? this.isCustom,
     );
   }
 

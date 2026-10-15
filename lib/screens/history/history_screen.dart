@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/user_profile.dart';
 import '../../models/workout_day.dart';
 import '../../services/database_helper.dart';
+import '../../services/fairy_reaction_service.dart';
 import '../../widgets/history_card.dart';
 import 'history_detail_screen.dart';
 
@@ -13,21 +14,44 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  List<UserProfile> _profiles = [];
   UserProfile? _activeProfile;
   List<WorkoutDay> _history = [];
   bool _loading = true;
+  bool _migrating = false;
   String _filter = 'all';
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    FairyReactionService().addProfileListener(_onProfileChanged);
+  }
+
+  void _onProfileChanged() {
+    if (!mounted) return;
+    debugPrint('🔧 HistoryScreen: профиль изменился → reload');
+    _loadData();
+  }
+
+  @override
+  void dispose() {
+    FairyReactionService().removeProfileListener(_onProfileChanged);
+    super.dispose();
   }
 
   Future<void> _loadData() async {
     setState(() => _loading = true);
-    final profiles = await DatabaseHelper.instance.getProfiles();
+
+    var profiles = await DatabaseHelper.instance.getProfiles();
+
+    // ═══ RETRY ═══
+    if (profiles.isEmpty) {
+      for (int attempt = 0; attempt < 5; attempt++) {
+        await Future.delayed(const Duration(milliseconds: 300));
+        profiles = await DatabaseHelper.instance.getProfiles();
+        if (profiles.isNotEmpty) break;
+      }
+    }
 
     UserProfile? active;
     List<WorkoutDay> history = [];
@@ -39,24 +63,114 @@ class _HistoryScreenState extends State<HistoryScreen> {
       );
     }
 
+    if (!mounted) return;
     setState(() {
-      _profiles = profiles;
       _activeProfile = active;
       _history = history;
       _loading = false;
     });
   }
 
-  Future<void> _switchProfile(UserProfile profile) async {
-    setState(() => _loading = true);
-    final history = await DatabaseHelper.instance.getWorkoutDays(
-      profileId: profile.id!,
+  // ═══════════════════════════════════════════════════════════
+  //  ⚠️ МИГРАЦИЯ — пересчитать статусы по сетам
+  // ═══════════════════════════════════════════════════════════
+  //
+  //  У старых записей status='completed' может стоять ошибочно,
+  //  даже если отмечена только часть подходов. Пересчитываем:
+  //    done == total → completed
+  //    0 < done < total → in_progress
+  //    done == 0 → in_progress
+
+  Future<void> _migrateStatuses() async {
+    if (_activeProfile == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Пересчитать статусы?'),
+        content: const Text(
+            'Приложение проверит каждую тренировку в истории '
+            'и пересчитает статус по реально отмеченным подходам. '
+            'Полезно один раз после обновления.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Пересчитать'),
+          ),
+        ],
+      ),
     );
-    setState(() {
-      _activeProfile = profile;
-      _history = history;
-      _loading = false;
-    });
+
+    if (confirmed != true) return;
+
+    setState(() => _migrating = true);
+
+    final db = DatabaseHelper.instance;
+    int updatedCount = 0;
+
+    for (final w in _history) {
+      if (w.id == null) continue;
+
+      final exercises = await db.getWorkoutExercises(w.id!);
+      if (exercises.isEmpty) continue;
+
+      int totalSets = 0;
+      int doneSets = 0;
+
+      for (final we in exercises) {
+        if (we.itemType != 'exercise') continue;
+        if (we.isCoolDown) continue;
+
+        final sets = await db.getWorkoutSets(we.id!);
+        for (final s in sets) {
+          totalSets++;
+          if (s.completed) doneSets++;
+        }
+      }
+
+      if (totalSets == 0) continue;
+
+      final shouldBeCompleted =
+          doneSets == totalSets; // все отмечено → completed
+      final shouldBeInProgress = !shouldBeCompleted; // иначе in_progress
+
+      final currentIsCompleted = w.status == 'completed';
+      final needsFix =
+          (shouldBeCompleted && !currentIsCompleted) ||
+              (shouldBeInProgress && currentIsCompleted);
+
+      if (needsFix) {
+        final newStatus = shouldBeCompleted ? 'completed' : 'in_progress';
+        final updated = w.copyWith(
+          status: newStatus,
+          // ⚠️ При понижении статуса убираем completedAt
+          completedAt: shouldBeCompleted ? w.completedAt : null,
+        );
+        await db.updateWorkoutDay(updated);
+        updatedCount++;
+        debugPrint('📊 fix: workoutDay=${w.id} → $newStatus '
+            '($doneSets/$totalSets)');
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _migrating = false);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          updatedCount > 0
+              ? '✅ Исправлено записей: $updatedCount'
+              : '✅ Все записи корректны',
+        ),
+      ),
+    );
+
+    await _loadData();
   }
 
   Future<void> _openDetail(WorkoutDay workout) async {
@@ -121,6 +235,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
       appBar: AppBar(
         title: const Text('История'),
         actions: [
+          if (_history.isNotEmpty && _activeProfile != null)
+            IconButton(
+              icon: const Icon(Icons.auto_fix_high_rounded),
+              tooltip: 'Пересчитать статусы',
+              onPressed: _migrating ? null : _migrateStatuses,
+            ),
           if (_history.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.delete_sweep_rounded),
@@ -137,9 +257,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   onRefresh: _loadData,
                   child: Column(
                     children: [
-                      if (_profiles.length > 1)
-                        _buildProfileSwitcher(context),
                       _buildFilters(context),
+                      if (_migrating)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 4),
+                          child: LinearProgressIndicator(),
+                        ),
                       Expanded(
                         child: _filteredHistory.isEmpty
                             ? _buildEmptyState(context)
@@ -159,67 +283,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ],
                   ),
                 ),
-    );
-  }
-
-  Widget _buildProfileSwitcher(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return SizedBox(
-      height: 56,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _profiles.length,
-        itemBuilder: (_, i) {
-          final p = _profiles[i];
-          final isActive = p.id == _activeProfile!.id;
-
-          return Padding(
-            padding: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
-            child: GestureDetector(
-              onTap: () => _switchProfile(p),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: isActive
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.surface,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: isActive
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.onSurface.withOpacity(0.1),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.person,
-                      size: 16,
-                      color: isActive
-                          ? Colors.white
-                          : theme.colorScheme.onSurface,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      p.name,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: isActive
-                            ? Colors.white
-                            : theme.colorScheme.onSurface,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
     );
   }
 
@@ -296,10 +359,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
               color: theme.colorScheme.primary.withOpacity(0.5),
             ),
             const SizedBox(height: 16),
-            Text('Нет профилей', style: theme.textTheme.displaySmall),
+            Text('Нет профиля', style: theme.textTheme.displaySmall),
             const SizedBox(height: 8),
             Text(
-              'Создайте профиль во вкладке «Профили»',
+              'Создайте профиль во вкладке «Профиль»',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: theme.colorScheme.onSurface.withOpacity(0.6),

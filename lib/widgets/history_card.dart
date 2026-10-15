@@ -6,11 +6,16 @@ class HistoryCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onDelete;
 
+  /// ⚠️ Вычислено снаружи (в HistoryScreen):
+  ///    0 < doneSets < totalSets → true (частично выполнен).
+  final bool isPartial;
+
   const HistoryCard({
     super.key,
     required this.workout,
     required this.onTap,
     this.onDelete,
+    this.isPartial = false,
   });
 
   String _formatDate(DateTime date) {
@@ -25,6 +30,38 @@ class HistoryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isCompleted = workout.status == 'completed';
+    final isYoga = workout.type == 'yoga';
+
+    // ⚠️ Три состояния:
+    //    completed      → зелёный
+    //    partial        → оранжевый («Не до конца»)
+    //    in_progress(0) → жёлтый / голубой (для йоги)
+    final List<Color> gradientColors;
+    final IconData iconData;
+    final Color accentColor;
+    final String badgeText;
+
+    if (isCompleted) {
+      gradientColors = [const Color(0xFF00B894), const Color(0xFF55EFC4)];
+      iconData = Icons.check_circle_rounded;
+      accentColor = const Color(0xFF00B894);
+      badgeText = 'Завершена';
+    } else if (isPartial) {
+      gradientColors = [const Color(0xFFE17055), const Color(0xFFFDCB6E)];
+      iconData = Icons.hourglass_bottom_rounded;
+      accentColor = const Color(0xFFE17055);
+      badgeText = 'Не до конца';
+    } else if (isYoga) {
+      gradientColors = [const Color(0xFF81ECEC), const Color(0xFFB2F5EA)];
+      iconData = Icons.self_improvement_rounded;
+      accentColor = const Color(0xFF00B894);
+      badgeText = workout.statusLabel;
+    } else {
+      gradientColors = [const Color(0xFFFDCB6E), const Color(0xFFFFEAA7)];
+      iconData = Icons.timer_rounded;
+      accentColor = const Color(0xFFFDCB6E);
+      badgeText = workout.statusLabel;
+    }
 
     final card = Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -35,21 +72,16 @@ class HistoryCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
+              // ═══ Иконка ═══
               Container(
                 width: 52,
                 height: 52,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: isCompleted
-                        ? [const Color(0xFF00B894), const Color(0xFF55EFC4)]
-                        : [const Color(0xFFFDCB6E), const Color(0xFFFFEAA7)],
-                  ),
+                  gradient: LinearGradient(colors: gradientColors),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Icon(
-                  isCompleted
-                      ? Icons.check_circle_rounded
-                      : Icons.timer_rounded,
+                  iconData,
                   color: Colors.white,
                   size: 26,
                 ),
@@ -59,11 +91,49 @@ class HistoryCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      workout.name,
-                      style: theme.textTheme.headlineMedium,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    // ═══ Название + бейдж «Йога» ═══
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            workout.name,
+                            style: theme.textTheme.headlineMedium,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (isYoga) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00B894)
+                                  .withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.self_improvement_rounded,
+                                  size: 10,
+                                  color: Color(0xFF00B894),
+                                ),
+                                SizedBox(width: 3),
+                                Text(
+                                  'Йога',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF00B894),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -96,19 +166,15 @@ class HistoryCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: isCompleted
-                                ? const Color(0xFF00B894).withOpacity(0.15)
-                                : const Color(0xFFFDCB6E).withOpacity(0.15),
+                            color: accentColor.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            workout.statusLabel,
+                            badgeText,
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
-                              color: isCompleted
-                                  ? const Color(0xFF00B894)
-                                  : const Color(0xFFFDCB6E),
+                              color: accentColor,
                             ),
                           ),
                         ),

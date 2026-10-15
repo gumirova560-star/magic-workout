@@ -7,15 +7,7 @@ import '../services/database_helper.dart';
 import '../services/fairy_reaction_service.dart';
 import '../services/fairy_stats_service.dart';
 
-/// Плавающая фея — появляется СВЕРХУ ПО ЦЕНТРУ.
-///
-/// Этап D:
-/// - 🦋 Полёт сверху вниз
-/// - ✨ Взлёт вверх при исчезновении
-/// - 💫 Искры высоко над головой при mood.party (салют)
-/// - 🌟 Свечение мягкое, едва заметное, своего цвета для каждой эмоции
-///
-/// Размер: фея 44×44, свечение 110/130 (мягкое), искры 70–110.
+/// Плавающая фея — 12×12, появляется СВЕРХУ, позиции по экранам.
 class FairyBubble extends StatefulWidget {
   final String screenKey;
 
@@ -44,31 +36,25 @@ class _FairyBubbleState extends State<FairyBubble>
   void initState() {
     super.initState();
 
-    // ═══ Подписка на события феи ═══
-    FairyReactionService().onEvent = (message, mood) {
-      if (!mounted) return;
-      setState(() {
-        _phrases = [(text: message, mood: mood)];
-        _phraseIndex = 0;
-      });
-      _show();
-    };
+    // ⚠️ Подписываемся как слушатель событий (список, не одиночный onEvent)
+    FairyReactionService().addEventListener(_onFairyEvent);
 
-    // ═══ Подписка: профиль изменился ═══
-    FairyReactionService().onProfileChanged = () {
-      if (!mounted) return;
-      _initPhrases().then((_) {
-        if (mounted) {
-          setState(() => _phraseIndex = 0);
-          _show();
-        }
-      });
-    };
+    FairyReactionService().addProfileListener(_onProfileChanged);
 
-    // ═══ _show() ПОСЛЕ _initPhrases() ═══
-    _initPhrases().then((_) {
+    _initPhrases().then((_) async {
       if (!mounted) return;
-      _show();
+
+      for (final mood in FairyMood.values) {
+        try {
+          await precacheImage(AssetImage(mood.asset), context);
+        } catch (_) {}
+      }
+
+      if (!mounted) return;
+
+      if (_phrases.isNotEmpty) {
+        _show();
+      }
     });
 
     _controller = AnimationController(
@@ -107,7 +93,42 @@ class _FairyBubbleState extends State<FairyBubble>
     )..repeat();
   }
 
+  // ⚠️ Событие от сервиса — подменяем фразу и показываем
+  void _onFairyEvent(String message, FairyMood mood) {
+    debugPrint('🧚 FairyBubble.onEvent: "$message", mounted=$mounted');
+    if (!mounted) return;
+    setState(() {
+      _phrases = [(text: message, mood: mood)];
+      _phraseIndex = 0;
+    });
+    _show();
+  }
+
+  void _onProfileChanged() {
+    if (!mounted) return;
+
+    // ⚠️ Если сервис держит фразу (profile_changed_ask) — не трогаем
+    if (FairyReactionService().isHoldingScreenPhrases) {
+      debugPrint('🧚 _onProfileChanged skipped (hold)');
+      return;
+    }
+
+    _initPhrases().then((_) {
+      if (mounted) {
+        setState(() => _phraseIndex = 0);
+        _show();
+      }
+    });
+  }
+
   Future<void> _initPhrases() async {
+    // ⚠️ Если сервис держит фразы — не загружаем byScreen,
+    //    чтобы не перебить событийную фразу (profile_changed_ask)
+    if (FairyReactionService().isHoldingScreenPhrases) {
+      debugPrint('🧚 _initPhrases SKIPPED (hold)');
+      return;
+    }
+
     try {
       await FairyReactionService().loadActiveProfile();
 
@@ -115,7 +136,6 @@ class _FairyBubbleState extends State<FairyBubble>
       var gender = FairyReactionService().profileGender;
       var id = FairyReactionService().activeProfileId;
 
-      // ═══ RETRY ═══
       if (name == null || name.trim().isEmpty) {
         for (int attempt = 0; attempt < 5; attempt++) {
           await Future.delayed(const Duration(milliseconds: 300));
@@ -135,7 +155,6 @@ class _FairyBubbleState extends State<FairyBubble>
         }
       }
 
-      // ═══ Goal ═══
       String? goal;
       if (id != null) {
         final profile = await DatabaseHelper.instance.getProfileById(id);
@@ -146,16 +165,13 @@ class _FairyBubbleState extends State<FairyBubble>
       final streak = await FairyStatsService.getStreak();
       final daysSince = await FairyStatsService.daysSinceLastWorkout();
 
-      // ═══ ВЕТКА 4: Профиля нет ═══
       if (name == null || name.trim().isEmpty) {
         _phrases = FairyPhrases.forSituationWithMood(
           'no_profile',
           name: null,
           gender: gender,
         );
-      }
-      // ═══ ВЕТКА 5: Comeback ═══
-      else if (daysSince >= 2 && daysSince < 100) {
+      } else if (daysSince >= 2 && daysSince < 100) {
         _phrases = [
           ...FairyPhrases.forScreenWithMood('default',
               name: name, gender: gender),
@@ -166,19 +182,25 @@ class _FairyBubbleState extends State<FairyBubble>
                   ))
               .toList(),
         ];
-      }
-      // ═══ ВЕТКА 6 и 7 ═══
-      else {
+      } else {
         final templates = id != null
-            ? await DatabaseHelper.instance.getTemplates(id)
+            ? await DatabaseHelper.instance.getAutoTemplates(id)
             : <dynamic>[];
 
         if (id != null && templates.isEmpty) {
-          _phrases = FairyPhrases.forSituationWithMood(
-            'no_plan',
-            name: name,
-            gender: gender,
-          );
+          if (widget.screenKey == 'workout') {
+            _phrases = FairyPhrases.forSituationWithMood(
+              'no_plan',
+              name: name,
+              gender: gender,
+            );
+          } else {
+            _phrases = FairyPhrases.forScreenWithMood(
+              widget.screenKey,
+              name: name,
+              gender: gender,
+            );
+          }
         } else {
           final screenPhrases = FairyPhrases.forScreenWithMood(
             widget.screenKey,
@@ -195,21 +217,13 @@ class _FairyBubbleState extends State<FairyBubble>
             hour: hour,
             streakDays: streak,
           );
-          final goalText = FairyPhrases.contextualPhrase(
-            hour: hour,
-            name: name,
-            goal: goal,
-            gender: gender,
-          );
           _phrases = [
             ...screenPhrases,
             (text: contextText, mood: contextMood),
-            (text: goalText, mood: FairyMood.wink),
           ];
         }
       }
 
-      // ═══ FALLBACK ═══
       if (_phrases.isEmpty) {
         _phrases = [
           (
@@ -254,9 +268,10 @@ class _FairyBubbleState extends State<FairyBubble>
     _controller.dispose();
     _wingController.dispose();
     _sparkController.dispose();
-    if (FairyReactionService().onProfileChanged != null) {
-      FairyReactionService().onProfileChanged = null;
-    }
+
+    FairyReactionService().removeEventListener(_onFairyEvent);
+    FairyReactionService().removeProfileListener(_onProfileChanged);
+
     super.dispose();
   }
 
@@ -276,7 +291,7 @@ class _FairyBubbleState extends State<FairyBubble>
 
   void _scheduleHide() {
     _hideTimer?.cancel();
-    _hideTimer = Timer(const Duration(seconds: 12), () {
+    _hideTimer = Timer(const Duration(seconds: 4), () {
       if (mounted) _hide();
     });
   }
@@ -290,8 +305,47 @@ class _FairyBubbleState extends State<FairyBubble>
   }
 
   // ═══════════════════════════════════════════════════════════
-  //  ЦВЕТ СВЕЧЕНИЯ ДЛЯ КАЖДОЙ ЭМОЦИИ
+  //  ПОЗИЦИИ ПО ЭКРАНАМ
   // ═══════════════════════════════════════════════════════════
+
+  double _topForScreen() {
+    switch (widget.screenKey) {
+      case 'profiles':
+        return 70;
+      case 'workout':
+        return 60;
+      case 'workout_detail':
+        return 60;
+      case 'yoga':
+        return 70;
+      case 'progress':
+        return 70;
+      case 'history':
+        return 70;
+      case 'settings':
+        return 70;
+      default:
+        return 70;
+    }
+  }
+
+  double _rightForScreen() {
+    switch (widget.screenKey) {
+      case 'workout':
+        return 16;
+      case 'workout_detail':
+        return 16;
+      case 'settings':
+        return 16;
+      default:
+        return 16;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  СВЕЧЕНИЕ
+  // ═══════════════════════════════════════════════════════════
+
   Color _glowColor(FairyMood mood) {
     switch (mood) {
       case FairyMood.happy:
@@ -310,13 +364,13 @@ class _FairyBubbleState extends State<FairyBubble>
   // ═══════════════════════════════════════════════════════════
   //  ЖИВАЯ ФЕЯ
   // ═══════════════════════════════════════════════════════════
+
   Widget _buildLiveFairy(FairyMood mood) {
     final showSparks = mood == FairyMood.party;
     final glowColor = _glowColor(mood);
 
-    // ═══ Мягкое свечение, едва заметное ═══
     final glowIntensity = mood == FairyMood.party ? 0.30 : 0.22;
-    final glowSize = mood == FairyMood.party ? 130.0 : 110.0;
+    final glowSize = mood == FairyMood.party ? 55.0 : 45.0;
     final glowAmplitude = mood == FairyMood.party ? 0.08 : 0.06;
 
     return AnimatedBuilder(
@@ -327,14 +381,13 @@ class _FairyBubbleState extends State<FairyBubble>
         final scale = 1.0 + 0.008 * math.sin(angle * 2);
 
         final glowT = _sparkController.value;
-        final glowOpacity = glowIntensity +
-            glowAmplitude * math.sin(glowT * 2 * math.pi);
+        final glowOpacity =
+            glowIntensity + glowAmplitude * math.sin(glowT * 2 * math.pi);
 
         return Stack(
           alignment: Alignment.center,
           clipBehavior: Clip.none,
           children: [
-            // ═══ Свечение — мягкое, едва заметное ═══
             Container(
               width: glowSize,
               height: glowSize,
@@ -350,21 +403,16 @@ class _FairyBubbleState extends State<FairyBubble>
                 ),
               ),
             ),
-
-            // ═══ Фея ═══
             Transform.scale(
               scale: scale,
               child: child,
             ),
-
-            // ═══ Искры — высоко над головой ═══
             if (showSparks) ...[
-              _spark(glowT, 0.0, 70, const Color(0xFFFFD166)),
-              _spark(glowT, 0.15, 85, const Color(0xFFEF476F)),
-              _spark(glowT, 0.3, 100, const Color(0xFF06D6A0)),
-              _spark(glowT, 0.45, 110, const Color(0xFF118AB2)),
-              _spark(glowT, 0.6, 75, const Color(0xFF9B5DE5)),
-              _spark(glowT, 0.75, 95, const Color(0xFFF15BB5)),
+              _sparkAbove(glowT, 0.00, -55, -8, const Color(0xFFFFD166)),
+              _sparkAbove(glowT, 0.20, -62, 6, const Color(0xFFEF476F)),
+              _sparkAbove(glowT, 0.40, -48, -4, const Color(0xFF06D6A0)),
+              _sparkAbove(glowT, 0.60, -58, 8, const Color(0xFF118AB2)),
+              _sparkAbove(glowT, 0.80, -52, -6, const Color(0xFF9B5DE5)),
             ],
           ],
         );
@@ -373,35 +421,44 @@ class _FairyBubbleState extends State<FairyBubble>
         mood.asset,
         key: ValueKey(mood),
         fit: BoxFit.contain,
+        frameBuilder: (context, child, frame, wasSyncLoaded) {
+          if (wasSyncLoaded || frame != null) return child;
+          return const SizedBox.shrink();
+        },
         errorBuilder: (_, __, ___) => const Icon(
           Icons.auto_awesome,
-          size: 26,
+          size: 12,
         ),
       ),
     );
   }
 
-  /// Искра — вылетает высоко ВВЕРХ за голову феи (салют).
-  Widget _spark(double t, double phase, double radius, Color color) {
+  Widget _sparkAbove(
+    double t,
+    double phase,
+    double baseY,
+    double xOffset,
+    Color color,
+  ) {
     final a = 2 * math.pi * (t + phase);
 
-    final x = 20 * math.cos(a);
-    final y = -radius - 12 * math.sin(a);
+    final driftY = 6 * math.sin(a * 2);
+    final driftX = 3 * math.cos(a * 3);
 
-    final opacity = 0.4 + 0.6 * (0.5 + 0.5 * math.sin(a * 3));
+    final opacity = 0.4 + 0.6 * (0.5 + 0.5 * math.sin(a * 4));
 
     return Transform.translate(
-      offset: Offset(x, y),
+      offset: Offset(xOffset + driftX, baseY + driftY),
       child: Container(
-        width: 6,
-        height: 6,
+        width: 3.5,
+        height: 3.5,
         decoration: BoxDecoration(
           color: color.withOpacity(opacity),
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
               color: color.withOpacity(0.7),
-              blurRadius: 8,
+              blurRadius: 4,
               spreadRadius: 1,
             ),
           ],
@@ -410,9 +467,41 @@ class _FairyBubbleState extends State<FairyBubble>
     );
   }
 
+  Size _measureBubbleSize(String text, TextStyle style) {
+    const maxWidth = 240.0;
+    const minWidth = 120.0;
+
+    const padLeft = 24.0;
+    const padRight = 36.0;
+    const padTop = 14.0;
+    const padBottom = 24.0;
+
+    const tailExtraRight = 45.0;
+    const tailExtraBottom = 15.0;
+
+    final tp = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+      maxLines: 3,
+      textAlign: TextAlign.center,
+    )..layout(maxWidth: maxWidth - padLeft - padRight);
+
+    final textW = tp.width;
+    final textH = tp.height;
+
+    final bubbleW = (textW + padLeft + padRight).clamp(minWidth, maxWidth);
+    final bubbleH = (textH + padTop + padBottom).clamp(50.0, 130.0);
+
+    return Size(
+      bubbleW + tailExtraRight,
+      bubbleH + tailExtraBottom,
+    );
+  }
+
   // ═══════════════════════════════════════════════════════════
   //  BUILD
   // ═══════════════════════════════════════════════════════════
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -422,18 +511,25 @@ class _FairyBubbleState extends State<FairyBubble>
       return const SizedBox.shrink();
     }
 
+    final textStyle = theme.textTheme.bodyMedium?.copyWith(
+          fontWeight: FontWeight.w600,
+          fontSize: 11,
+          color: theme.colorScheme.onSurface,
+        ) ??
+        const TextStyle(fontSize: 11, fontWeight: FontWeight.w600);
+
+    final bubbleSize = _measureBubbleSize(item.text, textStyle);
+
     return Positioned(
-      top: 130,
-      left: 24,
-      right: 24,
+      top: _topForScreen(),
+      right: _rightForScreen(),
       child: AnimatedBuilder(
         animation: _controller,
         builder: (context, child) {
           final isDisappearing =
               _controller.status == AnimationStatus.reverse;
-          final offset = isDisappearing
-              ? _slideUpOut.value
-              : _slideFromTop.value;
+          final offset =
+              isDisappearing ? _slideUpOut.value : _slideFromTop.value;
 
           return FractionalTranslation(
             translation: offset,
@@ -445,68 +541,73 @@ class _FairyBubbleState extends State<FairyBubble>
         },
         child: GestureDetector(
           onTap: _nextPhrase,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              // ═══ Фея 44×44 (ещё меньше) ═══
-              SizedBox(
-                width: 44,
-                height: 44,
-                child: OverflowBox(
-                  minWidth: 0,
-                  maxWidth: 280,
-                  minHeight: 0,
-                  maxHeight: 420,
-                  alignment: Alignment.center,
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 300),
-                    child: _buildLiveFairy(item.mood),
+              Padding(
+                padding: const EdgeInsets.only(right: 40),
+                child: SizedBox(
+                  width: bubbleSize.width,
+                  height: bubbleSize.height,
+                  child: CustomPaint(
+                    painter: _SpeechBubblePainter(
+                      fillColor: theme.colorScheme.surface,
+                      borderColor: Colors.black.withOpacity(0.25),
+                      shadowColor: Colors.black.withOpacity(0.15),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.only(
+                        left: 22,
+                        right: 34,
+                        top: 16,
+                        bottom: 26,
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item.text,
+                              textAlign: TextAlign.center,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: textStyle,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          GestureDetector(
+                            onTap: _hide,
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 14,
+                              color: theme.colorScheme.onSurface
+                                  .withOpacity(0.5),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(height: 4),
 
-              // ═══ Облачко ═══
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  borderRadius: BorderRadius.circular(18),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.12),
-                      blurRadius: 14,
-                      offset: const Offset(0, 5),
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: OverflowBox(
+                    minWidth: 0,
+                    maxWidth: 140,
+                    minHeight: 0,
+                    maxHeight: 180,
+                    alignment: Alignment.center,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      child: _buildLiveFairy(item.mood),
                     ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        item.text,
-                        textAlign: TextAlign.center,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                          color: theme.colorScheme.onSurface,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: _hide,
-                      child: Icon(
-                        Icons.close_rounded,
-                        size: 16,
-                        color: theme.colorScheme.onSurface.withOpacity(0.5),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ],
@@ -514,5 +615,93 @@ class _FairyBubbleState extends State<FairyBubble>
         ),
       ),
     );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  РИСУЕТ ПУЗЫРЬ (ОВАЛ) + ХВОСТИК («КАПЕЛЬКА»)
+// ═══════════════════════════════════════════════════════════
+
+class _SpeechBubblePainter extends CustomPainter {
+  final Color fillColor;
+  final Color borderColor;
+  final Color shadowColor;
+
+  _SpeechBubblePainter({
+    required this.fillColor,
+    required this.borderColor,
+    required this.shadowColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bubbleWidth = size.width - 25;
+    final bubbleHeight = size.height - 20;
+
+    final bubbleRect = Rect.fromLTWH(
+      0,
+      0,
+      bubbleWidth,
+      bubbleHeight,
+    );
+
+    final ovalPath = Path()..addOval(bubbleRect);
+
+    final tailPath = Path();
+
+    final tailBaseTop = Offset(
+      bubbleWidth - 20,
+      bubbleHeight * 0.55,
+    );
+    final tailBaseBottom = Offset(
+      bubbleWidth - 15,
+      bubbleHeight * 0.95,
+    );
+
+    final tailTip = Offset(
+      bubbleWidth + 30,
+      bubbleHeight * 0.95,
+    );
+
+    tailPath.moveTo(tailBaseTop.dx, tailBaseTop.dy);
+    tailPath.cubicTo(
+      bubbleWidth + 5, bubbleHeight * 0.55,
+      bubbleWidth + 15, bubbleHeight * 0.7,
+      tailTip.dx, tailTip.dy,
+    );
+    tailPath.cubicTo(
+      bubbleWidth + 15, bubbleHeight * 0.85,
+      bubbleWidth + 5, bubbleHeight * 0.9,
+      tailBaseBottom.dx, tailBaseBottom.dy,
+    );
+    tailPath.close();
+
+    final combined = Path.combine(
+      PathOperation.union,
+      ovalPath,
+      tailPath,
+    );
+
+    canvas.drawShadow(combined, shadowColor, 6, false);
+
+    final fillPaint = Paint()
+      ..color = fillColor
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true;
+    canvas.drawPath(combined, fillPaint);
+
+    final borderPaint = Paint()
+      ..color = borderColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..isAntiAlias = true;
+    canvas.drawPath(combined, borderPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SpeechBubblePainter oldDelegate) {
+    return oldDelegate.fillColor != fillColor ||
+        oldDelegate.borderColor != borderColor ||
+        oldDelegate.shadowColor != shadowColor;
   }
 }

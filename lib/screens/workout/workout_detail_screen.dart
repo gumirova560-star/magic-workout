@@ -12,6 +12,7 @@ import '../../widgets/fairy_bubble.dart';
 import 'replace_exercise_screen.dart';
 import 'widgets/set_row.dart';
 import 'widgets/rest_timer.dart';
+import '../exercise/exercise_detail_screen.dart';
 
 /// Экран тренировки — 3 режима:
 /// 🆕 createNew — из шаблона, ещё не начата
@@ -20,6 +21,9 @@ import 'widgets/rest_timer.dart';
 ///
 /// ⚠️ Кардио — вне блоков. Показывается отдельной секцией после
 ///    силовых, перед заминкой.
+///
+/// ⚠️ Рядом с названием упражнения — иконка ⓘ, открывает
+///    экран деталей (описание, техника, ошибки, советы, 3 кнопки поиска).
 class WorkoutDetailScreen extends StatefulWidget {
   final WorkoutTemplate? template;
   final WorkoutDay? workoutDay;
@@ -130,7 +134,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     });
   }
 
-  /// ⚠️ Проверить, все ли подходы в круге выполнены.
   bool _isCircleComplete(List<TemplateItem> blockItems, int circle) {
     for (final item in blockItems) {
       final sets = _setsData[item.id!];
@@ -141,7 +144,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     return true;
   }
 
-  /// ⚠️ Количество выполненных подходов в круге.
   int _completedInCircle(List<TemplateItem> blockItems, int circle) {
     int count = 0;
     for (final item in blockItems) {
@@ -382,6 +384,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     _showMessage('Блоки сброшены');
   }
 
+// ═══ ЧАСТЬ 1 — КОНЕЦ ═══
   // ═══════════════════════════════════════════════════════════
   //  БЛОКИ — включение/выключение (после старта, в БД)
   // ═══════════════════════════════════════════════════════════
@@ -437,7 +440,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     }
   }
 
-// ═══ ЧАСТЬ 1 — КОНЕЦ ═══
   // ═══════════════════════════════════════════════════════════
   //  СТАРТ ТРЕНИРОВКИ
   // ═══════════════════════════════════════════════════════════
@@ -594,9 +596,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
         .difference(day.startedAt ?? DateTime.now())
         .inMinutes;
 
-    // ⚠️ Статус:
-    //    все подходы отмечены → 'completed'
-    //    иначе → 'in_progress' (можно вернуться и доделать)
     final isFullyDone = totalSets > 0 && completedSets == totalSets;
     final newStatus = isFullyDone ? 'completed' : 'in_progress';
 
@@ -610,7 +609,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
 
     if (!mounted) return;
 
-    // ⚠️ Фея: только на полное завершение
     if (isFullyDone) {
       FairyReactionService().trigger(
         'workout_completed',
@@ -1399,7 +1397,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     for (final blockNum in sortedBlocks) {
       final blockItems = blocks[blockNum]!;
 
-      // ⚠️ Количество кругов = макс. подходов среди упражнений блока
       int maxCircles = 1;
       for (final item in blockItems) {
         final sets = _setsData[item.id!] ?? [];
@@ -1415,12 +1412,10 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
         final total = blockItems.length;
         final isCollapsed = _isCircleCollapsed(blockNum, circleNum);
 
-        // ⚠️ Авто-сворачивание при завершении
         if (isComplete && !isCollapsed) {
           _collapsedCircles.add(_circleKey(blockNum, circleNum));
         }
 
-        // ⚠️ Заголовок
         slivers.add(
           SliverToBoxAdapter(
             child: _buildCircleHeader(
@@ -1435,7 +1430,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
           ),
         );
 
-        // ⚠️ Упражнения (только если не свёрнуто)
         if (!isCollapsed) {
           slivers.add(
             SliverPadding(
@@ -1781,6 +1775,8 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
 
   /// ⚠️ Карточка упражнения.
   /// `circleIndex` — если задан, показываем ТОЛЬКО один подход.
+  ///
+  /// ⚠️ Рядом с названием — иконка ⓘ, открывает экран деталей.
   Widget _buildExerciseCard(
     BuildContext context,
     TemplateItem item, {
@@ -1803,7 +1799,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
 
     final sets = _setsData[item.id!]!;
 
-    // ⚠️ Определяем, какие подходы показывать
     final List<int> setIndexesToShow;
     if (circleIndex != null) {
       if (circleIndex < sets.length) {
@@ -1853,11 +1848,40 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          ex.name,
-                          style: theme.textTheme.headlineMedium,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                ex.name,
+                                style: theme.textTheme.headlineMedium,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            // ⚠️ Иконка «подробнее» — открывает экран деталей
+                            InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        ExerciseDetailScreen(
+                                      exercise: ex,
+                                    ),
+                                  ),
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(20),
+                              child: Padding(
+                                padding: const EdgeInsets.all(6),
+                                child: Icon(
+                                  Icons.info_outline_rounded,
+                                  size: 20,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -1922,7 +1946,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                     );
                   }
 
-                  // ⚠️ Авто-сворачивание круга
                   if (circleIndex != null && item.id != null) {
                     _tryAutoCollapse(item, circleIndex);
                   }
@@ -1933,7 +1956,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                         () => _activeRestSeconds = item.restSeconds);
                   }
 
-                  // ⚠️ Авто-сворачивание круга
                   if (circleIndex != null && item.id != null) {
                     _tryAutoCollapse(item, circleIndex);
                   }
@@ -1943,7 +1965,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                     : null,
               ),
 
-            // ⚠️ Кнопка «+ Добавить подход» (только в обычном режиме)
             if (!_isViewMode && _started && circleIndex == null && !isCardio)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -1977,7 +1998,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
 
     final blockNum = _pendingBlocks[idx] ?? 1;
 
-    // ⚠️ Собираем items этого блока
     final blockItems = <TemplateItem>[];
     for (int i = 0; i < _items.length; i++) {
       if (_items[i].isCoolDown) continue;
@@ -1985,7 +2005,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
       blockItems.add(_items[i]);
     }
 
-    // ⚠️ Проверяем, всё ли выполнено
     if (_isCircleComplete(blockItems, circleIndex) && _started) {
       final key = _circleKey(blockNum, circleIndex + 1);
       if (!_collapsedCircles.contains(key)) {

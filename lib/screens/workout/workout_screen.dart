@@ -731,28 +731,46 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               const SizedBox(height: 24),
             ],
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildSectionTitle(context, 'Мой план на неделю'),
-                if (_templates.isNotEmpty)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextButton.icon(
-                        onPressed: _openMyTemplates,
-                        icon: const Icon(Icons.bookmark_rounded, size: 18),
-                        label: const Text('Из шаблона'),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(child: _buildSectionTitle(context, 'Мой план на неделю')),
+                    if (_templates.isNotEmpty)
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert_rounded),
+                        tooltip: 'Действия',
+                        onSelected: (value) {
+                          if (value == 'templates') _openMyTemplates();
+                          if (value == 'update') _confirmRegenerate();
+                        },
+                        itemBuilder: (ctx) => [
+                          const PopupMenuItem(
+                            value: 'templates',
+                            child: Row(
+                              children: [
+                                Icon(Icons.bookmark_rounded, size: 20),
+                                SizedBox(width: 8),
+                                Text('Из шаблона'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'update',
+                            child: Row(
+                              children: [
+                                Icon(Icons.refresh_rounded, size: 20),
+                                SizedBox(width: 8),
+                                Text('Обновить план'),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 4),
-                      TextButton.icon(
-                        onPressed:
-                            _generating ? null : _confirmRegenerate,
-                        icon: const Icon(Icons.refresh_rounded, size: 18),
-                        label: const Text('Обновить'),
-                      ),
-                    ],
-                  ),
+                  ],
+                ),
               ],
             ),
             const SizedBox(height: 12),

@@ -17,6 +17,9 @@ import 'widgets/rest_timer.dart';
 /// 🆕 createNew — из шаблона, ещё не начата
 /// ⏳ inProgress — продолжение текущей
 /// ✅ viewCompleted — просмотр завершённой + «Сохранить как шаблон»
+///
+/// ⚠️ Кардио — вне блоков. Показывается отдельной секцией после
+///    силовых, перед заминкой.
 class WorkoutDetailScreen extends StatefulWidget {
   final WorkoutTemplate? template;
   final WorkoutDay? workoutDay;
@@ -335,6 +338,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
   //  БЛОКИ — создание/сброс ДО старта
   // ═══════════════════════════════════════════════════════════
 
+  /// ⚠️ Кардио НЕ попадает в блоки — оно отдельно, после.
   void _createBlocks() {
     _pendingBlocks.clear();
     _collapsedCircles.clear();
@@ -345,6 +349,11 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     for (int i = 0; i < _items.length; i++) {
       final item = _items[i];
       if (item.isCoolDown) continue;
+
+      // ⚠️ Кардио — вне блоков
+      final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
+      final isCardio = ex != null && _isCardio(ex);
+      if (isCardio) continue;
 
       if (countInBlock >= 3) {
         blockNum++;
@@ -377,6 +386,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
   //  БЛОКИ — включение/выключение (после старта, в БД)
   // ═══════════════════════════════════════════════════════════
 
+  /// ⚠️ Кардио получает `blockNumber = null` — оно вне блоков.
   Future<void> _toggleBlocks() async {
     if (_workoutDayId == null) return;
 
@@ -397,6 +407,17 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
       for (final item in _items) {
         if (item.id == null) continue;
         if (item.isCoolDown) continue;
+
+        // ⚠️ Кардио — вне блоков
+        final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
+        final isCardio = ex != null && _isCardio(ex);
+        if (isCardio) {
+          await DatabaseHelper.instance.updateWorkoutExerciseBlock(
+            id: item.id!,
+            blockNumber: null,
+          );
+          continue;
+        }
 
         if (countInBlock >= 3) {
           blockNum++;
@@ -528,13 +549,12 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
   }
 
   // ═══════════════════════════════════════════════════════════
-  //  ⚠️ ЗАВЕРШЕНИЕ — пересчёт статуса по семам
+  //  ЗАВЕРШЕНИЕ — пересчёт статуса по семам
   // ═══════════════════════════════════════════════════════════
 
   Future<void> _finishWorkout() async {
     if (_workoutDayId == null) return;
 
-    // ⚠️ Считаем: сколько подходов отмечено и сколько всего
     int completedSets = 0;
     int totalSets = 0;
     for (final sets in _setsData.values) {
@@ -544,7 +564,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
       }
     }
 
-    // ⚠️ Если вообще ничего не отмечено — спросить «Завершить?»
     if (completedSets == 0) {
       final ok = await showDialog<bool>(
         context: context,
@@ -1345,18 +1364,29 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
 
   // ═══════════════════════════════════════════════════════════
   //  ПЕРЕГРУППИРОВКА ПО КРУГАМ (блоки включены)
+  //
+  //  ⚠️ Кардио (без blockNumber) идёт в `unassigned` —
+  //     показывается отдельной секцией «Кардио» ПОСЛЕ блоков,
+  //     перед заминкой.
   // ═══════════════════════════════════════════════════════════
 
   List<Widget> _buildCircuitsSlivers(BuildContext context) {
     final slivers = <Widget>[];
 
     final Map<int, List<TemplateItem>> blocks = {};
+    final List<TemplateItem> unassigned = []; // ⚠️ кардио и прочее
 
     for (int i = 0; i < _items.length; i++) {
       final item = _items[i];
       if (item.isCoolDown) continue;
 
-      final blockNum = _pendingBlocks[i] ?? 1;
+      final blockNum = _pendingBlocks[i];
+
+      // ⚠️ Если blockNumber не задан → показываем после блоков
+      if (blockNum == null) {
+        unassigned.add(item);
+        continue;
+      }
 
       blocks.putIfAbsent(blockNum, () => []);
       blocks[blockNum]!.add(item);
@@ -1427,6 +1457,48 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
           );
         }
       }
+    }
+
+    // ⚠️ Кардио и прочее вне блоков — после блоков, перед заминкой
+    if (unassigned.isNotEmpty) {
+      slivers.add(
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE17055).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'Кардио',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: Color(0xFFE17055),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      slivers.add(
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, i) => _buildItemCard(context, unassigned[i]),
+              childCount: unassigned.length,
+            ),
+          ),
+        ),
+      );
     }
 
     // ⚠️ Заминка — отдельно
@@ -1506,7 +1578,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
           ),
           child: Row(
             children: [
-              // ⚠️ Иконка статуса
               Icon(
                 isComplete
                     ? Icons.check_circle_rounded
@@ -1516,7 +1587,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
               ),
               const SizedBox(width: 8),
 
-              // ⚠️ Название
               Expanded(
                 child: Text(
                   'БЛОК $blockNum — КРУГ $circleNum · $completed/$total',
@@ -1528,7 +1598,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                 ),
               ),
 
-              // ⚠️ Кнопка свернуть/развернуть
               Icon(
                 isCollapsed
                     ? Icons.keyboard_arrow_down_rounded

@@ -28,6 +28,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   final Set<String> _focusAreas = {};
   final Set<String> _limitations = {};
 
+  /// ⚠️ Максимум фокусных зон
+  static const int _maxFocusAreas = 3;
+
   @override
   void initState() {
     super.initState();
@@ -43,7 +46,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       _equipment = p.equipment;
       _daysPerWeek = p.daysPerWeek;
       _sessionMinutes = p.sessionMinutes;
-      _focusAreas.addAll(p.focusAreas);
+      // ⚠️ Максимум 3 фокусные зоны — обрезаем старые
+      _focusAreas.addAll(p.focusAreas.take(_maxFocusAreas));
       _limitations.addAll(p.limitations);
     }
   }
@@ -66,7 +70,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       weight: _weight,
       level: _level,
       goal: _goal,
-      focusAreas: _focusAreas.toList(),
+      // ⚠️ Обрезаем до 3 перед сохранением
+      focusAreas: _focusAreas.take(_maxFocusAreas).toList(),
       limitations: _limitations.toList(),
       equipment: _equipment,
       daysPerWeek: _daysPerWeek,
@@ -201,18 +206,36 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
             // ═══ ФОКУСНЫЕ ЗОНЫ ═══
             _sectionTitle('Фокусные зоны'),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Можно выбрать до $_maxFocusAreas зон. '
+                'Выбрано: ${_focusAreas.length}/$_maxFocusAreas',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
-                _chip('glutes', 'Ягодицы', _focusAreas),
-                _chip('abs', 'Пресс', _focusAreas),
-                _chip('arms', 'Руки', _focusAreas),
-                _chip('legs', 'Ноги', _focusAreas),
-                _chip('back', 'Спина', _focusAreas),
-                _chip('chest', 'Грудь', _focusAreas),
-                _chip('shoulders', 'Плечи', _focusAreas),
-                _chip('calves', 'Голень', _focusAreas),
+                _chip('glutes', 'Ягодицы', _focusAreas,
+                    maxSelection: _maxFocusAreas),
+                _chip('abs', 'Пресс', _focusAreas,
+                    maxSelection: _maxFocusAreas),
+                _chip('arms', 'Руки', _focusAreas,
+                    maxSelection: _maxFocusAreas),
+                _chip('legs', 'Ноги', _focusAreas,
+                    maxSelection: _maxFocusAreas),
+                _chip('back', 'Спина', _focusAreas,
+                    maxSelection: _maxFocusAreas),
+                _chip('chest', 'Грудь', _focusAreas,
+                    maxSelection: _maxFocusAreas),
+                _chip('shoulders', 'Плечи', _focusAreas,
+                    maxSelection: _maxFocusAreas),
+                _chip('calves', 'Голень', _focusAreas,
+                    maxSelection: _maxFocusAreas),
+                _chip('cardio', 'Кардио', _focusAreas,
+                    maxSelection: _maxFocusAreas),
               ],
             ),
             const SizedBox(height: 24),
@@ -267,7 +290,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
               max: 90,
               divisions: 4,
               unit: 'мин',
-              onChanged: (v) => setState(() => _sessionMinutes = v.toInt()),
+              onChanged: (v) =>
+                  setState(() => _sessionMinutes = v.toInt()),
             ),
             const SizedBox(height: 32),
 
@@ -396,7 +420,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         child: GestureDetector(
           onTap: () => onSelected(value),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: isSelected
                   ? theme.colorScheme.primary.withOpacity(0.12)
@@ -442,18 +467,32 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     }).toList();
   }
 
-  Widget _chip(String value, String label, Set<String> collection) {
+  /// ⚠️ `maxSelection` — максимум выбранных. Если null — без ограничения.
+  Widget _chip(
+    String value,
+    String label,
+    Set<String> collection, {
+    int? maxSelection,
+  }) {
     final isSelected = collection.contains(value);
+    final atLimit = maxSelection != null &&
+        collection.length >= maxSelection &&
+        !isSelected;
+
     return FilterChip(
       label: Text(label),
       selected: isSelected,
-      onSelected: (v) => setState(() {
-        if (v) {
-          collection.add(value);
-        } else {
-          collection.remove(value);
-        }
-      }),
+      // ⚠️ Блокируем выбор, если уже максимум и чип не выбран
+      onSelected: atLimit
+          ? null
+          : (v) => setState(() {
+                if (v) {
+                  collection.add(value);
+                } else {
+                  collection.remove(value);
+                }
+              }),
     );
   }
 }
+// ═══ ФАЙЛ profile_edit_screen.dart ЗАВЕРШЁН ═══

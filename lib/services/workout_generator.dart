@@ -9,16 +9,122 @@ import 'week_analyzer.dart';
 /// Умный генератор плана тренировок.
 ///
 /// 📌 Особенности:
-/// — 🧠 Умное распределение по категориям (Верх / Низ / Кор / Руки)
-/// — 🔁 Базовые упражнения (присед, жим, тяга) повторяются из недели в неделю
-/// — 🎲 Изолирующие меняются каждую неделю
-/// — 🚫 Нет повторов упражнений между днями одной недели
-/// — 📈 Прогрессия веса применяется при старте (в WorkoutDetailScreen)
+/// — 🧠 Фокусные зоны — ПРИОРИТЕТ (максимум 3 из UI)
+/// — 🧩 basePool — только если фокусных < 3 (для добивки)
+/// — ⚖️ Равномерное распределение упражнений по группам дня
+/// — ✂️ Название дня — только по фокусным зонам
+/// — 🚫 Фильтр ограничений (только основная зона упражнения)
+/// — 🎚 Фильтр сложности: beginner → beginner, intermediate → без advanced
+/// — ❤️ Кардио `every_day` при тонусе / похудении / фокусе «кардио»
+/// — 📈 Прогрессия веса применяется при старте
 class WorkoutGenerator {
   static final Random _random = Random();
 
   // ═══════════════════════════════════════════════════════════
-  //  ГЛАВНЫЙ МЕТОД — сгенерировать план на неделю
+  //  МАППИНГИ
+  // ═══════════════════════════════════════════════════════════
+
+  static const Map<String, String> _aliasMap = {
+    // Ограничения / травмы
+    'плечи': 'shoulders',
+    'спина': 'back',
+    'колени': 'knees',
+    'шея': 'neck',
+    'поясница': 'lower_back',
+    'локти': 'elbows',
+    'запястья': 'wrists',
+    'бёдра': 'hips',
+    'голеностоп': 'ankles',
+
+    // Фокусные зоны
+    'ягодицы': 'glutes',
+    'пресс': 'abs',
+    'косые': 'obliques',
+    'руки': 'arms',
+    'бицепс': 'biceps',
+    'трицепс': 'triceps',
+    'ноги': 'legs',
+    'голень': 'calves',
+    'широчайшие': 'lats',
+    'трапеции': 'traps',
+    'грудь': 'chest',
+    'кор': 'core',
+    'кардио': 'cardio',
+  };
+
+  static const Map<String, List<String>> _limitationToBlockedZones = {
+    'плечи': ['shoulders'],
+    'shoulders': ['shoulders'],
+
+    'колени': ['knees', 'quads'],
+    'knees': ['knees', 'quads'],
+
+    'спина': ['back', 'lats', 'lower_back'],
+    'back': ['back', 'lats', 'lower_back'],
+
+    'поясница': ['lower_back'],
+    'lower_back': ['lower_back'],
+
+    'шея': ['neck'],
+    'neck': ['neck'],
+
+    'локти': ['elbows', 'biceps', 'triceps'],
+    'elbows': ['elbows', 'biceps', 'triceps'],
+
+    'запястья': ['wrists'],
+    'wrists': ['wrists'],
+
+    'бёдра': ['hips', 'glutes'],
+    'hips': ['hips', 'glutes'],
+
+    'голеностоп': ['ankles', 'calves'],
+    'ankles': ['ankles', 'calves'],
+  };
+
+  /// ⚠️ Разворачивает составную зону в конкретные технические коды.
+  static const Map<String, List<String>> _zoneExpand = {
+    'arms': ['arms', 'biceps', 'triceps'],
+    'legs': ['legs', 'quads', 'hamstrings', 'calves'],
+    'back': ['back', 'lats', 'traps', 'lower_back'],
+    'core': ['core', 'abs', 'obliques', 'lower_back'],
+    'abs': ['abs', 'obliques'],
+    'chest': ['chest'],
+    'glutes': ['glutes', 'hamstrings'],
+    'shoulders': ['shoulders', 'traps'],
+  };
+
+  static String _norm(String s) => _aliasMap[s] ?? s;
+
+  /// Развернуть список групп в объединённое множество кодов.
+  static Set<String> _expandGroups(List<String> groups) {
+    final result = <String>{};
+    for (final g in groups) {
+      final norm = _norm(g);
+      final expanded = _zoneExpand[norm];
+      if (expanded != null) {
+        result.addAll(expanded);
+      } else {
+        result.add(norm);
+      }
+    }
+    return result;
+  }
+
+  static Set<String> _buildBlockedZones(List<String> limitations) {
+    final blocked = <String>{};
+    for (final lim in limitations) {
+      final zones = _limitationToBlockedZones[lim];
+      if (zones != null) {
+        blocked.addAll(zones);
+      } else {
+        blocked.add(_norm(lim));
+      }
+    }
+    return blocked;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  ГЛАВНЫЙ МЕТОД
   // ═══════════════════════════════════════════════════════════
 
   static Future<List<WorkoutTemplate>> generateWeekPlan(
@@ -29,19 +135,16 @@ class WorkoutGenerator {
       throw Exception('Profile ID обязателен');
     }
 
-    // ═══ 0. Умный режим — анализ ═══
     int setsAdjustment = 0;
     Set<int> recentExerciseIds = {};
 
     if (smart) {
       try {
-        // Пропуски на прошлой неделе
         final missed = await WeekAnalyzer.missedLastWeek(profile.id!);
         if (missed >= 2) {
           setsAdjustment = -1;
         }
 
-        // Упражнения за последние 14 дней — для исключения повторов
         recentExerciseIds = await DatabaseHelper.instance
             .getRecentExerciseIds(
           profileId: profile.id!,
@@ -50,56 +153,62 @@ class WorkoutGenerator {
       } catch (_) {}
     }
 
-    // ═══ 1. Группы мышц из профиля ═══
     final focusGroups = _getFocusGroups(profile);
 
-    // ═══ 2. Умное распределение по категориям ═══
+    final cardioMode = _computeCardioMode(
+      focusGroups: focusGroups,
+      goal: profile.goal,
+    );
+
     final dayPlans = _distributeByCategoriesSmart(
       focusGroups: focusGroups,
       daysCount: profile.daysPerWeek,
       goal: profile.goal,
       limitations: profile.limitations,
+      cardioMode: cardioMode,
     );
 
-    // ═══ 3. Загрузка данных ═══
     final allExercises = await DatabaseHelper.instance.getExercises();
     final allStretches = await DatabaseHelper.instance.getStretches();
 
-    // ═══ 4. Создание шаблонов ═══
     final templates = <WorkoutTemplate>[];
-    final usedExerciseIds = <int>{}; // для исключения между днями
+    final usedExerciseIds = <int>{};
 
     for (int i = 0; i < dayPlans.length; i++) {
       final groups = dayPlans[i];
-      final dayName = _getDayName(groups, i + 1);
+      final dayName = _getDayName(
+        groups,
+        i + 1,
+        focusGroups: focusGroups,
+      );
 
-      // 4.1 Умный подбор упражнений
       final exercises = _pickExercisesSmart(
         allExercises: allExercises,
         muscleGroups: groups,
         equipment: profile.equipment,
         level: profile.level,
         limitations: profile.limitations,
-        maxCount: _getExerciseCount(profile.sessionMinutes),
+        maxCount: _getExerciseCount(
+          profile.sessionMinutes,
+          profile.level,
+        ),
         age: profile.age,
         recentExerciseIds: recentExerciseIds,
         usedExerciseIds: usedExerciseIds,
         goal: profile.goal,
+        cardioMode: cardioMode,
       );
 
-      // Запоминаем использованные
       for (final ex in exercises) {
         if (ex.id != null) usedExerciseIds.add(ex.id!);
       }
 
-      // 4.2 Заминка
       final coolDown = _pickCoolDown(
         allStretches: allStretches,
         trainedGroups: groups,
         maxCount: 5,
       );
 
-      // 4.3 Создать шаблон
       final template = WorkoutTemplate(
         profileId: profile.id!,
         name: dayName,
@@ -107,28 +216,32 @@ class WorkoutGenerator {
         estimatedMinutes: profile.sessionMinutes,
       );
 
-      final templateId = await DatabaseHelper.instance
-          .saveTemplate(template);
+      final templateId =
+          await DatabaseHelper.instance.saveTemplate(template);
 
-      // 4.4 Упражнения
       final baseSets = _getSets(profile.level, profile.age);
       final finalSets = (baseSets + setsAdjustment).clamp(2, 5);
 
       int order = 1;
       for (final ex in exercises) {
         if (ex.id == null) continue;
+
+        final isCardio = ex.muscleGroups.contains('cardio');
+        final setsCount = isCardio ? 1 : finalSets;
+        final repsStr =
+            isCardio ? '5' : _getReps(profile.goal, profile.age);
+
         await DatabaseHelper.instance.addTemplateItem(TemplateItem(
           templateId: templateId,
           itemType: 'exercise',
           itemId: ex.id!,
           order: order++,
-          sets: finalSets,
-          reps: _getReps(profile.goal, profile.age),
+          sets: setsCount,
+          reps: repsStr,
           restSeconds: _getRest(profile.goal, profile.age),
         ));
       }
 
-      // 4.5 Заминка
       for (final stretch in coolDown) {
         if (stretch.id == null) continue;
         await DatabaseHelper.instance.addTemplateItem(TemplateItem(
@@ -141,26 +254,43 @@ class WorkoutGenerator {
         ));
       }
 
-      // Перечитать шаблон с ID
-      final saved = await DatabaseHelper.instance
-          .getTemplateById(templateId);
+      final saved =
+          await DatabaseHelper.instance.getTemplateById(templateId);
       if (saved != null) templates.add(saved);
     }
 
     return templates;
   }
 
-// ╔═══════════════════════════════════════════════════════════╗
-// ║  ⚠️ ЧАСТЬ 2.1 ЗАКОНЧИЛАСЬ — ЖДИТЕ ЧАСТЬ 2.2              ║
-// ╚═══════════════════════════════════════════════════════════╝
   // ═══════════════════════════════════════════════════════════
-  //  УМНОЕ РАСПРЕДЕЛЕНИЕ ПО КАТЕГОРИЯМ
+  //  РЕЖИМ КАРДИО
   // ═══════════════════════════════════════════════════════════
 
-  /// Определить группы мышц из профиля.
+  static String _computeCardioMode({
+    required List<String> focusGroups,
+    required String goal,
+  }) {
+    if (focusGroups.contains('cardio')) return 'every_day';
+
+    switch (goal) {
+      case 'lose_weight':
+      case 'tone':
+        return 'every_day';
+      case 'gain_mass':
+      case 'strength':
+      default:
+        return 'off';
+    }
+  }
+
+// ═══ ЧАСТЬ 1 — ЗАКОНЧЕНА ═══
+  // ═══════════════════════════════════════════════════════════
+  //  ФОКУСНЫЕ ЗОНЫ И РАСПРЕДЕЛЕНИЕ ПО ДНЯМ
+  // ═══════════════════════════════════════════════════════════
+
   static List<String> _getFocusGroups(UserProfile profile) {
     if (profile.focusAreas.isNotEmpty) {
-      return profile.focusAreas;
+      return profile.focusAreas.map(_norm).toList();
     }
 
     if (profile.gender == 'female') {
@@ -170,96 +300,112 @@ class WorkoutGenerator {
     }
   }
 
-  /// Умное распределение по категориям.
-  ///
-  /// Логика:
-  /// — 3 дня: Верх / Низ / Кор+Руки
-  /// — 4 дня: Верх / Низ / Кор+Руки / Full Body
-  /// — 5 дней: Верх / Низ / Кор / Руки / Full Body
-  /// — 6 дней: Верх / Низ / Кор / Руки / Full Body / Full Body
-  /// — 2 дня: Верх / Низ
+  /// Распределение по дням:
+  ///  1. Фокусные зоны — ПО КРУГУ, по 3 на день (приоритет).
+  ///  2. basePool — только если фокусных < 3 (для добивки).
+  ///  3. Если всё ещё < 3 — добиваем фокусными.
+  ///  4. Кардио — в конец каждого дня (если режим every_day).
   static List<List<String>> _distributeByCategoriesSmart({
     required List<String> focusGroups,
     required int daysCount,
     required String goal,
     required List<String> limitations,
+    required String cardioMode,
   }) {
-    // ═══ Категории с группами ═══
-    const upper = ['chest', 'back', 'shoulders', 'lats', 'traps'];
-    const lower = ['glutes', 'legs', 'quads', 'hamstrings', 'calves'];
-    const core = ['abs', 'obliques', 'core', 'lower_back'];
-    const arms = ['biceps', 'triceps', 'arms'];
+    final blocked = _buildBlockedZones(limitations);
 
-    // ═══ План на неделю ═══
-    List<List<String>> plan;
+    final focus = focusGroups
+        .map(_norm)
+        .where((g) => g != 'cardio')
+        .where((g) => !blocked.contains(g))
+        .toList();
 
-    switch (daysCount) {
-      case 2:
-        plan = [upper, lower];
-        break;
-      case 3:
-        plan = [upper, lower, [...core, ...arms]];
-        break;
-      case 4:
-        plan = [upper, lower, [...core, ...arms], [...upper, ...lower]];
-        break;
-      case 5:
-        plan = [upper, lower, core, arms, [...upper, ...lower]];
-        break;
-      case 6:
-      default:
-        plan = [
-          upper,
-          lower,
-          core,
-          arms,
-          [...upper, ...lower],
-          [...core, ...arms],
-        ];
-        break;
-    }
+    final effectiveFocus = focus.isNotEmpty
+        ? focus
+        : ['glutes', 'abs', 'legs', 'arms'];
 
-    // ═══ Обрезка по daysCount (если нужно) ═══
-    if (plan.length > daysCount) {
-      plan = plan.sublist(0, daysCount);
-    }
+    // ⚠️ basePool — только если фокусных < 3
+    final hasEnoughFocus = effectiveFocus.length >= 3;
 
-    // ═══ Фильтрация по limitations ═══
-    if (limitations.isNotEmpty) {
-      for (int i = 0; i < plan.length; i++) {
-        final filtered = plan[i]
-            .where((g) => !limitations.contains(g))
-            .toList();
+    final basePool = hasEnoughFocus
+        ? <String>[]
+        : [
+            'chest', 'back', 'lats', 'traps',
+            'quads', 'hamstrings', 'calves',
+          ]
+              .where((g) => !effectiveFocus.contains(g))
+              .where((g) => !blocked.contains(g))
+              .toList()
+          ..shuffle(_random);
 
-        // Если всё убрали — оставить хотя бы что-то неопасное
-        plan[i] = filtered.isNotEmpty ? filtered : ['full_body'];
+    final plan = List.generate(daysCount, (_) => <String>[]);
+
+    // ═══ 1. Фокусные — по кругу, по 3 на день ═══
+    const focusPerDay = 3;
+
+    for (int i = 0; i < daysCount; i++) {
+      for (int j = 0; j < focusPerDay; j++) {
+        final idx = (i * focusPerDay + j) % effectiveFocus.length;
+        final g = effectiveFocus[idx];
+        if (!plan[i].contains(g)) plan[i].add(g);
       }
     }
 
-    // ═══ Приоритезация по focusGroups ═══
-    // Если есть focus-группа, попавшая в день — усилить её приоритет
-    for (int i = 0; i < plan.length; i++) {
-      final relevant = plan[i]
-          .where((g) => focusGroups.contains(g))
-          .toList();
+    // ═══ 2. basePool — только если фокусных < 3 ═══
+    int baseIdx = 0;
+    for (int i = 0; i < daysCount; i++) {
+      while (plan[i].length < 3 && baseIdx < basePool.length) {
+        final g = basePool[baseIdx++];
+        if (!plan[i].contains(g)) plan[i].add(g);
+      }
+    }
 
-      if (relevant.isNotEmpty) {
-        // Упорядочить так, чтобы focus-группы были первыми
-        final rest = plan[i].where((g) => !focusGroups.contains(g)).toList();
-        plan[i] = [...relevant, ...rest];
+    // ═══ 3. Если всё ещё < 3 — добиваем фокусными ═══
+    for (int i = 0; i < daysCount && plan[i].length < 3; i++) {
+      for (final g in effectiveFocus) {
+        if (!plan[i].contains(g)) plan[i].add(g);
+        if (plan[i].length >= 3) break;
+      }
+    }
+
+    // ═══ 4. Кардио — в конец ═══
+    if (cardioMode == 'every_day') {
+      for (int i = 0; i < daysCount; i++) {
+        if (!plan[i].contains('cardio')) plan[i].add('cardio');
       }
     }
 
     return plan;
   }
 
-  /// Название дня по группам.
-  static String _getDayName(List<String> groups, int dayNumber) {
-    final labels = groups.map(_groupLabel).toList();
-    return 'День $dayNumber: ${labels.join(' + ')}';
+  /// Название дня — по ФОКУСНЫМ зонам.
+  static String _getDayName(
+    List<String> groups,
+    int dayNumber, {
+    required List<String> focusGroups,
+  }) {
+    final filteredGroups =
+        groups.where((g) => g != 'cardio').toList();
+    final normFocus = focusGroups.map(_norm).toList();
+
+    final onlyFocus = filteredGroups
+        .where((g) => normFocus.contains(g))
+        .toList();
+
+    final source = onlyFocus.isNotEmpty ? onlyFocus : filteredGroups;
+
+    if (source.isEmpty) {
+      return 'День $dayNumber';
+    }
+
+    final trimmed = source.take(3).toList();
+    final labels = trimmed.map(_groupLabel).toList();
+    final hasMore = source.length > 3;
+    final suffix = hasMore ? ' и др.' : '';
+
+    return 'День $dayNumber: ${labels.join(' + ')}$suffix';
   }
 
-  /// Русская метка группы.
   static String _groupLabel(String code) {
     const map = {
       'glutes': 'ягодицы',
@@ -280,54 +426,61 @@ class WorkoutGenerator {
       'chest': 'грудь',
       'core': 'кор',
       'full_body': 'всё тело',
+      'cardio': 'кардио',
     };
     return map[code] ?? code;
   }
 
-// ╔═══════════════════════════════════════════════════════════╗
-// ║  ⚠️ ЧАСТЬ 2.2 ЗАКОНЧИЛАСЬ — ЖДИТЕ ЧАСТЬ 2.3              ║
-// ╚═══════════════════════════════════════════════════════════╝
+// ═══ ЧАСТЬ 2 — ЗАКОНЧЕНА ═══
   // ═══════════════════════════════════════════════════════════
-  //  БАЗОВОЕ ИЛИ ИЗОЛИРУЮЩЕЕ УПРАЖНЕНИЕ
+  //  БАЗОВОЕ / ИЗОЛИРУЮЩЕЕ / КАРДИО
   // ═══════════════════════════════════════════════════════════
 
-  /// Базовые упражнения (многосуставные) — определяем по ключевым словам.
   static const List<String> _compoundKeywords = [
-    // Приседания / ноги
     'присед', 'приседание', 'squat',
     'выпад', 'lunge',
     'становая', 'deadlift',
     'румынск', 'romanian',
 
-    // Жим
     'жим', 'press',
     'bench press', 'жим лёжа', 'жим лежа',
 
-    // Тяга
     'тяга', 'row',
     'подтягив', 'pull-up', 'pullup',
 
-    // Общие многосуставные
     'отжимание', 'push-up', 'pushup',
     'берпи', 'burpee',
     'планка', 'plank',
     'скручивание', 'crunch',
   ];
 
-  /// Является ли упражнение базовым (многосуставным).
   static bool _isCompound(Exercise ex) {
     final lower = ex.name.toLowerCase();
     return _compoundKeywords.any((kw) => lower.contains(kw));
   }
 
+  static bool _isCardio(Exercise ex) {
+    return ex.muscleGroups.contains('cardio');
+  }
+
   // ═══════════════════════════════════════════════════════════
-  //  УМНЫЙ ПОДБОР УПРАЖНЕНИЙ (ГИБРИД)
+  //  ФИЛЬТР СЛОЖНОСТИ
   // ═══════════════════════════════════════════════════════════
 
-  /// Умный подбор упражнений:
-  /// — 2 базовых на группу (приоритет)
-  /// — изолирующие — новые (не из последних 14 дней)
-  /// — без повторов с другими днями (usedExerciseIds)
+  static bool _isDifficultyAllowed(Exercise e, String level) {
+    if (level == 'beginner') {
+      return e.difficulty == 'beginner';
+    }
+    if (level == 'intermediate') {
+      return e.difficulty != 'advanced';
+    }
+    return true;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  УМНЫЙ ПОДБОР УПРАЖНЕНИЙ
+  // ═══════════════════════════════════════════════════════════
+
   static List<Exercise> _pickExercisesSmart({
     required List<Exercise> allExercises,
     required List<String> muscleGroups,
@@ -339,127 +492,201 @@ class WorkoutGenerator {
     required Set<int> recentExerciseIds,
     required Set<int> usedExerciseIds,
     required String goal,
+    required String cardioMode,
   }) {
-    // ═══ 1. Фильтр по группам мышц ═══
-    var filtered = allExercises.where((e) {
-      return e.muscleGroups.any(muscleGroups.contains);
-    }).toList();
+    final blocked = _buildBlockedZones(limitations);
 
-    // ═══ 2. Фильтр по оборудованию ═══
-    filtered = filtered.where((e) => _matchesEquipment(e, equipment)).toList();
+    // ═══ 0. Кардио в режиме every_day ═══
+    if (cardioMode == 'every_day') {
+      final cardioCandidates = allExercises
+          .where(_isCardio)
+          .where((e) => _matchesEquipment(e, equipment))
+          .where((e) =>
+              e.id == null || !usedExerciseIds.contains(e.id))
+          .where((e) => _isDifficultyAllowed(e, level))
+          .where((e) {
+            if (e.contraindications
+                .map(_norm)
+                .any(blocked.contains)) {
+              return false;
+            }
+            if (e.muscleGroups.isNotEmpty) {
+              final primary = _norm(e.muscleGroups.first);
+              if (blocked.contains(primary)) return false;
+            }
+            return true;
+          })
+          .toList()
+        ..shuffle(_random);
 
-    // ═══ 3. Фильтр по ограничениям ═══
-    if (limitations.isNotEmpty) {
-      filtered = filtered
-          .where((e) => !e.contraindications.any(limitations.contains))
-          .toList();
+      if (cardioCandidates.isNotEmpty) {
+        final cardio = cardioCandidates.first;
+
+        final strengthExercises = _pickStrengthOnly(
+          allExercises: allExercises,
+          muscleGroups: muscleGroups,
+          equipment: equipment,
+          level: level,
+          blocked: blocked,
+          maxCount: maxCount,
+          recentExerciseIds: recentExerciseIds,
+          usedExerciseIds: {
+            ...usedExerciseIds,
+            if (cardio.id != null) cardio.id!,
+          },
+        );
+
+        // ⚠️ Кардио — В КОНЕЦ
+        return [...strengthExercises, cardio];
+      }
     }
 
-    // ═══ 4. Фильтр по возрасту ═══
-   // ═══ Фильтр по возрасту — ОТКЛЮЧЁН ═══
-       // Возраст не учитывается при подборе упражнений.
+    // ═══ 1. Только силовые ═══
+    return _pickStrengthOnly(
+      allExercises: allExercises,
+      muscleGroups: muscleGroups,
+      equipment: equipment,
+      level: level,
+      blocked: blocked,
+      maxCount: maxCount,
+      recentExerciseIds: recentExerciseIds,
+      usedExerciseIds: usedExerciseIds,
+    );
+  }
 
-    // ═══ 5. Исключить уже использованные в этой неделе ═══
+  // ═══════════════════════════════════════════════════════════
+  //  ⚖️ РАВНОМЕРНЫЙ ПОДБОР СИЛОВЫХ ПО ГРУППАМ
+  // ═══════════════════════════════════════════════════════════
+
+  /// Равномерное распределение упражнений по группам дня.
+  ///
+  /// ⚠️ Логика:
+  ///  — каждая группа дня получает `perGroup = maxCount / groups.length`
+  ///    упражнений (примерно равное количество);
+  ///  — группы идут в порядке: сначала фокусные, потом доборные;
+  ///  — из группы приоритет — упражнениям из истории (прогрессия);
+  ///  — если на группу не хватило — добираем из других групп.
+  static List<Exercise> _pickStrengthOnly({
+    required List<Exercise> allExercises,
+    required List<String> muscleGroups,
+    required String equipment,
+    required String level,
+    required Set<String> blocked,
+    required int maxCount,
+    required Set<int> recentExerciseIds,
+    required Set<int> usedExerciseIds,
+  }) {
+    if (maxCount <= 0) return [];
+
+    // ═══ 1. Разворачиваем составные зоны дня ═══
+    final expandedDay = _expandGroups(muscleGroups);
+
+    // ═══ 2. База: силовые, по группам дня ═══
+    var filtered = allExercises.where((e) {
+      if (_isCardio(e)) return false;
+      return e.muscleGroups.any(expandedDay.contains);
+    }).toList();
+
+    // ═══ 3. Оборудование ═══
+    filtered = filtered
+        .where((e) => _matchesEquipment(e, equipment))
+        .toList();
+
+    // ═══ 4. Сложность ═══
+    filtered = filtered
+        .where((e) => _isDifficultyAllowed(e, level))
+        .toList();
+
+    // ═══ 5. Ограничения ═══
+    if (blocked.isNotEmpty) {
+      filtered = filtered.where((e) {
+        final hasContra =
+            e.contraindications.map(_norm).any(blocked.contains);
+        if (hasContra) return false;
+        if (e.muscleGroups.isNotEmpty) {
+          final primary = _norm(e.muscleGroups.first);
+          if (blocked.contains(primary)) return false;
+        }
+        return true;
+      }).toList();
+    }
+
+    // ═══ 6. Исключить использованные ═══
     filtered = filtered
         .where((e) => e.id == null || !usedExerciseIds.contains(e.id))
         .toList();
 
-    // ═══ 6. Разделить на базовые и изолирующие ═══
-    final compounds = filtered.where(_isCompound).toList();
-    final isolations = filtered.where((e) => !_isCompound(e)).toList();
- // ═══ 6.1. Убрать дубликаты по нормализованному имени ═══
+    // ═══ 7. Дедупликация по нормализованному имени ═══
     final usedNormalized = <String>{};
-
-    List<Exercise> dedup(List<Exercise> list) {
-      final result = <Exercise>[];
-      for (final ex in list) {
-        final norm = _normalizeName(ex.name);
-        if (usedNormalized.contains(norm)) continue;
-        usedNormalized.add(norm);
-        result.add(ex);
-      }
-      return result;
+    final unique = <Exercise>[];
+    for (final ex in filtered) {
+      final norm = _normalizeName(ex.name);
+      if (usedNormalized.contains(norm)) continue;
+      usedNormalized.add(norm);
+      unique.add(ex);
     }
 
-    final compoundsUnique = dedup(compounds);
-    final isolationsUnique = dedup(isolations);
-    // ═══ 7. Сортировка по matchScore ═══
-    compoundsUnique.sort((a, b) =>
-            _matchScore(b, level).compareTo(_matchScore(a, level)));
-        isolationsUnique.sort((a, b) =>
-            _matchScore(b, level).compareTo(_matchScore(a, level)));
-
-    // ═══ 8. Выбор базовых (до 2, приоритет — из истории) ═══
+    // ═══ 8. Равномерное распределение по группам ═══
     final picked = <Exercise>[];
     final usedIds = <int>{};
 
-    // 8.1 Приоритет — базовые из истории (для прогрессии)
-   final fromHistory = compoundsUnique
-           .where((e) => e.id != null && recentExerciseIds.contains(e.id))
-           .toList();
-    fromHistory.shuffle(_random);
+    // Список групп без cardio
+    final groupsList =
+        muscleGroups.where((g) => g != 'cardio').toList();
 
-    for (final ex in fromHistory) {
-      if (picked.length >= 2) break;
-      if (ex.id == null || usedIds.contains(ex.id)) continue;
-      picked.add(ex);
-      usedIds.add(ex.id!);
-    }
+    if (groupsList.isEmpty) return picked;
 
-    // 8.2 Добить базовыми (новыми)
-   final newCompounds = compoundsUnique
-             .where((e) => e.id != null && !usedIds.contains(e.id))
-             .toList()
-           ..shuffle(_random);
+    // Сколько на каждую группу
+    final perGroup = (maxCount / groupsList.length).ceil();
 
-      for (final ex in newCompounds) {
-        if (picked.length >= 2) break;
-        if (ex.id == null) continue;
+    // ⚠️ Итерируем по КАЖДОЙ группе дня
+    for (final group in groupsList) {
+      final expanded = _expandGroups([group]);
+
+      final groupExs = unique
+          .where((e) => e.muscleGroups.any(expanded.contains))
+          .where((e) => e.id != null && !usedIds.contains(e.id))
+          .toList()
+        ..shuffle(_random);
+
+      // Сортировка: упражнения из истории — выше
+      groupExs.sort((a, b) {
+        final aScore = (a.id != null &&
+                recentExerciseIds.contains(a.id))
+            ? 2
+            : 1;
+        final bScore = (b.id != null &&
+                recentExerciseIds.contains(b.id))
+            ? 2
+            : 1;
+        return bScore.compareTo(aScore);
+      });
+
+      int taken = 0;
+      for (final ex in groupExs) {
+        if (taken >= perGroup) break;
+        if (picked.length >= maxCount) break;
         picked.add(ex);
         usedIds.add(ex.id!);
+        taken++;
       }
-
-    // ═══ 9. Добить изолирующими (НЕ из последних 14 дней — разнообразие) ═══
-     final freshIsolations = isolationsUnique
-            .where((e) => e.id != null && !recentExerciseIds.contains(e.id))
-            .toList()
-          ..shuffle(_random);
-
-    for (final ex in freshIsolations) {
-      if (picked.length >= maxCount) break;
-      if (ex.id == null || usedIds.contains(ex.id)) continue;
-      picked.add(ex);
-      usedIds.add(ex.id!);
     }
 
-    // ═══ 10. Если не хватило — добить любыми изолирующими ═══
-    final rest = isolationsUnique
-              .where((e) => e.id != null && !usedIds.contains(e.id))
-              .toList()
-            ..shuffle(_random);
+    // ═══ 9. Если осталось место — добираем из других групп дня ═══
+    if (picked.length < maxCount) {
+      final rest = unique
+          .where((e) => e.id != null && !usedIds.contains(e.id))
+          .toList()
+        ..shuffle(_random);
 
       for (final ex in rest) {
         if (picked.length >= maxCount) break;
-        if (ex.id == null) continue;
         picked.add(ex);
         usedIds.add(ex.id!);
       }
+    }
 
-      // ═══ 11. Если всё ещё мало — добить базовыми ═══
-        final restCompounds = compoundsUnique
-            .where((e) => e.id != null && !usedIds.contains(e.id))
-            .toList()
-          ..shuffle(_random);
-
-        for (final ex in restCompounds) {
-          if (picked.length >= maxCount) break;
-          if (ex.id == null) continue;
-          picked.add(ex);
-          usedIds.add(ex.id!);
-        }
-
-    // ═══ 12. Перемешать, чтобы базовые не были всегда первыми ═══
-    // Оставляем первый базовый первым (разминка)
+    // ═══ 10. Перемешать, оставив первый базовый первым ═══
     if (picked.length > 2) {
       final head = picked.first;
       final tail = picked.sublist(1)..shuffle(_random);
@@ -469,7 +696,6 @@ class WorkoutGenerator {
     return picked;
   }
 
-  /// Проверка соответствия оборудования.
   static bool _matchesEquipment(Exercise e, String equipment) {
     if (equipment == 'gym') return true;
     if (equipment == 'bodyweight') {
@@ -480,10 +706,9 @@ class WorkoutGenerator {
           e.equipment.contains('dumbbells') ||
           e.equipment.contains('resistance_band');
     }
-    return true; // mixed — всё
+    return true;
   }
 
-  /// Оценка соответствия уровню.
   static int _matchScore(Exercise e, String level) {
     if (e.difficulty == level) return 3;
     if (level == 'intermediate' && e.difficulty == 'beginner') return 2;
@@ -491,9 +716,7 @@ class WorkoutGenerator {
     return 1;
   }
 
-// ╔═══════════════════════════════════════════════════════════╗
-// ║  ⚠️ ЧАСТЬ 2.3 ЗАКОНЧИЛАСЬ — ЖДИТЕ ЧАСТЬ 2.4              ║
-// ╚═══════════════════════════════════════════════════════════╝
+// ═══ ЧАСТЬ 3 — ЗАКОНЧЕНА ═══
   // ═══════════════════════════════════════════════════════════
   //  ПОДБОР ЗАМИНКИ
   // ═══════════════════════════════════════════════════════════
@@ -517,21 +740,25 @@ class WorkoutGenerator {
   //  ПАРАМЕТРЫ: ПОДХОДЫ / ПОВТОРЫ / ОТДЫХ
   // ═══════════════════════════════════════════════════════════
 
-    static int _getSets(String level, int age) {
-        switch (level) {
-          case 'beginner':
-            return 3;
-          case 'intermediate':
-            return 3;
-          case 'advanced':
-            return 4;
-          default:
-            return 3;
-        }
-      }
+  /// Количество подходов по уровню.
+  ///  — beginner:     2 подхода
+  ///  — intermediate: 3 подхода
+  ///  — advanced:     4 подхода
+  static int _getSets(String level, int age) {
+    switch (level) {
+      case 'beginner':
+        return 2;
+      case 'intermediate':
+        return 3;
+      case 'advanced':
+        return 4;
+      default:
+        return 3;
+    }
+  }
 
   static String _getReps(String goal, int age) {
-      switch (goal) {
+    switch (goal) {
       case 'strength':
         return '6-8';
       case 'gain_mass':
@@ -545,7 +772,7 @@ class WorkoutGenerator {
   }
 
   static int _getRest(String goal, int age) {
-     switch (goal) {
+    switch (goal) {
       case 'strength':
         return 120;
       case 'gain_mass':
@@ -557,22 +784,14 @@ class WorkoutGenerator {
         return 60;
     }
   }
+
   // ═══════════════════════════════════════════════════════════
-  //  НОРМАЛИЗАЦИЯ НАЗВАНИЙ (для исключения дубликатов)
+  //  НОРМАЛИЗАЦИЯ НАЗВАНИЙ
   // ═══════════════════════════════════════════════════════════
 
-  /// Приводит название упражнения к «базовому» виду:
-  /// убирает уточнения («на одной ноге», «с гантелями» и т.п.).
-  ///
-  /// Примеры:
-  ///   «Ягодичный мостик» + «Ягодичный мостик на одной ноге»
-  ///     → обе → «ягодичный мостик»
-  ///   «Подъём на ступнях» + «Подъём на одной ноге»
-  ///     → обе → «подъём на ступнях» (или «подъём на»)
   static String _normalizeName(String name) {
     var s = name.toLowerCase();
 
-    // ═══ Уточнения — убрать ═══
     const removals = [
       'на одной ноге',
       'на одной руке',
@@ -603,15 +822,34 @@ class WorkoutGenerator {
       s = s.replaceAll(r, '');
     }
 
-    // ═══ Убрать знаки и лишние пробелы ═══
     s = s.replaceAll(RegExp(r'[,\-—–()\[\]:;]'), ' ');
     s = s.replaceAll(RegExp(r'\s+'), ' ');
     return s.trim();
   }
-  static int _getExerciseCount(int sessionMinutes) {
-    if (sessionMinutes <= 30) return 4;
-    if (sessionMinutes <= 45) return 6;
-    if (sessionMinutes <= 60) return 7;
-    return 8;
+
+  // ═══════════════════════════════════════════════════════════
+  //  КОЛИЧЕСТВО УПРАЖНЕНИЙ
+  // ═══════════════════════════════════════════════════════════
+
+  /// Количество упражнений в дне.
+  ///
+  /// ⚠️ 1 блок ≈ 20 минут. В блоке:
+  ///   — beginner:     2 упражнения;
+  ///   — intermediate: 3 упражнения;
+  ///   — advanced:     3 упражнения.
+  ///
+  /// Примеры при 60 мин:
+  ///   beginner     → 3 блока × 2 = 6
+  ///   intermediate → 3 блока × 3 = 9
+  ///   advanced     → 3 блока × 3 = 9
+  ///
+  /// Минимум 3, максимум 15.
+  static int _getExerciseCount(int sessionMinutes, String level) {
+    final blocks = sessionMinutes ~/ 20;
+    final perBlock = level == 'beginner' ? 2 : 3;
+    final total = blocks * perBlock;
+    return total.clamp(3, 15);
   }
 }
+// ═══ ЧАСТЬ 4 — ЗАКОНЧЕНА ═══
+// ═══ ФАЙЛ workout_generator.dart ЗАВЕРШЁН ═══

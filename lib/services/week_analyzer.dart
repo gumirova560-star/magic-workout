@@ -27,19 +27,15 @@ class WeekSummary {
 
   String get recommendation {
     if (isEmpty) return '';
-
     if (isFullWeek) {
       return '💡 Рекомендую повысить вес на 5% — отличная неделя!';
     }
-
     if (missedCount >= 2) {
       return '💡 Рекомендую понизить вес на 10% — чтобы вернуться в ритм';
     }
-
     if (missedCount == 1) {
       return '💡 Неплохо! Оставь вес как есть или +2.5 кг, если легко';
     }
-
     return '';
   }
 }
@@ -84,7 +80,6 @@ class ExerciseTrend {
           return '🆕 Новое упражнение — набирай форму';
       }
     }
-
     switch (direction) {
       case TrendDirection.up:
         return '📈 Растёт! Продолжай в том же темпе';
@@ -214,20 +209,8 @@ class WeekAnalyzer {
   }
 
   // ═══════════════════════════════════════════════════════════
-  //  ⚠️ СТАТУС ВЫПОЛНЕНИЯ ПО ШАБЛОНАМ (по сетам!)
+  //  ⚠️ СТАТУС ВЫПОЛНЕНИЯ ПО ШАБЛОНАМ (по сетам)
   // ═══════════════════════════════════════════════════════════
-  //
-  //  Для каждого дня считаем:
-  //    totalSets — сколько всего подходов во всех «настоящих»
-  //                упражнениях (itemType == 'exercise', не coolDown).
-  //    doneSets  — сколько из них completed.
-  //
-  //  Возвращаем две группы templateId:
-  //    fullyDone — все подходы отмечены (done == total).
-  //    partial   — часть отмечена (0 < done < total).
-  //
-  //  ⚠️ Не смотрим на day.status — потому что день может быть
-  //     'completed', но внутри не все подходы отмечены.
 
   static Future<({Set<int> fullyDone, Set<int> partial})>
       workoutStatusInTwoWeeks(int profileId) async {
@@ -282,7 +265,6 @@ class WeekAnalyzer {
       }
     }
 
-    // ⚠️ Полное выполнение важнее частичного
     partial.removeAll(fullyDone);
 
     return (fullyDone: fullyDone, partial: partial);
@@ -293,8 +275,9 @@ class WeekAnalyzer {
     return summary.missedCount;
   }
 
+// ═══ ЧАСТЬ 1 — ЗАКОНЧЕНА ═══
   // ═══════════════════════════════════════════════════════════
-  //  АНАЛИЗ ТРЕНДОВ ПО УПРАЖНЕНИЯМ (с логами)
+  //  АНАЛИЗ ТРЕНДОВ ПО УПРАЖНЕНИЯМ
   // ═══════════════════════════════════════════════════════════
 
   static Future<List<ExerciseTrend>> analyzeExerciseTrends(
@@ -313,45 +296,22 @@ class WeekAnalyzer {
     final week1Start = today.subtract(const Duration(days: 7));
     final week2Start = today.subtract(const Duration(days: 14));
 
-    debugPrint('🔍 Сегодня: $today');
-    debugPrint('🔍 Week1: $week1Start .. $today');
-    debugPrint('🔍 Week2: $week2Start .. $week1Start');
-
-    // ═══ Собираем записи ═══
     final records = <int, List<_SetRecord>>{};
 
     for (final day in days) {
-      debugPrint('🔍 Day id=${day.id} status=${day.status} '
-          'name="${day.name}" date=${day.date}');
-      if (day.status != 'completed') {
-        debugPrint('   ⏭ Пропущен (не completed)');
-        continue;
-      }
+      if (day.status != 'completed') continue;
 
       final exercises = await db.getWorkoutExercises(day.id!);
-      debugPrint('   🔍 Упражнений в дне: ${exercises.length}');
 
       for (final we in exercises) {
-        if (we.itemType != 'exercise' || we.isCoolDown) {
-          debugPrint('   ⏭ weId=${we.id} пропущен (type=${we.itemType}, '
-              'coolDown=${we.isCoolDown})');
-          continue;
-        }
-        final exId = we.replacedByItemId ?? we.itemId;
-        debugPrint('   🔍 weId=${we.id} exId=$exId');
+        if (we.itemType != 'exercise' || we.isCoolDown) continue;
 
+        final exId = we.replacedByItemId ?? we.itemId;
         final sets = await db.getWorkoutSets(we.id!);
+
         for (final s in sets) {
-          debugPrint('      🔍 set id=${s.id} weight=${s.weight} '
-              'reps=${s.reps} completed=${s.completed}');
-          if (!s.completed) {
-            debugPrint('      ⏭ пропущен (completed=false)');
-            continue;
-          }
-          if (s.weight == null && s.reps == null) {
-            debugPrint('      ⏭ пропущен (weight и reps = null)');
-            continue;
-          }
+          if (!s.completed) continue;
+          if (s.weight == null && s.reps == null) continue;
 
           records.putIfAbsent(exId, () => []);
           records[exId]!.add(_SetRecord(
@@ -359,31 +319,19 @@ class WeekAnalyzer {
             weight: s.weight,
             reps: s.reps,
           ));
-          debugPrint('      ✅ добавлен');
         }
       }
     }
 
-    debugPrint('🔍 ИТОГО записей: ${records.length} упражнений');
-    for (final e in records.entries) {
-      debugPrint('   exId=${e.key} → ${e.value.length} записей');
-    }
-
-    // ═══ Считаем тренд ═══
     final trends = <ExerciseTrend>[];
 
     for (final entry in records.entries) {
       final exId = entry.key;
       final recs = entry.value;
 
-      if (recs.length < 2) {
-        debugPrint('   ⏭ exId=$exId пропущен (< 2 записей)');
-        continue;
-      }
+      if (recs.length < 2) continue;
 
       final hasWeight = recs.any((r) => r.weight != null);
-      debugPrint('   🔍 exId=$exId hasWeight=$hasWeight '
-          '(всего ${recs.length} записей)');
 
       final week1 = recs
           .where((r) =>
@@ -394,9 +342,6 @@ class WeekAnalyzer {
           .where((r) =>
               !r.date.isBefore(week2Start) && r.date.isBefore(week1Start))
           .toList();
-
-      debugPrint('      week1: ${week1.length} записей');
-      debugPrint('      week2: ${week2.length} записей');
 
       double? avg1;
       double? avg2;
@@ -415,15 +360,12 @@ class WeekAnalyzer {
             .map((r) => r.reps!.toDouble()));
       }
 
-      debugPrint('      avg1=$avg1, avg2=$avg2');
-
       TrendDirection dir;
       if (avg1 == null || avg2 == null) {
         dir = TrendDirection.new_;
       } else {
         final diff = avg1 - avg2;
         final threshold = hasWeight ? 2.5 : 2.0;
-        debugPrint('      diff=$diff, threshold=$threshold');
         if (diff >= threshold) {
           dir = TrendDirection.up;
         } else if (diff <= -threshold) {
@@ -434,12 +376,7 @@ class WeekAnalyzer {
       }
 
       final ex = await db.getExerciseById(exId);
-      if (ex == null) {
-        debugPrint('   ⏭ exId=$exId — упражнение не найдено в БД');
-        continue;
-      }
-
-      debugPrint('   ✅ Тренд: "${ex.name}" dir=$dir');
+      if (ex == null) continue;
 
       trends.add(ExerciseTrend(
         exerciseId: exId,
@@ -451,9 +388,6 @@ class WeekAnalyzer {
         isWeightBased: hasWeight,
       ));
     }
-
-    debugPrint('🔍 ИТОГО трендов: ${trends.length}');
-    debugPrint('═══════════════════════════════════════');
 
     trends.sort((a, b) {
       int order(TrendDirection d) {
@@ -494,3 +428,5 @@ class _SetRecord {
 
   _SetRecord({required this.date, this.weight, this.reps});
 }
+// ═══ ЧАСТЬ 2 — ЗАКОНЧЕНА ═══
+// ═══ ФАЙЛ week_analyzer.dart ЗАВЕРШЁН ═══

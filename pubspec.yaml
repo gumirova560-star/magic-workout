@@ -45,6 +45,9 @@ dependencies:
   # ═══ Web: URL без # ═══
   url_strategy: ^0.3.0
 
+  # ═══ Открытие внешних ссылок (Яндекс.Видео, Картинки) ═══
+  url_launcher: ^6.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

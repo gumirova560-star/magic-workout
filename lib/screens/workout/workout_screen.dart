@@ -13,6 +13,7 @@ import '../../services/fairy_stats_service.dart';
 import '../yoga/yoga_screen.dart';
 import 'workout_detail_screen.dart';
 import 'my_templates_screen.dart';
+import 'widgets/focus_areas_dialog.dart';
 
 class WorkoutScreen extends StatefulWidget {
   const WorkoutScreen({super.key});
@@ -25,14 +26,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   UserProfile? _activeProfile;
   List<WorkoutTemplate> _templates = [];
   Set<int> _completedTemplateIds = {};
-  Set<int> _partialTemplateIds = {}; // ⚠️ частично выполненные
+  Set<int> _partialTemplateIds = {};
   WeekSummary? _lastWeek;
   int _streak = 0;
   bool _loading = true;
   bool _generating = false;
   bool _showCompletionBanner = false;
 
-  // ═══ Текущая неделя (для блока «Прогресс за неделю») ═══
   int _currentWeekWorkouts = 0;
   int _currentWeekMinutes = 0;
 
@@ -62,12 +62,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 
   // ═══════════════════════════════════════════════════════════
-  //  ХЕШ ПРОФИЛЯ — для отслеживания изменений
+  //  ХЕШ ПРОФИЛЯ
   // ═══════════════════════════════════════════════════════════
 
   String _computeProfileHash(UserProfile p) {
     return [
-      // ⚠️ НЕ включаем name — оно не влияет на план
       p.gender,
       p.age,
       p.height,
@@ -155,24 +154,20 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       final templates =
           await DatabaseHelper.instance.getAutoTemplates(active.id!);
 
-      // ⚠️ Три источника: completedIds, statusResult, lastWeek
       final completedIds =
           await WeekAnalyzer.completedTemplateIdsInTwoWeeks(active.id!);
 
       final statusResult =
           await WeekAnalyzer.workoutStatusInTwoWeeks(active.id!);
 
-      // ⚠️ «Завершённые» дни, где НЕ все подходы отмечены → частичные
       final partialIds = {
         ...statusResult.partial,
         ...completedIds.where((id) => statusResult.partial.contains(id)),
       };
 
-      // ⚠️ Реально завершённые: status=completed и в partial их НЕТ
       final strictCompleted =
           completedIds.where((id) => !partialIds.contains(id)).toSet();
 
-      // ⚠️ «Всё отмечено, но не завершено» тоже считаем выполненными
       final allDoneIds = {...strictCompleted, ...statusResult.fullyDone};
 
       final lastWeek = await WeekAnalyzer.analyzeLastWeek(active.id!);
@@ -230,7 +225,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         }
       });
 
-      // ⚠️ Проверяем, менялся ли профиль
       final shouldHold = await _shouldSuggestPlanUpdate(active);
 
       if (shouldHold) {
@@ -250,7 +244,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         });
       }
 
-      // ⚠️ Показываем рекомендацию ТОЛЬКО если профиль изменился
       if (shouldHold) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
@@ -260,8 +253,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           }
         });
       }
-      // ⚠️ Если shouldHold == false — FairyBubble сам покажет
-      //    обычную фразу по экрану 'workout' («что сегодня тренируем?»)
     } else {
       if (!mounted) return;
       setState(() {
@@ -280,10 +271,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════
-  //  ИЗМЕНЕНИЕ ПРОФИЛЯ — фея рекомендует обновить план
-  // ═══════════════════════════════════════════════════════════
-
   Future<void> _showProfileChangedBannerNow(UserProfile profile) async {
     if (!mounted) {
       FairyReactionService().releaseScreenPhrases();
@@ -301,16 +288,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       return;
     }
 
-    // ⚠️ Показываем событие "не забудь обновить план"
     await FairyReactionService().trigger(
       'profile_changed_ask',
       mood: FairyMood.think,
     );
 
-    // ⚠️ Держим флаг ~4 сек, чтобы _initPhrases не перебила
     await Future.delayed(const Duration(seconds: 4));
 
-    // ⚠️ Помечаем как dismissed ТОЛЬКО после фактического показа
     await _saveProfileHashAsDismissed(profile);
 
     FairyReactionService().releaseScreenPhrases();
@@ -568,6 +552,28 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       return;
     }
 
+    // ⚠️ Диалог выбора фокусных зон
+    final selected = await showDialog<Set<String>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => FocusAreasDialog(
+        initial: _activeProfile!.focusAreas.toSet(),
+        maxCount: 3,
+      ),
+    );
+
+    // Отмена — выходим
+    if (selected == null || selected.isEmpty) return;
+
+    // ⚠️ Сохраняем выбранные зоны в профиль
+    final updatedProfile = _activeProfile!.copyWith(
+      focusAreas: selected.toList(),
+    );
+    await DatabaseHelper.instance.updateProfile(updatedProfile);
+
+    if (!mounted) return;
+    setState(() => _activeProfile = updatedProfile);
+
     setState(() {
       _generating = true;
       _showCompletionBanner = false;
@@ -606,7 +612,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       final statusResult =
           await WeekAnalyzer.workoutStatusInTwoWeeks(freshProfile.id!);
 
-      // ⚠️ Те же три правила, что и в _loadData
       final partialIds = {
         ...statusResult.partial,
         ...completedIds.where((id) => statusResult.partial.contains(id)),
@@ -631,7 +636,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         _showCompletionBanner = false;
       });
 
-      // ⚠️ Хеш = принятый (план обновлён)
       await _saveProfileHashAsAccepted(freshProfile);
 
       await _loadData();
@@ -731,46 +735,44 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               const SizedBox(height: 24),
             ],
 
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(child: _buildSectionTitle(context, 'Мой план на неделю')),
-                    if (_templates.isNotEmpty)
-                      PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_vert_rounded),
-                        tooltip: 'Действия',
-                        onSelected: (value) {
-                          if (value == 'templates') _openMyTemplates();
-                          if (value == 'update') _confirmRegenerate();
-                        },
-                        itemBuilder: (ctx) => [
-                          const PopupMenuItem(
-                            value: 'templates',
-                            child: Row(
-                              children: [
-                                Icon(Icons.bookmark_rounded, size: 20),
-                                SizedBox(width: 8),
-                                Text('Из шаблона'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'update',
-                            child: Row(
-                              children: [
-                                Icon(Icons.refresh_rounded, size: 20),
-                                SizedBox(width: 8),
-                                Text('Обновить план'),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                  ],
+                Expanded(
+                  child:
+                      _buildSectionTitle(context, 'Мой план на неделю'),
                 ),
+                if (_templates.isNotEmpty)
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert_rounded),
+                    tooltip: 'Действия',
+                    onSelected: (value) {
+                      if (value == 'templates') _openMyTemplates();
+                      if (value == 'update') _confirmRegenerate();
+                    },
+                    itemBuilder: (ctx) => [
+                      const PopupMenuItem(
+                        value: 'templates',
+                        child: Row(
+                          children: [
+                            Icon(Icons.bookmark_rounded, size: 20),
+                            SizedBox(width: 8),
+                            Text('Из шаблона'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'update',
+                        child: Row(
+                          children: [
+                            Icon(Icons.refresh_rounded, size: 20),
+                            SizedBox(width: 8),
+                            Text('Обновить план'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
             const SizedBox(height: 12),

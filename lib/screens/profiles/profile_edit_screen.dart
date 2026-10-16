@@ -28,7 +28,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   final Set<String> _focusAreas = {};
   final Set<String> _limitations = {};
 
-  /// ⚠️ Максимум фокусных зон
   static const int _maxFocusAreas = 3;
 
   @override
@@ -46,7 +45,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       _equipment = p.equipment;
       _daysPerWeek = p.daysPerWeek;
       _sessionMinutes = p.sessionMinutes;
-      // ⚠️ Максимум 3 фокусные зоны — обрезаем старые
       _focusAreas.addAll(p.focusAreas.take(_maxFocusAreas));
       _limitations.addAll(p.limitations);
     }
@@ -70,7 +68,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       weight: _weight,
       level: _level,
       goal: _goal,
-      // ⚠️ Обрезаем до 3 перед сохранением
       focusAreas: _focusAreas.take(_maxFocusAreas).toList(),
       limitations: _limitations.toList(),
       equipment: _equipment,
@@ -204,41 +201,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             ),
             const SizedBox(height: 24),
 
-            // ═══ ФОКУСНЫЕ ЗОНЫ ═══
-            _sectionTitle('Фокусные зоны'),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                'Можно выбрать до $_maxFocusAreas зон. '
-                'Выбрано: ${_focusAreas.length}/$_maxFocusAreas',
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _chip('glutes', 'Ягодицы', _focusAreas,
-                    maxSelection: _maxFocusAreas),
-                _chip('abs', 'Пресс', _focusAreas,
-                    maxSelection: _maxFocusAreas),
-                _chip('arms', 'Руки', _focusAreas,
-                    maxSelection: _maxFocusAreas),
-                _chip('legs', 'Ноги', _focusAreas,
-                    maxSelection: _maxFocusAreas),
-                _chip('back', 'Спина', _focusAreas,
-                    maxSelection: _maxFocusAreas),
-                _chip('chest', 'Грудь', _focusAreas,
-                    maxSelection: _maxFocusAreas),
-                _chip('shoulders', 'Плечи', _focusAreas,
-                    maxSelection: _maxFocusAreas),
-                _chip('calves', 'Голень', _focusAreas,
-                    maxSelection: _maxFocusAreas),
-                _chip('cardio', 'Кардио', _focusAreas,
-                    maxSelection: _maxFocusAreas),
-              ],
-            ),
-            const SizedBox(height: 24),
+            // ⚠️ Блок «ФОКУСНЫЕ ЗОНЫ» УДАЛЁН — теперь выбор зон
+            //    при генерации плана (диалог).
 
             // ═══ ОГРАНИЧЕНИЯ ═══
             _sectionTitle('Ограничения / травмы'),
@@ -353,7 +317,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             Text(
               label,
               style: TextStyle(
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                fontWeight:
+                    isSelected ? FontWeight.w600 : FontWeight.w500,
                 color: isSelected
                     ? theme.colorScheme.primary
                     : theme.colorScheme.onSurface,
@@ -467,31 +432,18 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     }).toList();
   }
 
-  /// ⚠️ `maxSelection` — максимум выбранных. Если null — без ограничения.
-  Widget _chip(
-    String value,
-    String label,
-    Set<String> collection, {
-    int? maxSelection,
-  }) {
+  Widget _chip(String value, String label, Set<String> collection) {
     final isSelected = collection.contains(value);
-    final atLimit = maxSelection != null &&
-        collection.length >= maxSelection &&
-        !isSelected;
-
     return FilterChip(
       label: Text(label),
       selected: isSelected,
-      // ⚠️ Блокируем выбор, если уже максимум и чип не выбран
-      onSelected: atLimit
-          ? null
-          : (v) => setState(() {
-                if (v) {
-                  collection.add(value);
-                } else {
-                  collection.remove(value);
-                }
-              }),
+      onSelected: (v) => setState(() {
+        if (v) {
+          collection.add(value);
+        } else {
+          collection.remove(value);
+        }
+      }),
     );
   }
 }

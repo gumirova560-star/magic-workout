@@ -6,14 +6,15 @@ import 'progress/progress_screen.dart';
 import 'history/history_screen.dart';
 import 'settings/settings_screen.dart';
 import '../widgets/fairy_bubble.dart';
+import '../services/database_helper.dart';
 
 /// Главный экран с нижней навигацией и феей-наставником.
 ///
 /// Активный таб сохраняется в SharedPreferences — при F5 (Web)
 /// или перезапуске приложения возвращаемся на тот же таб.
 ///
-/// KeyedSubtree — при переключении таба экран ПЕРЕСОЗДАЁТСЯ,
-/// поэтому данные (прогресс, история, тренировки) обновляются сразу.
+/// ⚠️ Если сохранённого таба НЕТ, но профиль создан —
+///    открываем «Тренировки» (индекс 1).
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -52,13 +53,25 @@ class _MainScreenState extends State<MainScreen> {
   Future<void> _restoreTab() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getInt(_keyLastTab);
+
+    int initialIndex = 0;
+
+    if (saved != null && saved >= 0 && saved < _screens.length) {
+      initialIndex = saved;
+    } else {
+      // ⚠️ Сохранённого таба нет — проверяем наличие профиля
+      try {
+        final profiles = await DatabaseHelper.instance.getProfiles();
+        if (profiles.isNotEmpty) {
+          initialIndex = 1; // Тренировки
+        }
+      } catch (_) {}
+    }
+
     if (!mounted) return;
 
     setState(() {
-      _currentIndex =
-          (saved != null && saved >= 0 && saved < _screens.length)
-              ? saved
-              : 0;
+      _currentIndex = initialIndex;
       _restored = true;
     });
   }
@@ -86,7 +99,6 @@ class _MainScreenState extends State<MainScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // ═══ KeyedSubtree — пересоздание экрана при смене таба ═══
           KeyedSubtree(
             key: ValueKey('screen_$_currentIndex'),
             child: _screens[_currentIndex],
@@ -205,3 +217,4 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 }
+// ═══ ФАЙЛ main_screen.dart ЗАВЕРШЁН ═══

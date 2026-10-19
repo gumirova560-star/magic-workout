@@ -36,9 +36,7 @@ class _FairyBubbleState extends State<FairyBubble>
   void initState() {
     super.initState();
 
-    // ⚠️ Подписываемся как слушатель событий (список, не одиночный onEvent)
     FairyReactionService().addEventListener(_onFairyEvent);
-
     FairyReactionService().addProfileListener(_onProfileChanged);
 
     _initPhrases().then((_) async {
@@ -93,7 +91,6 @@ class _FairyBubbleState extends State<FairyBubble>
     )..repeat();
   }
 
-  // ⚠️ Событие от сервиса — подменяем фразу и показываем
   void _onFairyEvent(String message, FairyMood mood) {
     debugPrint('🧚 FairyBubble.onEvent: "$message", mounted=$mounted');
     if (!mounted) return;
@@ -107,7 +104,6 @@ class _FairyBubbleState extends State<FairyBubble>
   void _onProfileChanged() {
     if (!mounted) return;
 
-    // ⚠️ Если сервис держит фразу (profile_changed_ask) — не трогаем
     if (FairyReactionService().isHoldingScreenPhrases) {
       debugPrint('🧚 _onProfileChanged skipped (hold)');
       return;
@@ -122,8 +118,6 @@ class _FairyBubbleState extends State<FairyBubble>
   }
 
   Future<void> _initPhrases() async {
-    // ⚠️ Если сервис держит фразы — не загружаем byScreen,
-    //    чтобы не перебить событийную фразу (profile_changed_ask)
     if (FairyReactionService().isHoldingScreenPhrases) {
       debugPrint('🧚 _initPhrases SKIPPED (hold)');
       return;
@@ -172,16 +166,19 @@ class _FairyBubbleState extends State<FairyBubble>
           gender: gender,
         );
       } else if (daysSince >= 2 && daysSince < 100) {
-        _phrases = [
-          ...FairyPhrases.forScreenWithMood('default',
-              name: name, gender: gender),
-          ...FairyPhrases.comeback
-              .map((t) => (
-                    text: FairyPhrases.apply(t, name, gender: gender),
-                    mood: FairyMood.sleepy,
-                  ))
-              .toList(),
-        ];
+        // ⚠️ Возвращение — добавляем comeback к фразам ТЕКУЩЕГО экрана.
+        final screenPhrases = FairyPhrases.forScreenWithMood(
+          widget.screenKey, // ⚠️ текущий экран
+          name: name,
+          gender: gender,
+        );
+        final comebackPhrases = FairyPhrases.comeback
+            .map((t) => (
+                  text: FairyPhrases.apply(t, name, gender: gender),
+                  mood: FairyMood.sleepy,
+                ))
+            .toList();
+        _phrases = [...comebackPhrases, ...screenPhrases];
       } else {
         final templates = id != null
             ? await DatabaseHelper.instance.getAutoTemplates(id)
@@ -304,10 +301,6 @@ class _FairyBubbleState extends State<FairyBubble>
     _scheduleHide();
   }
 
-  // ═══════════════════════════════════════════════════════════
-  //  ПОЗИЦИИ ПО ЭКРАНАМ
-  // ═══════════════════════════════════════════════════════════
-
   double _topForScreen() {
     switch (widget.screenKey) {
       case 'profiles':
@@ -342,10 +335,6 @@ class _FairyBubbleState extends State<FairyBubble>
     }
   }
 
-  // ═══════════════════════════════════════════════════════════
-  //  СВЕЧЕНИЕ
-  // ═══════════════════════════════════════════════════════════
-
   Color _glowColor(FairyMood mood) {
     switch (mood) {
       case FairyMood.happy:
@@ -360,10 +349,6 @@ class _FairyBubbleState extends State<FairyBubble>
         return const Color(0xFF9D8EC4);
     }
   }
-
-  // ═══════════════════════════════════════════════════════════
-  //  ЖИВАЯ ФЕЯ
-  // ═══════════════════════════════════════════════════════════
 
   Widget _buildLiveFairy(FairyMood mood) {
     final showSparks = mood == FairyMood.party;
@@ -497,10 +482,6 @@ class _FairyBubbleState extends State<FairyBubble>
       bubbleH + tailExtraBottom,
     );
   }
-
-  // ═══════════════════════════════════════════════════════════
-  //  BUILD
-  // ═══════════════════════════════════════════════════════════
 
   @override
   Widget build(BuildContext context) {

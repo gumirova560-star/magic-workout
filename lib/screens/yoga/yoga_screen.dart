@@ -22,7 +22,7 @@ class _YogaScreenState extends State<YogaScreen> {
   void initState() {
     super.initState();
 
-    // ⚠️ Блокируем стандартные фразы
+    // Блокируем фразы, пока грузятся данные
     FairyReactionService().holdScreenPhrases();
 
     _loadSessions().then((_) {
@@ -30,8 +30,8 @@ class _YogaScreenState extends State<YogaScreen> {
 
       FairyReactionService().releaseScreenPhrases();
 
-      // Небольшая задержка, чтобы старый пузырь успел исчезнуть
-      Future.delayed(const Duration(milliseconds: 150), () {
+      // Задержка для 100% удаления старого пузыря
+      Future.delayed(const Duration(milliseconds: 300), () {
         if (mounted) {
           FairyReactionService().say(
             'Дыши глубже, расслабься и почувствуй свое тело 🧘‍♀️',

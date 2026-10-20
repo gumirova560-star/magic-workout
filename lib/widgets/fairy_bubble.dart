@@ -107,6 +107,11 @@ class _FairyBubbleState extends State<FairyBubble>
   Future<void> _initPhrases() async {
     if (FairyReactionService().isHoldingScreenPhrases) return;
 
+    // ⚠️ Для Йоги и Каталога мы берем управление на себя через экран
+    if (widget.screenKey == 'yoga' || widget.screenKey == 'catalog') {
+      return;
+    }
+
     try {
       await FairyReactionService().loadActiveProfile();
 
@@ -198,7 +203,7 @@ class _FairyBubbleState extends State<FairyBubble>
         }
       }
 
-      if (_phrases.isEmpty && widget.screenKey != 'catalog' && widget.screenKey != 'yoga') {
+      if (_phrases.isEmpty) {
         _phrases = [
           (
             text: 'Привет, ${name ?? "друг"}! Я твоя фея 🧚',
@@ -209,11 +214,9 @@ class _FairyBubbleState extends State<FairyBubble>
     } catch (e, stack) {
       debugPrint('❌ ОШИБКА в _initPhrases: $e');
       debugPrint('$stack');
-      if (widget.screenKey != 'catalog' && widget.screenKey != 'yoga') {
-        _phrases = [
-          (text: 'Привет! Я твоя фея 🧚', mood: FairyMood.happy),
-        ];
-      }
+      _phrases = [
+        (text: 'Привет! Я твоя фея 🧚', mood: FairyMood.happy),
+      ];
     }
   }
 
@@ -430,13 +433,10 @@ class _FairyBubbleState extends State<FairyBubble>
         const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600);
 
     final bubbleSize = _measureBubbleSize(item.text, textStyle);
-
-    // ⚠️ ПРОВЕРКА ДЛЯ ЙОГИ
     final isYoga = widget.screenKey == 'yoga';
 
     return Positioned(
       top: null,
-      // Для йоги оставляем 220, для остальных поднимаем выше (350)
       bottom: isYoga ? 220.0 : 350.0,
       right: isYoga ? 40 : 30,
       child: IgnorePointer(
@@ -459,7 +459,6 @@ class _FairyBubbleState extends State<FairyBubble>
               clipBehavior: Clip.none,
               children: [
                 Padding(
-                  // Если йога — отступ 50, иначе 35 (чтобы придвинуть пузырь к фее)
                   padding: EdgeInsets.only(right: isYoga ? 50 : 35, top: 10),
                   child: SizedBox(
                     width: bubbleSize.width,
@@ -529,8 +528,9 @@ class _FairyBubbleState extends State<FairyBubble>
 
   @override
   Widget build(BuildContext context) {
+    // ⚠️ Принудительное удаление оверлея при каждой перерисовке
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !_visible) {
+      if (mounted) {
         _removeOverlay();
       }
     });

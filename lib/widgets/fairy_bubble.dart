@@ -39,21 +39,26 @@ class _FairyBubbleState extends State<FairyBubble>
     FairyReactionService().addEventListener(_onFairyEvent);
     FairyReactionService().addProfileListener(_onProfileChanged);
 
-    _initPhrases().then((_) async {
-      if (!mounted) return;
-
-      for (final mood in FairyMood.values) {
-        try {
-          await precacheImage(AssetImage(mood.asset), context);
-        } catch (_) {}
-      }
-
-      if (!mounted) return;
-
-      if (_phrases.isNotEmpty) {
-        _show();
-      }
-    });
+    // ⚠️ УМНАЯ ЗАДЕРЖКА ДЛЯ ЙОГИ И КАТАЛОГА
+    if (widget.screenKey == 'yoga' || widget.screenKey == 'catalog') {
+      Future.delayed(const Duration(milliseconds: 150), () {
+        if (!mounted) return;
+        // Если экран не прислал свою фразу, показываем дефолтную
+        if (_phrases.isEmpty) {
+          _initPhrases().then((_) async {
+            if (!mounted) return;
+            await _precacheAllMoods();
+            if (mounted && _phrases.isNotEmpty) _show();
+          });
+        }
+      });
+    } else {
+      _initPhrases().then((_) async {
+        if (!mounted) return;
+        await _precacheAllMoods();
+        if (mounted && _phrases.isNotEmpty) _show();
+      });
+    }
 
     _controller = AnimationController(
       vsync: this,
@@ -83,6 +88,14 @@ class _FairyBubbleState extends State<FairyBubble>
     )..repeat();
   }
 
+  Future<void> _precacheAllMoods() async {
+    for (final mood in FairyMood.values) {
+      try {
+        await precacheImage(AssetImage(mood.asset), context);
+      } catch (_) {}
+    }
+  }
+
   void _onFairyEvent(String message, FairyMood mood) {
     if (!mounted) return;
     setState(() {
@@ -106,11 +119,6 @@ class _FairyBubbleState extends State<FairyBubble>
 
   Future<void> _initPhrases() async {
     if (FairyReactionService().isHoldingScreenPhrases) return;
-
-    // ⚠️ Для Йоги и Каталога мы берем управление на себя через экран
-    if (widget.screenKey == 'yoga' || widget.screenKey == 'catalog') {
-      return;
-    }
 
     try {
       await FairyReactionService().loadActiveProfile();
@@ -259,7 +267,7 @@ class _FairyBubbleState extends State<FairyBubble>
     if (_phrases.isEmpty) return;
     if (!mounted) return;
 
-    _removeOverlay();
+    _removeOverlay(); // Очищаем старый оверлей
 
     setState(() => _visible = true);
     _updateOverlay();
@@ -275,7 +283,7 @@ class _FairyBubbleState extends State<FairyBubble>
 
   void _scheduleHide() {
     _hideTimer?.cancel();
-    _hideTimer = Timer(const Duration(seconds: 4), () {
+    _hideTimer = Timer(const Duration(seconds: 5), () {
       if (mounted) _hide();
     });
   }
@@ -528,7 +536,6 @@ class _FairyBubbleState extends State<FairyBubble>
 
   @override
   Widget build(BuildContext context) {
-    // ⚠️ Принудительное удаление оверлея при каждой перерисовке
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _removeOverlay();

@@ -48,6 +48,9 @@ dependencies:
   # ═══ Открытие внешних ссылок (Яндекс.Видео, Картинки) ═══
   url_launcher: ^6.3.0
 
+  # ═══ Работа с камерой и галереей ═══
+  image_picker: ^1.0.7
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -5,6 +5,7 @@ import 'workout/workout_screen.dart';
 import 'progress/progress_screen.dart';
 import 'history/history_screen.dart';
 import 'settings/settings_screen.dart';
+import 'catalog/catalog_screen.dart'; // ⚠️ Новый экран каталога
 import '../widgets/fairy_bubble.dart';
 import '../services/database_helper.dart';
 
@@ -28,9 +29,11 @@ class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
   bool _restored = false;
 
+  // ⚠️ Добавлен экран каталога (индекс 2)
   final List<Widget> _screens = const [
     ProfilesScreen(),
     WorkoutScreen(),
+    CatalogScreen(),
     ProgressScreen(),
     HistoryScreen(),
     SettingsScreen(),
@@ -39,6 +42,7 @@ class _MainScreenState extends State<MainScreen> {
   final List<String> _screenKeys = const [
     'profiles',
     'workout',
+    'catalog',
     'progress',
     'history',
     'settings',
@@ -97,7 +101,9 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     return Scaffold(
+      // ⚠️ fit: StackFit.expand фиксит дерганье при исчезновении феи
       body: Stack(
+        fit: StackFit.expand,
         children: [
           KeyedSubtree(
             key: ValueKey('screen_$_currentIndex'),
@@ -137,23 +143,31 @@ class _MainScreenState extends State<MainScreen> {
                   activeIcon: Icons.fitness_center,
                   label: 'Тренировки',
                 ),
+                // ⚠️ Новый таб "Каталог"
                 _buildNavItem(
                   context,
                   index: 2,
+                  icon: Icons.menu_book_outlined,
+                  activeIcon: Icons.menu_book_rounded,
+                  label: 'Каталог',
+                ),
+                _buildNavItem(
+                  context,
+                  index: 3,
                   icon: Icons.insights_outlined,
                   activeIcon: Icons.insights_rounded,
                   label: 'Прогресс',
                 ),
                 _buildNavItem(
                   context,
-                  index: 3,
+                  index: 4,
                   icon: Icons.history_outlined,
                   activeIcon: Icons.history_rounded,
                   label: 'История',
                 ),
                 _buildNavItem(
                   context,
-                  index: 4,
+                  index: 5,
                   icon: Icons.settings_outlined,
                   activeIcon: Icons.settings_rounded,
                   label: 'Настройки',

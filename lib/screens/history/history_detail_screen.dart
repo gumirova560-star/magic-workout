@@ -83,6 +83,34 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
                 // ═══ Инфо ═══
                 _buildInfoCard(context),
 
+                // ⚠️ ЗАМЕТКА (если есть)
+                if (widget.workout.notes != null && widget.workout.notes!.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.notes_rounded, color: Colors.amber, size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            widget.workout.notes!,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 20),
 
                 // ═══ Упражнения ═══
@@ -373,3 +401,4 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
     );
   }
 }
+// ═══ ФАЙЛ history_detail_screen.dart ЗАВЕРШЁН ═══

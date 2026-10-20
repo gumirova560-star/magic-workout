@@ -5,6 +5,7 @@ enum FairyMood {
   think,   // 🤔 совет
   party,   // 🎉 рекорд, завершение
   sleepy,  // 😴 comeback, ночь
+  yoga,    // 🧘‍♀️ фея в позе лотоса (для экрана Йоги)
 }
 
 extension FairyMoodAsset on FairyMood {
@@ -21,6 +22,8 @@ extension FairyMoodAsset on FairyMood {
         return 'assets/fairy/fairy_party.png';
       case FairyMood.sleepy:
         return 'assets/fairy/fairy_sleepy.png';
+      case FairyMood.yoga:
+        return 'assets/fairy/fairy_yoga.png'; // ⚠️ Убедись, что эта картинка есть в assets/fairy/
     }
   }
 }

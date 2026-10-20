@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../models/yoga_session.dart';
 import '../../services/database_helper.dart';
+import '../../services/fairy_reaction_service.dart';
+import '../../data/fairy_mood.dart';
 import '../../widgets/fairy_bubble.dart';
-import 'yoga_player_screen.dart';
+import 'session_detail_screen.dart';
 import 'stretch_list_screen.dart';
 
 class YogaScreen extends StatefulWidget {
@@ -19,7 +21,25 @@ class _YogaScreenState extends State<YogaScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSessions();
+
+    // ⚠️ Блокируем стандартные фразы
+    FairyReactionService().holdScreenPhrases();
+
+    _loadSessions().then((_) {
+      if (!mounted) return;
+
+      FairyReactionService().releaseScreenPhrases();
+
+      // Небольшая задержка, чтобы старый пузырь успел исчезнуть
+      Future.delayed(const Duration(milliseconds: 150), () {
+        if (mounted) {
+          FairyReactionService().say(
+            'Дыши глубже, расслабься и почувствуй свое тело 🧘‍♀️',
+            mood: FairyMood.yoga,
+          );
+        }
+      });
+    });
   }
 
   Future<void> _loadSessions() async {
@@ -34,9 +54,7 @@ class _YogaScreenState extends State<YogaScreen> {
   Future<void> _openSession(YogaSession session) async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => YogaPlayerScreen(session: session),
-      ),
+      MaterialPageRoute(builder: (_) => SessionDetailScreen(session: session)),
     );
   }
 
@@ -49,39 +67,25 @@ class _YogaScreenState extends State<YogaScreen> {
 
   IconData _getFocusIcon(String focus) {
     switch (focus) {
-      case 'back':
-        return Icons.accessibility_new_rounded;
-      case 'flexibility':
-        return Icons.self_improvement_rounded;
-      case 'relax':
-        return Icons.spa_rounded;
-      case 'glutes':
-        return Icons.directions_walk_rounded;
-      case 'morning':
-        return Icons.wb_sunny_rounded;
-      case 'core':
-        return Icons.fitness_center_rounded;
-      default:
-        return Icons.self_improvement;
+      case 'back': return Icons.accessibility_new_rounded;
+      case 'flexibility': return Icons.self_improvement_rounded;
+      case 'relax': return Icons.spa_rounded;
+      case 'glutes': return Icons.directions_walk_rounded;
+      case 'morning': return Icons.wb_sunny_rounded;
+      case 'core': return Icons.fitness_center_rounded;
+      default: return Icons.self_improvement;
     }
   }
 
   Color _getFocusColor(String focus) {
     switch (focus) {
-      case 'back':
-        return const Color(0xFF6C5CE7);
-      case 'flexibility':
-        return const Color(0xFF00B894);
-      case 'relax':
-        return const Color(0xFF81ECEC);
-      case 'glutes':
-        return const Color(0xFFE84393);
-      case 'morning':
-        return const Color(0xFFFDCB6E);
-      case 'core':
-        return const Color(0xFFE17055);
-      default:
-        return const Color(0xFF6C5CE7);
+      case 'back': return const Color(0xFF6C5CE7);
+      case 'flexibility': return const Color(0xFF00B894);
+      case 'relax': return const Color(0xFF81ECEC);
+      case 'glutes': return const Color(0xFFE84393);
+      case 'morning': return const Color(0xFFFDCB6E);
+      case 'core': return const Color(0xFFE17055);
+      default: return const Color(0xFF6C5CE7);
     }
   }
 
@@ -90,9 +94,7 @@ class _YogaScreenState extends State<YogaScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Йога и растяжка'),
-      ),
+      appBar: AppBar(title: const Text('Йога и растяжка')),
       body: Stack(
         children: [
           _loading
@@ -112,13 +114,11 @@ class _YogaScreenState extends State<YogaScreen> {
                       Text(
                         '${_sessions.length} практик для разных целей',
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color:
-                              theme.colorScheme.onSurface.withOpacity(0.6),
+                          color: theme.colorScheme.onSurface.withOpacity(0.6),
                         ),
                       ),
                       const SizedBox(height: 12),
-                      ..._sessions
-                          .map((s) => _buildSessionCard(context, s)),
+                      ..._sessions.map((s) => _buildSessionCard(context, s)),
                       const SizedBox(height: 120),
                     ],
                   ),
@@ -180,18 +180,12 @@ class _YogaScreenState extends State<YogaScreen> {
                   SizedBox(height: 4),
                   Text(
                     'Выбери позы и растяжки вручную',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
                   ),
                 ],
               ),
             ),
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: Colors.white,
-            ),
+            const Icon(Icons.chevron_right_rounded, color: Colors.white),
           ],
         ),
       ),
@@ -241,8 +235,7 @@ class _YogaScreenState extends State<YogaScreen> {
                     Text(
                       session.description,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color:
-                            theme.colorScheme.onSurface.withOpacity(0.6),
+                        color: theme.colorScheme.onSurface.withOpacity(0.6),
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -250,11 +243,7 @@ class _YogaScreenState extends State<YogaScreen> {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        Icon(
-                          Icons.timer_outlined,
-                          size: 14,
-                          color: color,
-                        ),
+                        Icon(Icons.timer_outlined, size: 14, color: color),
                         const SizedBox(width: 4),
                         Text(
                           '${session.durationMinutes} мин',

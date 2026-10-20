@@ -7,6 +7,17 @@ import '../../widgets/weight_chart.dart';
 import '../../widgets/weekly_bar_chart.dart';
 import '../../widgets/training_calendar.dart';
 import 'exercise_analysis_screen.dart';
+import 'transformation_screen.dart';
+
+// ⚠️ Хелпер для склонений (можно вынести в отдельный файл lib/utils/pluralize.dart)
+String pluralize(int number, String one, String few, String many) {
+  final n = number.abs() % 100;
+  if (n >= 11 && n <= 19) return '$number $many';
+  final i = n % 10;
+  if (i == 1) return '$number $one';
+  if (i >= 2 && i <= 4) return '$number $few';
+  return '$number $many';
+}
 
 class ProgressScreen extends StatefulWidget {
   const ProgressScreen({super.key});
@@ -30,6 +41,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
   List<Map<String, dynamic>> _availableExercises = [];
   List<WorkoutDay> _monthWorkouts = [];
+  List<WorkoutDay> _allHistory = [];
 
   @override
   void initState() {
@@ -82,7 +94,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
     final history = await DatabaseHelper.instance.getWorkoutDays(
       profileId: active.id!,
-      limit: 100,
+      limit: 365,
     );
 
     final completed =
@@ -93,7 +105,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
       totalMin += w.durationMinutes ?? 0;
     }
 
-    // ═══ За неделю ═══
     final now = DateTime.now();
     final monday = now.subtract(Duration(days: now.weekday - 1));
     final weekStart = DateTime(monday.year, monday.month, monday.day);
@@ -105,7 +116,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
       }
     }
 
-    // ═══ Тренировки за текущий месяц (для календаря) ═══
     final monthWorkouts = await DatabaseHelper.instance
         .getWorkoutDaysForMonth(
       profileId: active.id!,
@@ -113,7 +123,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
       month: now.month,
     );
 
-    // ═══ Объём ═══
     double volume = 0;
     for (final w in completed) {
       final exercises =
@@ -129,7 +138,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
       }
     }
 
-    // ═══ Упражнения для графика ═══
     final availableExercises = <Map<String, dynamic>>[];
     final seenIds = <int>{};
     for (final w in completed) {
@@ -159,6 +167,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
       _weeklyData = weekly;
       _availableExercises = availableExercises;
       _monthWorkouts = monthWorkouts;
+      _allHistory = history;
       _loading = false;
     });
 
@@ -193,7 +202,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
     );
   }
 
-  /// Загрузка тренировок за конкретный месяц (для листания календаря).
   Future<List<WorkoutDay>> _loadMonthWorkouts(int year, int month) async {
     if (_activeProfile == null) return [];
 
@@ -203,7 +211,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
       month: month,
     );
 
-    // Если это текущий отображаемый месяц — синхронизируем с состоянием
     final now = DateTime.now();
     if (year == now.year && month == now.month && mounted) {
       setState(() => _monthWorkouts = workouts);
@@ -212,7 +219,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
     return workouts;
   }
 
-  /// Тап на день календаря — SnackBar с деталями.
   void _onCalendarDayTap(WorkoutDay workout) {
     final status = workout.status == 'completed'
         ? '✅ Завершена'
@@ -235,6 +241,16 @@ class _ProgressScreenState extends State<ProgressScreen> {
           '$dateStr — ${workout.name}\n$status$minutes',
         ),
         duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _openTransformation() {
+    if (_activeProfile == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TransformationScreen(profile: _activeProfile!),
       ),
     );
   }
@@ -263,11 +279,12 @@ class _ProgressScreenState extends State<ProgressScreen> {
             _buildStatsRow(context),
             const SizedBox(height: 16),
 
-            // ═══ Кнопка «Анализ упражнений» ═══
+            _buildTransformationButton(context),
+            const SizedBox(height: 16),
+
             _buildAnalysisButton(context),
             const SizedBox(height: 16),
 
-            // ═══ Календарь ═══
             TrainingCalendar(
               workouts: _monthWorkouts,
               onDayTap: _onCalendarDayTap,
@@ -287,6 +304,71 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
             const SizedBox(height: 32),
           ],
+        ),
+      ),
+    );
+  }
+
+// ═══ КОНЕЦ ЧАСТИ 1 ═══
+// Скажи «часть 2», чтобы получить продолжение.
+  Widget _buildTransformationButton(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _openTransformation,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFFFB800), Color(0xFFFDCB6E)],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFFFB800).withOpacity(0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: const Row(
+            children: [
+              Icon(
+                Icons.photo_camera_front_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
+              SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Моя трансформация',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Фото до и после по месяцам',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: Colors.white70,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -356,14 +438,18 @@ class _ProgressScreenState extends State<ProgressScreen> {
   }
 
   Widget _buildStatsRow(BuildContext context) {
+    // ⚠️ Применяем склонения для правильного отображения
+    final workoutsText = pluralize(_totalWorkouts, 'тренировка', 'тренировки', 'тренировок');
+    final minutesText = pluralize(_totalMinutes, 'минута', 'минуты', 'минут');
+
     return Row(
       children: [
         Expanded(
           child: _statCard(
             context,
             icon: Icons.calendar_today_rounded,
-            value: '$_totalWorkouts',
-            label: 'тренировок',
+            value: workoutsText, // Выведет "1 тренировка" или "5 тренировок"
+            label: '', // Убрали дублирующий текст
             color: const Color(0xFF6C5CE7),
           ),
         ),
@@ -372,8 +458,8 @@ class _ProgressScreenState extends State<ProgressScreen> {
           child: _statCard(
             context,
             icon: Icons.timer_rounded,
-            value: '$_totalMinutes',
-            label: 'минут',
+            value: minutesText, // Выведет "1 минута" или "45 минут"
+            label: '',
             color: const Color(0xFF00B894),
           ),
         ),
@@ -385,7 +471,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
             value: _totalVolume >= 1000
                 ? '${(_totalVolume / 1000).toStringAsFixed(1)}т'
                 : '${_totalVolume.toInt()}',
-            label: 'объём',
+            label: 'объём', // Оставили подпись для объема, так как склонять "кг" или "тонны" тут не совсем удобно
             color: const Color(0xFFE17055),
           ),
         ),
@@ -423,17 +509,20 @@ class _ProgressScreenState extends State<ProgressScreen> {
           Text(
             value,
             style: theme.textTheme.headlineMedium?.copyWith(
-              fontSize: 18,
+              fontSize: 15, // Чуть уменьшили шрифт, чтобы поместились длинные фразы (например, "99 тренировок")
               fontWeight: FontWeight.w700,
             ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
-          Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.6),
-              fontSize: 10,
+          if (label.isNotEmpty)
+            Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.6),
+                fontSize: 10,
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -476,6 +565,8 @@ class _ProgressScreenState extends State<ProgressScreen> {
     );
   }
 
+// ═══ КОНЕЦ ЧАСТИ 2 ═══
+// Скажи «часть 3», чтобы получить финальный кусок.
   Widget _buildNoDataCard(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
@@ -539,3 +630,5 @@ class _ProgressScreenState extends State<ProgressScreen> {
     );
   }
 }
+// ═══ КОНЕЦ ЧАСТИ 3 ═══
+// ═══ ФАЙЛ progress_screen.dart ЗАВЕРШЁН ═══

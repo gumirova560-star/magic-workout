@@ -10,10 +10,7 @@ import 'screens/onboarding_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // ═══ URL без # (только для Web) ═══
   setPathUrlStrategy();
-
   await DataInitializer.initialize();
   runApp(const MyApp());
 }
@@ -68,8 +65,6 @@ class _MyAppState extends State<MyApp> {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: _themeMode,
-
-      // ═══ ЛОКАЛИЗАЦИЯ (для DatePicker и др.) ═══
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -80,7 +75,6 @@ class _MyAppState extends State<MyApp> {
         Locale('en', 'US'),
       ],
       locale: const Locale('ru', 'RU'),
-
       home: _showOnboarding
           ? OnboardingScreen(onFinish: _finishOnboarding)
           : const MainScreen(),

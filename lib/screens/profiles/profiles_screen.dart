@@ -1,13 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../models/user_profile.dart';
 import '../../services/database_helper.dart';
 import '../../services/fairy_reaction_service.dart';
 import 'profile_edit_screen.dart';
 
-/// Экран «Профили».
-///
-/// Один профиль — без списка, без «+ Создать», без удаления.
-/// Доступно только редактирование.
 class ProfilesScreen extends StatefulWidget {
   const ProfilesScreen({super.key});
 
@@ -18,6 +16,7 @@ class ProfilesScreen extends StatefulWidget {
 class _ProfilesScreenState extends State<ProfilesScreen> {
   UserProfile? _profile;
   bool _loading = true;
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
@@ -30,7 +29,6 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
 
     var profiles = await DatabaseHelper.instance.getProfiles();
 
-    // ═══ RETRY: ждём, пока база откроется (Web) ═══
     if (profiles.isEmpty) {
       for (int attempt = 0; attempt < 5; attempt++) {
         await Future.delayed(const Duration(milliseconds: 300));
@@ -52,7 +50,6 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
 
     final active = profiles.first;
 
-    // ═══ Сообщаем фее, кто активный ═══
     await FairyReactionService().setActiveProfile(
       active.id,
       active.name,
@@ -63,6 +60,28 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
       _profile = active;
       _loading = false;
     });
+  }
+
+  Future<void> _pickAvatar() async {
+    if (_profile == null) return;
+
+    final XFile? image = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 50,
+    );
+    if (image == null) return;
+
+    final bytes = await image.readAsBytes();
+    final base64String = base64Encode(bytes);
+
+    final updatedProfile = _profile!.copyWith(avatarPath: base64String);
+    await DatabaseHelper.instance.updateProfile(updatedProfile);
+
+    if (mounted) {
+      setState(() {
+        _profile = updatedProfile;
+      });
+    }
   }
 
   Future<void> _openEditor() async {
@@ -78,7 +97,6 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
     if (result == true) {
       await _loadProfile();
 
-      // ═══ Реакция феи ═══
       final profiles = await DatabaseHelper.instance.getProfiles();
       if (profiles.isEmpty) return;
 
@@ -192,29 +210,26 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    theme.colorScheme.primary,
-                    theme.colorScheme.primary.withOpacity(0.7),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Center(
-                child: Text(
-                  profile.name.isNotEmpty
-                      ? profile.name[0].toUpperCase()
-                      : '?',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+            GestureDetector(
+              onTap: _pickAvatar,
+              child: CircleAvatar(
+                radius: 50,
+                backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+                backgroundImage: profile.avatarPath != null && profile.avatarPath!.isNotEmpty
+                    ? MemoryImage(base64Decode(profile.avatarPath!))
+                    : null,
+                child: profile.avatarPath == null || profile.avatarPath!.isEmpty
+                    ? Text(
+                        profile.name.isNotEmpty
+                            ? profile.name[0].toUpperCase()
+                            : '?',
+                        style: TextStyle(
+                          color: theme.colorScheme.primary,
+                          fontSize: 40,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      )
+                    : null,
               ),
             ),
             const SizedBox(height: 16),

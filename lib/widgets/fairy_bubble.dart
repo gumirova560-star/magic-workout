@@ -7,7 +7,6 @@ import '../services/database_helper.dart';
 import '../services/fairy_reaction_service.dart';
 import '../services/fairy_stats_service.dart';
 
-/// Плавающая фея — 12×12, появляется СВЕРХУ, позиции по экранам.
 class FairyBubble extends StatefulWidget {
   final String screenKey;
 
@@ -26,11 +25,12 @@ class _FairyBubbleState extends State<FairyBubble>
 
   late AnimationController _controller;
   late Animation<Offset> _slideFromTop;
-  late Animation<Offset> _slideUpOut;
   late Animation<double> _fadeAnimation;
 
   late AnimationController _wingController;
   late AnimationController _sparkController;
+
+  OverlayEntry? _overlayEntry;
 
   @override
   void initState() {
@@ -68,14 +68,6 @@ class _FairyBubbleState extends State<FairyBubble>
       curve: Curves.easeOutCubic,
     ));
 
-    _slideUpOut = Tween<Offset>(
-      begin: Offset.zero,
-      end: const Offset(0, -1.5),
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeInCubic,
-    ));
-
     _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
@@ -92,7 +84,6 @@ class _FairyBubbleState extends State<FairyBubble>
   }
 
   void _onFairyEvent(String message, FairyMood mood) {
-    debugPrint('🧚 FairyBubble.onEvent: "$message", mounted=$mounted');
     if (!mounted) return;
     setState(() {
       _phrases = [(text: message, mood: mood)];
@@ -103,11 +94,7 @@ class _FairyBubbleState extends State<FairyBubble>
 
   void _onProfileChanged() {
     if (!mounted) return;
-
-    if (FairyReactionService().isHoldingScreenPhrases) {
-      debugPrint('🧚 _onProfileChanged skipped (hold)');
-      return;
-    }
+    if (FairyReactionService().isHoldingScreenPhrases) return;
 
     _initPhrases().then((_) {
       if (mounted) {
@@ -118,10 +105,7 @@ class _FairyBubbleState extends State<FairyBubble>
   }
 
   Future<void> _initPhrases() async {
-    if (FairyReactionService().isHoldingScreenPhrases) {
-      debugPrint('🧚 _initPhrases SKIPPED (hold)');
-      return;
-    }
+    if (FairyReactionService().isHoldingScreenPhrases) return;
 
     try {
       await FairyReactionService().loadActiveProfile();
@@ -149,12 +133,6 @@ class _FairyBubbleState extends State<FairyBubble>
         }
       }
 
-      String? goal;
-      if (id != null) {
-        final profile = await DatabaseHelper.instance.getProfileById(id);
-        goal = profile?.goal;
-      }
-
       final hour = DateTime.now().hour;
       final streak = await FairyStatsService.getStreak();
       final daysSince = await FairyStatsService.daysSinceLastWorkout();
@@ -166,9 +144,8 @@ class _FairyBubbleState extends State<FairyBubble>
           gender: gender,
         );
       } else if (daysSince >= 2 && daysSince < 100) {
-        // ⚠️ Возвращение — добавляем comeback к фразам ТЕКУЩЕГО экрана.
         final screenPhrases = FairyPhrases.forScreenWithMood(
-          widget.screenKey, // ⚠️ текущий экран
+          widget.screenKey,
           name: name,
           gender: gender,
         );
@@ -221,7 +198,7 @@ class _FairyBubbleState extends State<FairyBubble>
         }
       }
 
-      if (_phrases.isEmpty) {
+      if (_phrases.isEmpty && widget.screenKey != 'catalog' && widget.screenKey != 'yoga') {
         _phrases = [
           (
             text: 'Привет, ${name ?? "друг"}! Я твоя фея 🧚',
@@ -232,9 +209,11 @@ class _FairyBubbleState extends State<FairyBubble>
     } catch (e, stack) {
       debugPrint('❌ ОШИБКА в _initPhrases: $e');
       debugPrint('$stack');
-      _phrases = [
-        (text: 'Привет! Я твоя фея 🧚', mood: FairyMood.happy),
-      ];
+      if (widget.screenKey != 'catalog' && widget.screenKey != 'yoga') {
+        _phrases = [
+          (text: 'Привет! Я твоя фея 🧚', mood: FairyMood.happy),
+        ];
+      }
     }
   }
 
@@ -242,6 +221,9 @@ class _FairyBubbleState extends State<FairyBubble>
   void didUpdateWidget(covariant FairyBubble oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.screenKey != widget.screenKey) {
+      _removeOverlay();
+      _hideTimer?.cancel();
+
       _initPhrases().then((_) {
         if (mounted) {
           setState(() => _phraseIndex = 0);
@@ -251,17 +233,10 @@ class _FairyBubbleState extends State<FairyBubble>
     }
   }
 
-  Future<void> refresh() async {
-    await _initPhrases();
-    if (mounted) {
-      setState(() => _phraseIndex = 0);
-      _show();
-    }
-  }
-
   @override
   void dispose() {
     _hideTimer?.cancel();
+    _removeOverlay();
     _controller.dispose();
     _wingController.dispose();
     _sparkController.dispose();
@@ -272,18 +247,27 @@ class _FairyBubbleState extends State<FairyBubble>
     super.dispose();
   }
 
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
   void _show() {
     if (_phrases.isEmpty) return;
     if (!mounted) return;
+
+    _removeOverlay();
+
     setState(() => _visible = true);
+    _updateOverlay();
     _controller.forward(from: 0);
     _scheduleHide();
   }
 
   void _hide() {
-    _controller.reverse().then((_) {
-      if (mounted) setState(() => _visible = false);
-    });
+    _removeOverlay();
+    _hideTimer?.cancel();
+    if (mounted) setState(() => _visible = false);
   }
 
   void _scheduleHide() {
@@ -298,55 +282,27 @@ class _FairyBubbleState extends State<FairyBubble>
     setState(() {
       _phraseIndex = (_phraseIndex + 1) % _phrases.length;
     });
+    _updateOverlay();
     _scheduleHide();
   }
 
-  double _topForScreen() {
-    switch (widget.screenKey) {
-      case 'profiles':
-        return 70;
-      case 'workout':
-        return 60;
-      case 'workout_detail':
-        return 60;
-      case 'yoga':
-        return 70;
-      case 'progress':
-        return 70;
-      case 'history':
-        return 70;
-      case 'settings':
-        return 70;
-      default:
-        return 70;
-    }
-  }
-
-  double _rightForScreen() {
-    switch (widget.screenKey) {
-      case 'workout':
-        return 16;
-      case 'workout_detail':
-        return 16;
-      case 'settings':
-        return 16;
-      default:
-        return 16;
-    }
+  void _updateOverlay() {
+    _removeOverlay();
+    final overlay = Overlay.of(context);
+    _overlayEntry = OverlayEntry(
+      builder: (context) => _buildFairyOverlay(),
+    );
+    overlay.insert(_overlayEntry!);
   }
 
   Color _glowColor(FairyMood mood) {
     switch (mood) {
-      case FairyMood.happy:
-        return const Color(0xFFFFB800);
-      case FairyMood.wink:
-        return const Color(0xFF7C5CFF);
-      case FairyMood.think:
-        return const Color(0xFF3E7BFA);
-      case FairyMood.party:
-        return const Color(0xFF9B30FF);
-      case FairyMood.sleepy:
-        return const Color(0xFF9D8EC4);
+      case FairyMood.happy: return const Color(0xFFFFB800);
+      case FairyMood.wink: return const Color(0xFF7C5CFF);
+      case FairyMood.think: return const Color(0xFF3E7BFA);
+      case FairyMood.party: return const Color(0xFF9B30FF);
+      case FairyMood.sleepy: return const Color(0xFF9D8EC4);
+      case FairyMood.yoga: return const Color(0xFF00B894);
     }
   }
 
@@ -406,30 +362,16 @@ class _FairyBubbleState extends State<FairyBubble>
         mood.asset,
         key: ValueKey(mood),
         fit: BoxFit.contain,
-        frameBuilder: (context, child, frame, wasSyncLoaded) {
-          if (wasSyncLoaded || frame != null) return child;
-          return const SizedBox.shrink();
-        },
-        errorBuilder: (_, __, ___) => const Icon(
-          Icons.auto_awesome,
-          size: 12,
-        ),
+        errorBuilder: (_, __, ___) => const Icon(Icons.auto_awesome, size: 12),
       ),
     );
   }
 
   Widget _sparkAbove(
-    double t,
-    double phase,
-    double baseY,
-    double xOffset,
-    Color color,
-  ) {
+      double t, double phase, double baseY, double xOffset, Color color) {
     final a = 2 * math.pi * (t + phase);
-
     final driftY = 6 * math.sin(a * 2);
     final driftX = 3 * math.cos(a * 3);
-
     final opacity = 0.4 + 0.6 * (0.5 + 0.5 * math.sin(a * 4));
 
     return Transform.translate(
@@ -442,10 +384,7 @@ class _FairyBubbleState extends State<FairyBubble>
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: color.withOpacity(0.7),
-              blurRadius: 4,
-              spreadRadius: 1,
-            ),
+                color: color.withOpacity(0.7), blurRadius: 4, spreadRadius: 1),
           ],
         ),
       ),
@@ -453,21 +392,19 @@ class _FairyBubbleState extends State<FairyBubble>
   }
 
   Size _measureBubbleSize(String text, TextStyle style) {
-    const maxWidth = 240.0;
+    const maxWidth = 180.0;
     const minWidth = 120.0;
-
-    const padLeft = 24.0;
-    const padRight = 36.0;
-    const padTop = 14.0;
-    const padBottom = 24.0;
-
-    const tailExtraRight = 45.0;
-    const tailExtraBottom = 15.0;
+    const padLeft = 16.0;
+    const padRight = 24.0;
+    const padTop = 12.0;
+    const padBottom = 16.0;
+    const tailExtraRight = 25.0;
+    const tailExtraBottom = 10.0;
 
     final tp = TextPainter(
       text: TextSpan(text: text, style: style),
       textDirection: TextDirection.ltr,
-      maxLines: 3,
+      maxLines: 5,
       textAlign: TextAlign.center,
     )..layout(maxWidth: maxWidth - padLeft - padRight);
 
@@ -475,133 +412,131 @@ class _FairyBubbleState extends State<FairyBubble>
     final textH = tp.height;
 
     final bubbleW = (textW + padLeft + padRight).clamp(minWidth, maxWidth);
-    final bubbleH = (textH + padTop + padBottom).clamp(50.0, 130.0);
+    final bubbleH = (textH + padTop + padBottom).clamp(50.0, 150.0);
 
-    return Size(
-      bubbleW + tailExtraRight,
-      bubbleH + tailExtraBottom,
-    );
+    return Size(bubbleW + tailExtraRight, bubbleH + tailExtraBottom);
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildFairyOverlay() {
     final theme = Theme.of(context);
     final item = _phrases.isNotEmpty ? _phrases[_phraseIndex] : null;
-
-    if (!_visible || item == null || item.text.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    if (item == null) return const SizedBox.shrink();
 
     final textStyle = theme.textTheme.bodyMedium?.copyWith(
           fontWeight: FontWeight.w600,
-          fontSize: 11,
+          fontSize: 11.5,
           color: theme.colorScheme.onSurface,
         ) ??
-        const TextStyle(fontSize: 11, fontWeight: FontWeight.w600);
+        const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600);
 
     final bubbleSize = _measureBubbleSize(item.text, textStyle);
 
+    // ⚠️ ПРОВЕРКА ДЛЯ ЙОГИ
+    final isYoga = widget.screenKey == 'yoga';
+
     return Positioned(
-      top: _topForScreen(),
-      right: _rightForScreen(),
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, child) {
-          final isDisappearing =
-              _controller.status == AnimationStatus.reverse;
-          final offset =
-              isDisappearing ? _slideUpOut.value : _slideFromTop.value;
+      top: null,
+      // Для йоги оставляем 220, для остальных поднимаем выше (350)
+      bottom: isYoga ? 220.0 : 350.0,
+      right: isYoga ? 40 : 30,
+      child: IgnorePointer(
+        ignoring: !_visible,
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            final offset = _controller.status == AnimationStatus.reverse
+                ? Offset.zero
+                : _slideFromTop.value;
 
-          return FractionalTranslation(
-            translation: offset,
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: child,
+            return FractionalTranslation(
+              translation: offset,
+              child: FadeTransition(opacity: _fadeAnimation, child: child),
+            );
+          },
+          child: GestureDetector(
+            onTap: _nextPhrase,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Padding(
+                  // Если йога — отступ 50, иначе 35 (чтобы придвинуть пузырь к фее)
+                  padding: EdgeInsets.only(right: isYoga ? 50 : 35, top: 10),
+                  child: SizedBox(
+                    width: bubbleSize.width,
+                    height: bubbleSize.height,
+                    child: CustomPaint(
+                      painter: _SpeechBubblePainter(
+                        fillColor: theme.colorScheme.surface,
+                        borderColor: Colors.black.withOpacity(0.1),
+                        shadowColor: Colors.black.withOpacity(0.12),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.only(
+                            left: 12, right: 24, top: 12, bottom: 16),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                item.text,
+                                textAlign: TextAlign.center,
+                                maxLines: 5,
+                                overflow: TextOverflow.ellipsis,
+                                style: textStyle,
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: _hide,
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 4.0),
+                                child: Icon(Icons.close_rounded,
+                                    size: 14,
+                                    color: theme.colorScheme.onSurface
+                                        .withOpacity(0.4)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: 0,
+                  bottom: -5,
+                  child: SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: OverflowBox(
+                      minWidth: 0,
+                      maxWidth: 140,
+                      minHeight: 0,
+                      maxHeight: 180,
+                      alignment: Alignment.center,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        child: _buildLiveFairy(item.mood),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          );
-        },
-        child: GestureDetector(
-          onTap: _nextPhrase,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(right: 40),
-                child: SizedBox(
-                  width: bubbleSize.width,
-                  height: bubbleSize.height,
-                  child: CustomPaint(
-                    painter: _SpeechBubblePainter(
-                      fillColor: theme.colorScheme.surface,
-                      borderColor: Colors.black.withOpacity(0.25),
-                      shadowColor: Colors.black.withOpacity(0.15),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.only(
-                        left: 22,
-                        right: 34,
-                        top: 16,
-                        bottom: 26,
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              item.text,
-                              textAlign: TextAlign.center,
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                              style: textStyle,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          GestureDetector(
-                            onTap: _hide,
-                            child: Icon(
-                              Icons.close_rounded,
-                              size: 14,
-                              color: theme.colorScheme.onSurface
-                                  .withOpacity(0.5),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              Positioned(
-                right: 0,
-                bottom: 0,
-                child: SizedBox(
-                  width: 12,
-                  height: 12,
-                  child: OverflowBox(
-                    minWidth: 0,
-                    maxWidth: 140,
-                    minHeight: 0,
-                    maxHeight: 180,
-                    alignment: Alignment.center,
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 300),
-                      child: _buildLiveFairy(item.mood),
-                    ),
-                  ),
-                ),
-              ),
-            ],
           ),
         ),
       ),
     );
   }
-}
 
-// ═══════════════════════════════════════════════════════════
-//  РИСУЕТ ПУЗЫРЬ (ОВАЛ) + ХВОСТИК («КАПЕЛЬКА»)
-// ═══════════════════════════════════════════════════════════
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_visible) {
+        _removeOverlay();
+      }
+    });
+    return const SizedBox.shrink();
+  }
+}
 
 class _SpeechBubblePainter extends CustomPainter {
   final Color fillColor;
@@ -617,53 +552,29 @@ class _SpeechBubblePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final bubbleWidth = size.width - 25;
-    final bubbleHeight = size.height - 20;
+    final bubbleHeight = size.height - 10;
+    final radius = bubbleHeight / 2 > 24 ? 24.0 : bubbleHeight / 2;
 
-    final bubbleRect = Rect.fromLTWH(
-      0,
-      0,
-      bubbleWidth,
-      bubbleHeight,
-    );
+    final bubbleRect = Rect.fromLTWH(0, 0, bubbleWidth, bubbleHeight);
+    final rrect = RRect.fromRectAndRadius(bubbleRect, Radius.circular(radius));
 
-    final ovalPath = Path()..addOval(bubbleRect);
+    final path = Path()..addRRect(rrect);
 
-    final tailPath = Path();
+    final tailPath = Path()
+      ..moveTo(bubbleWidth - 20, bubbleHeight * 0.6)
+      ..quadraticBezierTo(
+        bubbleWidth + 10, bubbleHeight * 0.7,
+        bubbleWidth + 15, bubbleHeight * 0.95,
+      )
+      ..quadraticBezierTo(
+        bubbleWidth - 5, bubbleHeight * 0.85,
+        bubbleWidth - 20, bubbleHeight * 0.9,
+      )
+      ..close();
 
-    final tailBaseTop = Offset(
-      bubbleWidth - 20,
-      bubbleHeight * 0.55,
-    );
-    final tailBaseBottom = Offset(
-      bubbleWidth - 15,
-      bubbleHeight * 0.95,
-    );
+    final combined = Path.combine(PathOperation.union, path, tailPath);
 
-    final tailTip = Offset(
-      bubbleWidth + 30,
-      bubbleHeight * 0.95,
-    );
-
-    tailPath.moveTo(tailBaseTop.dx, tailBaseTop.dy);
-    tailPath.cubicTo(
-      bubbleWidth + 5, bubbleHeight * 0.55,
-      bubbleWidth + 15, bubbleHeight * 0.7,
-      tailTip.dx, tailTip.dy,
-    );
-    tailPath.cubicTo(
-      bubbleWidth + 15, bubbleHeight * 0.85,
-      bubbleWidth + 5, bubbleHeight * 0.9,
-      tailBaseBottom.dx, tailBaseBottom.dy,
-    );
-    tailPath.close();
-
-    final combined = Path.combine(
-      PathOperation.union,
-      ovalPath,
-      tailPath,
-    );
-
-    canvas.drawShadow(combined, shadowColor, 6, false);
+    canvas.drawShadow(combined, shadowColor, 8, false);
 
     final fillPaint = Paint()
       ..color = fillColor
@@ -674,7 +585,7 @@ class _SpeechBubblePainter extends CustomPainter {
     final borderPaint = Paint()
       ..color = borderColor
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5
+      ..strokeWidth = 1.0
       ..isAntiAlias = true;
     canvas.drawPath(combined, borderPaint);
   }

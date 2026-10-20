@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/database_helper.dart';
 import '../../services/theme_service.dart';
+import '../achievements/achievements_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -198,6 +199,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 24),
 
+          // ═══ АКТИВНОСТЬ ═══
+          _sectionTitle(context, 'Активность'),
+          _buildCard(
+            context,
+            children: [
+              ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFB800).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.emoji_events_rounded,
+                      color: Color(0xFFFFB800), size: 20),
+                ),
+                title: const Text('Мои достижения'),
+                subtitle: const Text('Посмотреть заработанные бейджи'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AchievementsScreen(),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 24),
+
           // ═══ ДАННЫЕ ═══
           _sectionTitle(context, 'Данные'),
           _buildCard(
@@ -315,18 +351,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  /// ═══ Карточка-обёртка с Material ═══
-  /// Material внутри Container решает проблему с ListTile/RadioListTile:
-  /// ripple-эффект работает, фон не перекрывает ink splash.
   Widget _buildCard(BuildContext context, {required List<Widget> children}) {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
       ),
-      clipBehavior: Clip.antiAlias,           // ← обрезает ripple по краям
+      clipBehavior: Clip.antiAlias,
       child: Material(
-        color: Colors.transparent,            // ← прозрачный Material
+        color: Colors.transparent,
         child: Column(children: children),
       ),
     );

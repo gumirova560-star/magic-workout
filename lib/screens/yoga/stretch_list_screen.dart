@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/stretch.dart';
 import '../../services/database_helper.dart';
 import 'stretch_practice_screen.dart';
+import '../exercise/stretch_detail_screen.dart';
 
 class StretchListScreen extends StatefulWidget {
   const StretchListScreen({super.key});
@@ -222,11 +223,40 @@ class _StretchListScreenState extends State<StretchListScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            stretch.name,
-                            style: theme.textTheme.headlineMedium,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  stretch.name,
+                                  style: theme.textTheme.headlineMedium,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              // ⚠️ Иконка «подробнее»
+                              InkWell(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          StretchDetailScreen(
+                                        stretch: stretch,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(20),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4),
+                                  child: Icon(
+                                    Icons.info_outline_rounded,
+                                    size: 18,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 2),
                           Text(
@@ -278,3 +308,4 @@ class _StretchListScreenState extends State<StretchListScreen> {
     );
   }
 }
+// ═══ ФАЙЛ stretch_list_screen.dart ЗАВЕРШЁН ═══

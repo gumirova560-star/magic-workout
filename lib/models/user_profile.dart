@@ -1,18 +1,22 @@
 class UserProfile {
   int? id;
-  String name;                // «Я», «Жена», «Муж»
-  String gender;              // 'male' | 'female'
-  int age;                    // лет
-  double height;              // см
-  double weight;              // кг
-  String level;               // 'beginner' | 'intermediate' | 'advanced'
-  String goal;                // 'lose_weight' | 'gain_mass' | 'tone' | 'strength'
-  List<String> focusAreas;    // ['glutes', 'abs', 'arms']
-  List<String> limitations;   // ['back', 'knees']
-  String equipment;           // 'gym' | 'dumbbells' | 'bodyweight' | 'mixed'
-  int daysPerWeek;            // 2-6
-  int sessionMinutes;         // 30 | 45 | 60 | 90
+  String name;
+  String gender;
+  int age;
+  double height;
+  double weight;
+  String level;
+  String goal;
+  List<String> focusAreas;
+  List<String> limitations;
+  String equipment;
+  int daysPerWeek;
+  int sessionMinutes;
   DateTime createdAt;
+  String? avatarPath;
+  String? beforePhotoPath; // Спереди
+  String? beforeSidePath;  // ⚠️ Сбоку
+  String? beforeBackPath;  // ⚠️ Сзади
 
   UserProfile({
     this.id,
@@ -29,11 +33,14 @@ class UserProfile {
     this.daysPerWeek = 3,
     this.sessionMinutes = 45,
     DateTime? createdAt,
+    this.avatarPath,
+    this.beforePhotoPath,
+    this.beforeSidePath,
+    this.beforeBackPath,
   })  : focusAreas = focusAreas ?? [],
         limitations = limitations ?? [],
         createdAt = createdAt ?? DateTime.now();
 
-  // ═══ Сериализация для БД ═══
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -50,6 +57,10 @@ class UserProfile {
       'daysPerWeek': daysPerWeek,
       'sessionMinutes': sessionMinutes,
       'createdAt': createdAt.toIso8601String(),
+      'avatarPath': avatarPath,
+      'beforePhotoPath': beforePhotoPath,
+      'beforeSidePath': beforeSidePath,
+      'beforeBackPath': beforeBackPath,
     };
   }
 
@@ -79,10 +90,13 @@ class UserProfile {
       createdAt: map['createdAt'] != null
           ? DateTime.parse(map['createdAt'])
           : DateTime.now(),
+      avatarPath: map['avatarPath'],
+      beforePhotoPath: map['beforePhotoPath'],
+      beforeSidePath: map['beforeSidePath'],
+      beforeBackPath: map['beforeBackPath'],
     );
   }
 
-  // ═══ Вспомогательные ═══
   UserProfile copyWith({
     int? id,
     String? name,
@@ -97,6 +111,10 @@ class UserProfile {
     String? equipment,
     int? daysPerWeek,
     int? sessionMinutes,
+    String? avatarPath,
+    String? beforePhotoPath,
+    String? beforeSidePath,
+    String? beforeBackPath,
   }) {
     return UserProfile(
       id: id ?? this.id,
@@ -113,52 +131,41 @@ class UserProfile {
       daysPerWeek: daysPerWeek ?? this.daysPerWeek,
       sessionMinutes: sessionMinutes ?? this.sessionMinutes,
       createdAt: this.createdAt,
+      avatarPath: avatarPath ?? this.avatarPath,
+      beforePhotoPath: beforePhotoPath ?? this.beforePhotoPath,
+      beforeSidePath: beforeSidePath ?? this.beforeSidePath,
+      beforeBackPath: beforeBackPath ?? this.beforeBackPath,
     );
   }
 
-  // ═══ Понятные названия для UI ═══
   String get genderLabel => gender == 'male' ? 'Мужской' : 'Женский';
 
   String get goalLabel {
     switch (goal) {
-      case 'lose_weight':
-        return 'Похудеть';
-      case 'gain_mass':
-        return 'Набрать массу';
-      case 'tone':
-        return 'Тонус';
-      case 'strength':
-        return 'Сила';
-      default:
-        return 'Тонус';
+      case 'lose_weight': return 'Похудеть';
+      case 'gain_mass': return 'Набрать массу';
+      case 'tone': return 'Тонус';
+      case 'strength': return 'Сила';
+      default: return 'Тонус';
     }
   }
 
   String get levelLabel {
     switch (level) {
-      case 'beginner':
-        return 'Новичок';
-      case 'intermediate':
-        return 'Средний';
-      case 'advanced':
-        return 'Опытный';
-      default:
-        return 'Новичок';
+      case 'beginner': return 'Новичок';
+      case 'intermediate': return 'Средний';
+      case 'advanced': return 'Опытный';
+      default: return 'Новичок';
     }
   }
 
   String get equipmentLabel {
     switch (equipment) {
-      case 'gym':
-        return 'Зал';
-      case 'dumbbells':
-        return 'Гантели';
-      case 'bodyweight':
-        return 'Своё тело';
-      case 'mixed':
-        return 'Смешанно';
-      default:
-        return 'Своё тело';
+      case 'gym': return 'Зал';
+      case 'dumbbells': return 'Гантели';
+      case 'bodyweight': return 'Своё тело';
+      case 'mixed': return 'Смешанно';
+      default: return 'Своё тело';
     }
   }
 }

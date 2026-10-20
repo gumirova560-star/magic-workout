@@ -13,6 +13,7 @@ import '../models/yoga_session.dart';
 import '../models/workout_template.dart';
 import '../models/workout_day.dart';
 import '../models/replacement_log.dart';
+import '../models/transformation_photo.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -20,7 +21,7 @@ class DatabaseHelper {
 
   DatabaseHelper._init();
 
-  static const int _dbVersion = 4;
+  static const int _dbVersion = 6; // ⚠️ УВЕЛИЧЕНО ДО 6
   static const String _dbName = 'workout_tracker.db';
 
   Future<Database> get database async {
@@ -66,10 +67,6 @@ class DatabaseHelper {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════
-  //  СОЗДАНИЕ ТАБЛИЦ
-  // ═══════════════════════════════════════════════════════════
-
   Future<void> _createDB(Database db, int version) async {
     await db.execute('''
       CREATE TABLE user_profiles (
@@ -86,7 +83,11 @@ class DatabaseHelper {
         equipment TEXT NOT NULL,
         daysPerWeek INTEGER NOT NULL,
         sessionMinutes INTEGER NOT NULL,
-        createdAt TEXT NOT NULL
+        createdAt TEXT NOT NULL,
+        avatarPath TEXT,
+        beforePhotoPath TEXT,
+        beforeSidePath TEXT,
+        beforeBackPath TEXT
       )
     ''');
 
@@ -247,6 +248,18 @@ class DatabaseHelper {
       )
     ''');
 
+    await db.execute('''
+      CREATE TABLE transformations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        profileId INTEGER NOT NULL,
+        imagePath TEXT NOT NULL,
+        monthNumber INTEGER NOT NULL,
+        angle TEXT DEFAULT 'front',
+        createdAt TEXT NOT NULL,
+        FOREIGN KEY (profileId) REFERENCES user_profiles (id) ON DELETE CASCADE
+      )
+    ''');
+
     await db.execute(
         'CREATE INDEX idx_workout_days_profile ON workout_days (profileId, date)');
     await db.execute(
@@ -259,691 +272,727 @@ class DatabaseHelper {
 
   Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
-      await db.execute(
-          'ALTER TABLE template_items ADD COLUMN replacedByItemId INTEGER');
-      await db.execute(
-          'ALTER TABLE template_items ADD COLUMN replacementReason TEXT');
-      await db.execute(
-          'ALTER TABLE template_items ADD COLUMN replacementPermanent INTEGER DEFAULT 0');
+      await db.execute('ALTER TABLE template_items ADD COLUMN replacedByItemId INTEGER');
+      await db.execute('ALTER TABLE template_items ADD COLUMN replacementReason TEXT');
+      await db.execute('ALTER TABLE template_items ADD COLUMN replacementPermanent INTEGER DEFAULT 0');
     }
 
     if (oldVersion < 3) {
       try {
-        await db.execute(
-            'ALTER TABLE workout_templates ADD COLUMN isCustom INTEGER DEFAULT 0');
+        await db.execute('ALTER TABLE workout_templates ADD COLUMN isCustom INTEGER DEFAULT 0');
       } catch (_) {}
     }
 
     if (oldVersion < 4) {
       try {
-        await db.execute(
-            'ALTER TABLE workout_exercises ADD COLUMN blockNumber INTEGER');
+        await db.execute('ALTER TABLE workout_exercises ADD COLUMN blockNumber INTEGER');
+      } catch (_) {}
+    }
+
+    if (oldVersion < 5) {
+      try {
+        await db.execute('ALTER TABLE user_profiles ADD COLUMN avatarPath TEXT');
+        await db.execute('ALTER TABLE user_profiles ADD COLUMN beforePhotoPath TEXT');
+        await db.execute('''
+          CREATE TABLE transformations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            profileId INTEGER NOT NULL,
+            imagePath TEXT NOT NULL,
+            monthNumber INTEGER NOT NULL,
+            angle TEXT DEFAULT 'front',
+            createdAt TEXT NOT NULL,
+            FOREIGN KEY (profileId) REFERENCES user_profiles (id) ON DELETE CASCADE
+          )
+        ''');
+      } catch (_) {}
+    }
+
+    // ⚠️ ОБНОВЛЕНИЕ ДО 6-й ВЕРСИИ (Добавляем Бок и Спину для фото "До")
+    if (oldVersion < 6) {
+      try {
+        await db.execute('ALTER TABLE user_profiles ADD COLUMN beforeSidePath TEXT');
+        await db.execute('ALTER TABLE user_profiles ADD COLUMN beforeBackPath TEXT');
       } catch (_) {}
     }
   }
+  // ═══ ЧАСТЬ 1 ЗАКОНЧЕНА ═══
+    // ═══════════════════════════════════════════════════════════
+    //  ПРОФИЛИ
+    // ═══════════════════════════════════════════════════════════
 
-  // ═══════════════════════════════════════════════════════════
-  //  ПРОФИЛИ
-  // ═══════════════════════════════════════════════════════════
-
-  Future<int> addProfile(UserProfile profile) async {
-    final db = await database;
-    return await db.insert('user_profiles', profile.toMap());
-  }
-
-  Future<List<UserProfile>> getProfiles() async {
-    final db = await database;
-    final maps = await db.query('user_profiles', orderBy: 'createdAt ASC');
-    return maps.map((m) => UserProfile.fromMap(m)).toList();
-  }
-
-  Future<UserProfile?> getProfileById(int id) async {
-    final db = await database;
-    final maps = await db.query(
-      'user_profiles',
-      where: 'id = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
-    if (maps.isEmpty) return null;
-    return UserProfile.fromMap(maps.first);
-  }
-
-  Future<int> updateProfile(UserProfile profile) async {
-    final db = await database;
-    return await db.update(
-      'user_profiles',
-      profile.toMap(),
-      where: 'id = ?',
-      whereArgs: [profile.id],
-    );
-  }
-
-  Future<int> deleteProfile(int id) async {
-    final db = await database;
-    return await db.delete(
-      'user_profiles',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
-
-// ╔═══════════════════════════════════════════════════════════╗
-// ║  ⚠️ ЧАСТЬ 1 ЗАКОНЧИЛАСЬ — ЖДИТЕ ЧАСТЬ 2                  ║
-// ╚═══════════════════════════════════════════════════════════╝
-  // ═══════════════════════════════════════════════════════════
-  //  УПРАЖНЕНИЯ
-  // ═══════════════════════════════════════════════════════════
-
-  Future<int> addExercise(Exercise exercise) async {
-    final db = await database;
-    return await db.insert('exercises', exercise.toMap());
-  }
-
-  Future<List<Exercise>> getExercises() async {
-    final db = await database;
-    final maps = await db.query('exercises', orderBy: 'name ASC');
-    return maps.map((m) => Exercise.fromMap(m)).toList();
-  }
-
-  Future<Exercise?> getExerciseById(int id) async {
-    final db = await database;
-    final maps = await db.query(
-      'exercises',
-      where: 'id = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
-    if (maps.isEmpty) return null;
-    return Exercise.fromMap(maps.first);
-  }
-
-  Future<int> countExercises() async {
-    final db = await database;
-    final result =
-        await db.rawQuery('SELECT COUNT(*) as count FROM exercises');
-    return Sqflite.firstIntValue(result) ?? 0;
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  //  РАСТЯЖКИ
-  // ═══════════════════════════════════════════════════════════
-
-  Future<int> addStretch(Stretch stretch) async {
-    final db = await database;
-    return await db.insert('stretches', stretch.toMap());
-  }
-
-  Future<List<Stretch>> getStretches() async {
-    final db = await database;
-    final maps = await db.query('stretches', orderBy: 'name ASC');
-    return maps.map((m) => Stretch.fromMap(m)).toList();
-  }
-
-  Future<Stretch?> getStretchById(int id) async {
-    final db = await database;
-    final maps = await db.query(
-      'stretches',
-      where: 'id = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
-    if (maps.isEmpty) return null;
-    return Stretch.fromMap(maps.first);
-  }
-
-  Future<Stretch?> getStretchByName(String name) async {
-    final db = await database;
-    final maps = await db.query(
-      'stretches',
-      where: 'name = ?',
-      whereArgs: [name],
-      limit: 1,
-    );
-    if (maps.isEmpty) return null;
-    return Stretch.fromMap(maps.first);
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  //  ЙОГА
-  // ═══════════════════════════════════════════════════════════
-
-  Future<int> addYogaSession(YogaSession session) async {
-    final db = await database;
-    return await db.insert('yoga_sessions', session.toMap());
-  }
-
-  Future<List<YogaSession>> getYogaSessions() async {
-    final db = await database;
-    final maps = await db.query('yoga_sessions', orderBy: 'name ASC');
-    return maps.map((m) => YogaSession.fromMap(m)).toList();
-  }
-
-  Future<int> addYogaStep(YogaStep step) async {
-    final db = await database;
-    return await db.insert('yoga_steps', step.toMap());
-  }
-
-  Future<List<YogaStep>> getYogaSteps(int sessionId) async {
-    final db = await database;
-    final maps = await db.query(
-      'yoga_steps',
-      where: 'sessionId = ?',
-      whereArgs: [sessionId],
-      orderBy: '"order" ASC',
-    );
-    return maps.map((m) => YogaStep.fromMap(m)).toList();
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  //  ШАБЛОНЫ
-  // ═══════════════════════════════════════════════════════════
-
-  Future<int> saveTemplate(WorkoutTemplate template) async {
-    final db = await database;
-    if (template.id == null) {
-      return await db.insert('workout_templates', template.toMap());
-    } else {
-      await db.update(
-        'workout_templates',
-        template.toMap(),
-        where: 'id = ?',
-        whereArgs: [template.id],
-      );
-      return template.id!;
+    Future<int> addProfile(UserProfile profile) async {
+      final db = await database;
+      return await db.insert('user_profiles', profile.toMap());
     }
-  }
 
-  Future<List<WorkoutTemplate>> getTemplates(int profileId) async {
-    final db = await database;
-    final maps = await db.query(
-      'workout_templates',
-      where: 'profileId = ?',
-      whereArgs: [profileId],
-      orderBy: 'createdAt ASC',
-    );
-    return maps.map((m) => WorkoutTemplate.fromMap(m)).toList();
-  }
+    Future<List<UserProfile>> getProfiles() async {
+      final db = await database;
+      final maps = await db.query('user_profiles', orderBy: 'createdAt ASC');
+      return maps.map((m) => UserProfile.fromMap(m)).toList();
+    }
 
-  Future<WorkoutTemplate?> getTemplateById(int id) async {
-    final db = await database;
-    final maps = await db.query(
-      'workout_templates',
-      where: 'id = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
-    if (maps.isEmpty) return null;
-    return WorkoutTemplate.fromMap(maps.first);
-  }
+    Future<UserProfile?> getProfileById(int id) async {
+      final db = await database;
+      final maps = await db.query(
+        'user_profiles',
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      if (maps.isEmpty) return null;
+      return UserProfile.fromMap(maps.first);
+    }
 
-  Future<int> deleteTemplate(int id) async {
-    final db = await database;
-    return await db.delete(
-      'workout_templates',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
+    Future<int> updateProfile(UserProfile profile) async {
+      final db = await database;
+      return await db.update(
+        'user_profiles',
+        profile.toMap(),
+        where: 'id = ?',
+        whereArgs: [profile.id],
+      );
+    }
 
-  Future<int> addTemplateItem(TemplateItem item) async {
-    final db = await database;
-    return await db.insert('template_items', item.toMap());
-  }
+    Future<int> deleteProfile(int id) async {
+      final db = await database;
+      return await db.delete(
+        'user_profiles',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
 
-  Future<List<TemplateItem>> getTemplateItems(int templateId) async {
-    final db = await database;
-    final maps = await db.query(
-      'template_items',
-      where: 'templateId = ?',
-      whereArgs: [templateId],
-      orderBy: '"order" ASC',
-    );
-    return maps.map((m) => TemplateItem.fromMap(m)).toList();
-  }
+    // ═══════════════════════════════════════════════════════════
+    //  УПРАЖНЕНИЯ
+    // ═══════════════════════════════════════════════════════════
 
-  // ═══════════════════════════════════════════════════════════
-  //  ДНИ ТРЕНИРОВОК
-  // ═══════════════════════════════════════════════════════════
+    Future<int> addExercise(Exercise exercise) async {
+      final db = await database;
+      return await db.insert('exercises', exercise.toMap());
+    }
 
-  Future<int> createWorkoutDay(WorkoutDay day) async {
-    final db = await database;
-    return await db.insert('workout_days', day.toMap());
-  }
+    Future<List<Exercise>> getExercises() async {
+      final db = await database;
+      final maps = await db.query('exercises', orderBy: 'name ASC');
+      return maps.map((m) => Exercise.fromMap(m)).toList();
+    }
 
-  Future<List<WorkoutDay>> getWorkoutDays({
-    required int profileId,
-    int limit = 100,
-  }) async {
-    final db = await database;
-    final maps = await db.query(
-      'workout_days',
-      where: 'profileId = ?',
-      whereArgs: [profileId],
-      orderBy: 'date DESC',
-      limit: limit,
-    );
-    return maps.map((m) => WorkoutDay.fromMap(m)).toList();
-  }
+    Future<Exercise?> getExerciseById(int id) async {
+      final db = await database;
+      final maps = await db.query(
+        'exercises',
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      if (maps.isEmpty) return null;
+      return Exercise.fromMap(maps.first);
+    }
 
-  Future<WorkoutDay?> getWorkoutDayById(int id) async {
-    final db = await database;
-    final maps = await db.query(
-      'workout_days',
-      where: 'id = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
-    if (maps.isEmpty) return null;
-    return WorkoutDay.fromMap(maps.first);
-  }
+    Future<int> countExercises() async {
+      final db = await database;
+      final result =
+          await db.rawQuery('SELECT COUNT(*) as count FROM exercises');
+      return Sqflite.firstIntValue(result) ?? 0;
+    }
 
-  Future<int> updateWorkoutDay(WorkoutDay day) async {
-    final db = await database;
-    return await db.update(
-      'workout_days',
-      day.toMap(),
-      where: 'id = ?',
-      whereArgs: [day.id],
-    );
-  }
+    // ═══════════════════════════════════════════════════════════
+    //  РАСТЯЖКИ
+    // ═══════════════════════════════════════════════════════════
 
-  Future<int> deleteWorkoutDay(int id) async {
-    final db = await database;
-    return await db.delete(
-      'workout_days',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
+    Future<int> addStretch(Stretch stretch) async {
+      final db = await database;
+      return await db.insert('stretches', stretch.toMap());
+    }
 
-  // ═══════════════════════════════════════════════════════════
-  //  ТРЕНИРОВКИ ЗА МЕСЯЦ (для календаря)
-  // ═══════════════════════════════════════════════════════════
+    Future<List<Stretch>> getStretches() async {
+      final db = await database;
+      final maps = await db.query('stretches', orderBy: 'name ASC');
+      return maps.map((m) => Stretch.fromMap(m)).toList();
+    }
 
-  Future<List<WorkoutDay>> getWorkoutDaysForMonth({
-    required int profileId,
-    required int year,
-    required int month,
-  }) async {
-    final db = await database;
+    Future<Stretch?> getStretchById(int id) async {
+      final db = await database;
+      final maps = await db.query(
+        'stretches',
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      if (maps.isEmpty) return null;
+      return Stretch.fromMap(maps.first);
+    }
 
-    final start = DateTime(year, month, 1);
-    final end = DateTime(year, month + 1, 1);
+    Future<Stretch?> getStretchByName(String name) async {
+      final db = await database;
+      final maps = await db.query(
+        'stretches',
+        where: 'name = ?',
+        whereArgs: [name],
+        limit: 1,
+      );
+      if (maps.isEmpty) return null;
+      return Stretch.fromMap(maps.first);
+    }
 
-    final maps = await db.query(
-      'workout_days',
-      where: 'profileId = ? AND date >= ? AND date < ?',
-      whereArgs: [
-        profileId,
-        start.toIso8601String(),
-        end.toIso8601String(),
-      ],
-      orderBy: 'date ASC',
-    );
-    return maps.map((m) => WorkoutDay.fromMap(m)).toList();
-  }
+    // ═══════════════════════════════════════════════════════════
+    //  ЙОГА
+    // ═══════════════════════════════════════════════════════════
 
-  // ═══════════════════════════════════════════════════════════
-  //  УПРАЖНЕНИЯ В ТРЕНИРОВКЕ
-  // ═══════════════════════════════════════════════════════════
+    Future<int> addYogaSession(YogaSession session) async {
+      final db = await database;
+      return await db.insert('yoga_sessions', session.toMap());
+    }
 
-  Future<int> addWorkoutExercise(WorkoutExercise exercise) async {
-    final db = await database;
-    return await db.insert('workout_exercises', exercise.toMap());
-  }
+    Future<List<YogaSession>> getYogaSessions() async {
+      final db = await database;
+      final maps = await db.query('yoga_sessions', orderBy: 'name ASC');
+      return maps.map((m) => YogaSession.fromMap(m)).toList();
+    }
 
-  Future<List<WorkoutExercise>> getWorkoutExercises(int workoutDayId) async {
-    final db = await database;
-    final maps = await db.query(
-      'workout_exercises',
-      where: 'workoutDayId = ?',
-      whereArgs: [workoutDayId],
-      orderBy: '"order" ASC',
-    );
-    return maps.map((m) => WorkoutExercise.fromMap(m)).toList();
-  }
+    Future<int> addYogaStep(YogaStep step) async {
+      final db = await database;
+      return await db.insert('yoga_steps', step.toMap());
+    }
 
-  // ═══════════════════════════════════════════════════════════
-  //  ПОДХОДЫ
-  // ═══════════════════════════════════════════════════════════
+    Future<List<YogaStep>> getYogaSteps(int sessionId) async {
+      final db = await database;
+      final maps = await db.query(
+        'yoga_steps',
+        where: 'sessionId = ?',
+        whereArgs: [sessionId],
+        orderBy: '"order" ASC',
+      );
+      return maps.map((m) => YogaStep.fromMap(m)).toList();
+    }
 
-  Future<int> addWorkoutSet(WorkoutSet set) async {
-    final db = await database;
-    return await db.insert('workout_sets', set.toMap());
-  }
+    // ═══════════════════════════════════════════════════════════
+    //  ШАБЛОНЫ
+    // ═══════════════════════════════════════════════════════════
 
-  Future<List<WorkoutSet>> getWorkoutSets(int workoutExerciseId) async {
-    final db = await database;
-    final maps = await db.query(
-      'workout_sets',
-      where: 'workoutExerciseId = ?',
-      whereArgs: [workoutExerciseId],
-      orderBy: '"order" ASC',
-    );
-    return maps.map((m) => WorkoutSet.fromMap(m)).toList();
-  }
+    Future<int> saveTemplate(WorkoutTemplate template) async {
+      final db = await database;
+      if (template.id == null) {
+        return await db.insert('workout_templates', template.toMap());
+      } else {
+        await db.update(
+          'workout_templates',
+          template.toMap(),
+          where: 'id = ?',
+          whereArgs: [template.id],
+        );
+        return template.id!;
+      }
+    }
 
-  /// ⚠️ Обновить номер блока для упражнения.
-  Future<int> updateWorkoutExerciseBlock({
-    required int id,
-    int? blockNumber,
-  }) async {
-    final db = await database;
-    return await db.update(
-      'workout_exercises',
-      {'blockNumber': blockNumber},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
+    Future<List<WorkoutTemplate>> getTemplates(int profileId) async {
+      final db = await database;
+      final maps = await db.query(
+        'workout_templates',
+        where: 'profileId = ?',
+        whereArgs: [profileId],
+        orderBy: 'createdAt ASC',
+      );
+      return maps.map((m) => WorkoutTemplate.fromMap(m)).toList();
+    }
 
-  /// ⚠️ Сбросить все блоки для дня (blockNumber = null).
-  Future<int> clearBlocksForWorkoutDay(int workoutDayId) async {
-    final db = await database;
-    return await db.update(
-      'workout_exercises',
-      {'blockNumber': null},
-      where: 'workoutDayId = ?',
-      whereArgs: [workoutDayId],
-    );
-  }
+    Future<WorkoutTemplate?> getTemplateById(int id) async {
+      final db = await database;
+      final maps = await db.query(
+        'workout_templates',
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      if (maps.isEmpty) return null;
+      return WorkoutTemplate.fromMap(maps.first);
+    }
 
-  Future<int> updateWorkoutSet(WorkoutSet set) async {
-    final db = await database;
-    return await db.update(
-      'workout_sets',
-      set.toMap(),
-      where: 'id = ?',
-      whereArgs: [set.id],
-    );
-  }
+    Future<int> deleteTemplate(int id) async {
+      final db = await database;
+      return await db.delete(
+        'workout_templates',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
 
-  Future<int> deleteWorkoutSet(int id) async {
-    final db = await database;
-    return await db.delete(
-      'workout_sets',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
+    Future<int> addTemplateItem(TemplateItem item) async {
+      final db = await database;
+      return await db.insert('template_items', item.toMap());
+    }
 
-  // ═══════════════════════════════════════════════════════════
-  //  ПРОВЕРКА ПУСТОЙ БАЗЫ
-  // ═══════════════════════════════════════════════════════════
+    Future<List<TemplateItem>> getTemplateItems(int templateId) async {
+      final db = await database;
+      final maps = await db.query(
+        'template_items',
+        where: 'templateId = ?',
+        whereArgs: [templateId],
+        orderBy: '"order" ASC',
+      );
+      return maps.map((m) => TemplateItem.fromMap(m)).toList();
+    }
 
-  Future<bool> isDatabaseEmpty() async {
-    final exercisesCount = await countExercises();
-    return exercisesCount == 0;
-  }
+    // ═══════════════════════════════════════════════════════════
+    //  ДНИ ТРЕНИРОВОК
+    // ═══════════════════════════════════════════════════════════
 
-  // ═══════════════════════════════════════════════════════════
-  //  ПРОГРЕСС ВЕСА (для графика)
-  // ═══════════════════════════════════════════════════════════
+    Future<int> createWorkoutDay(WorkoutDay day) async {
+      final db = await database;
+      return await db.insert('workout_days', day.toMap());
+    }
 
-  Future<List<Map<String, dynamic>>> getWeightProgress({
-    required int profileId,
-    required int exerciseId,
-    int limit = 30,
-  }) async {
-    final db = await database;
-    final result = await db.rawQuery('''
-      SELECT
-        wd.date AS date,
-        MAX(ws.weight) AS maxWeight,
-        SUM(ws.reps) AS totalReps
-      FROM workout_sets ws
-      JOIN workout_exercises we ON we.id = ws.workoutExerciseId
-      JOIN workout_days wd ON wd.id = we.workoutDayId
-      WHERE wd.profileId = ?
-        AND we.itemId = ?
-        AND ws.completed = 1
-      GROUP BY wd.date
-      ORDER BY wd.date DESC
-      LIMIT ?
-    ''', [profileId, exerciseId, limit]);
+    Future<List<WorkoutDay>> getWorkoutDays({
+      required int profileId,
+      int limit = 100,
+    }) async {
+      final db = await database;
+      final maps = await db.query(
+        'workout_days',
+        where: 'profileId = ?',
+        whereArgs: [profileId],
+        orderBy: 'date DESC',
+        limit: limit,
+      );
+      return maps.map((m) => WorkoutDay.fromMap(m)).toList();
+    }
 
-    return result;
-  }
+    Future<WorkoutDay?> getWorkoutDayById(int id) async {
+      final db = await database;
+      final maps = await db.query(
+        'workout_days',
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      if (maps.isEmpty) return null;
+      return WorkoutDay.fromMap(maps.first);
+    }
 
-  // ═══════════════════════════════════════════════════════════
-  //  АНАЛИЗ НЕДЕЛИ
-  // ═══════════════════════════════════════════════════════════
+    Future<int> updateWorkoutDay(WorkoutDay day) async {
+      final db = await database;
+      return await db.update(
+        'workout_days',
+        day.toMap(),
+        where: 'id = ?',
+        whereArgs: [day.id],
+      );
+    }
 
-  Future<List<WorkoutDay>> getWorkoutDaysBetween({
-    required int profileId,
-    required DateTime from,
-    required DateTime to,
-  }) async {
-    final db = await database;
-    final maps = await db.query(
-      'workout_days',
-      where: 'profileId = ? AND date >= ? AND date < ?',
-      whereArgs: [
-        profileId,
-        from.toIso8601String(),
-        to.toIso8601String(),
-      ],
-      orderBy: 'date DESC',
-    );
-    return maps.map((m) => WorkoutDay.fromMap(m)).toList();
-  }
+    Future<int> deleteWorkoutDay(int id) async {
+      final db = await database;
+      return await db.delete(
+        'workout_days',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
 
-  Future<Set<String>> getCompletedNamesInWindow({
-    required int profileId,
-    required DateTime from,
-    required DateTime to,
-  }) async {
-    final db = await database;
-    final maps = await db.query(
-      'workout_days',
-      columns: ['name'],
-      where: 'profileId = ? AND status = ? AND date >= ? AND date < ?',
-      whereArgs: [
-        profileId,
-        'completed',
-        from.toIso8601String(),
-        to.toIso8601String(),
-      ],
-    );
-    return maps.map((m) => m['name'] as String).toSet();
-  }
+    Future<List<WorkoutDay>> getWorkoutDaysForMonth({
+      required int profileId,
+      required int year,
+      required int month,
+    }) async {
+      final db = await database;
+      final start = DateTime(year, month, 1);
+      final end = DateTime(year, month + 1, 1);
+      final maps = await db.query(
+        'workout_days',
+        where: 'profileId = ? AND date >= ? AND date < ?',
+        whereArgs: [
+          profileId,
+          start.toIso8601String(),
+          end.toIso8601String(),
+        ],
+        orderBy: 'date ASC',
+      );
+      return maps.map((m) => WorkoutDay.fromMap(m)).toList();
+    }
 
-  // ═══════════════════════════════════════════════════════════
-  //  ПОЛЬЗОВАТЕЛЬСКИЕ ШАБЛОНЫ (isCustom = 1)
-  // ═══════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════
+    //  УПРАЖНЕНИЯ В ТРЕНИРОВКЕ
+    // ═══════════════════════════════════════════════════════════
 
-  /// Получить ТОЛЬКО пользовательские шаблоны (isCustom = 1).
-  Future<List<WorkoutTemplate>> getCustomTemplates(int profileId) async {
-    final db = await database;
-    final maps = await db.query(
-      'workout_templates',
-      where: 'profileId = ? AND isCustom = 1',
-      whereArgs: [profileId],
-      orderBy: 'createdAt DESC',
-    );
-    return maps.map((m) => WorkoutTemplate.fromMap(m)).toList();
-  }
+    Future<int> addWorkoutExercise(WorkoutExercise exercise) async {
+      final db = await database;
+      return await db.insert('workout_exercises', exercise.toMap());
+    }
 
-  /// Получить ТОЛЬКО авто-шаблоны (isCustom = 0).
-  Future<List<WorkoutTemplate>> getAutoTemplates(int profileId) async {
-    final db = await database;
-    final maps = await db.query(
-      'workout_templates',
-      where: 'profileId = ? AND isCustom = 0',
-      whereArgs: [profileId],
-      orderBy: 'createdAt ASC',
-    );
-    return maps.map((m) => WorkoutTemplate.fromMap(m)).toList();
-  }
+    Future<List<WorkoutExercise>> getWorkoutExercises(int workoutDayId) async {
+      final db = await database;
+      final maps = await db.query(
+        'workout_exercises',
+        where: 'workoutDayId = ?',
+        whereArgs: [workoutDayId],
+        orderBy: '"order" ASC',
+      );
+      return maps.map((m) => WorkoutExercise.fromMap(m)).toList();
+    }
 
-  // ═══════════════════════════════════════════════════════════
-  //  СОЗДАНИЕ ШАБЛОНА ИЗ ЗАВЕРШЁННОЙ ТРЕНИРОВКИ
-  // ═══════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════
+    //  ПОДХОДЫ
+    // ═══════════════════════════════════════════════════════════
 
-  Future<int> createTemplateFromWorkoutDay({
-    required int profileId,
-    required int workoutDayId,
-    required String templateName,
-    required String type,
-    required int estimatedMinutes,
-  }) async {
-    final db = await database;
+    Future<int> addWorkoutSet(WorkoutSet set) async {
+      final db = await database;
+      return await db.insert('workout_sets', set.toMap());
+    }
 
-    final templateId = await db.insert('workout_templates', {
-      'profileId': profileId,
-      'name': templateName,
-      'type': type,
-      'estimatedMinutes': estimatedMinutes,
-      'notes': null,
-      'createdAt': DateTime.now().toIso8601String(),
-      'isCustom': 1,
-    });
+    Future<List<WorkoutSet>> getWorkoutSets(int workoutExerciseId) async {
+      final db = await database;
+      final maps = await db.query(
+        'workout_sets',
+        where: 'workoutExerciseId = ?',
+        whereArgs: [workoutExerciseId],
+        orderBy: '"order" ASC',
+      );
+      return maps.map((m) => WorkoutSet.fromMap(m)).toList();
+    }
 
-    final workoutExs = await getWorkoutExercises(workoutDayId);
+    Future<int> updateWorkoutExerciseBlock({
+      required int id,
+      int? blockNumber,
+    }) async {
+      final db = await database;
+      return await db.update(
+        'workout_exercises',
+        {'blockNumber': blockNumber},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
 
-    for (final we in workoutExs) {
-      final sets = await getWorkoutSets(we.id!);
+    Future<int> clearBlocksForWorkoutDay(int workoutDayId) async {
+      final db = await database;
+      return await db.update(
+        'workout_exercises',
+        {'blockNumber': null},
+        where: 'workoutDayId = ?',
+        whereArgs: [workoutDayId],
+      );
+    }
 
-      String repsStr = we.reps;
-      if (sets.isNotEmpty) {
-        final r = sets.first.reps;
-        if (r != null) repsStr = '$r';
+    Future<int> updateWorkoutSet(WorkoutSet set) async {
+      final db = await database;
+      return await db.update(
+        'workout_sets',
+        set.toMap(),
+        where: 'id = ?',
+        whereArgs: [set.id],
+      );
+    }
+
+    Future<int> deleteWorkoutSet(int id) async {
+      final db = await database;
+      return await db.delete(
+        'workout_sets',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  ПРОВЕРКА ПУСТОЙ БАЗЫ
+    // ═══════════════════════════════════════════════════════════
+
+    Future<bool> isDatabaseEmpty() async {
+      final exercisesCount = await countExercises();
+      return exercisesCount == 0;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  ПРОГРЕСС ВЕСА (для графика)
+    // ═══════════════════════════════════════════════════════════
+
+    Future<List<Map<String, dynamic>>> getWeightProgress({
+      required int profileId,
+      required int exerciseId,
+      int limit = 30,
+    }) async {
+      final db = await database;
+      final result = await db.rawQuery('''
+        SELECT
+          wd.date AS date,
+          MAX(ws.weight) AS maxWeight,
+          SUM(ws.reps) AS totalReps
+        FROM workout_sets ws
+        JOIN workout_exercises we ON we.id = ws.workoutExerciseId
+        JOIN workout_days wd ON wd.id = we.workoutDayId
+        WHERE wd.profileId = ?
+          AND we.itemId = ?
+          AND ws.completed = 1
+        GROUP BY wd.date
+        ORDER BY wd.date DESC
+        LIMIT ?
+      ''', [profileId, exerciseId, limit]);
+
+      return result;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  АНАЛИЗ НЕДЕЛИ
+    // ═══════════════════════════════════════════════════════════
+
+    Future<List<WorkoutDay>> getWorkoutDaysBetween({
+      required int profileId,
+      required DateTime from,
+      required DateTime to,
+    }) async {
+      final db = await database;
+      final maps = await db.query(
+        'workout_days',
+        where: 'profileId = ? AND date >= ? AND date < ?',
+        whereArgs: [
+          profileId,
+          from.toIso8601String(),
+          to.toIso8601String(),
+        ],
+        orderBy: 'date DESC',
+      );
+      return maps.map((m) => WorkoutDay.fromMap(m)).toList();
+    }
+
+    Future<Set<String>> getCompletedNamesInWindow({
+      required int profileId,
+      required DateTime from,
+      required DateTime to,
+    }) async {
+      final db = await database;
+      final maps = await db.query(
+        'workout_days',
+        columns: ['name'],
+        where: 'profileId = ? AND status = ? AND date >= ? AND date < ?',
+        whereArgs: [
+          profileId,
+          'completed',
+          from.toIso8601String(),
+          to.toIso8601String(),
+        ],
+      );
+      return maps.map((m) => m['name'] as String).toSet();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  ПОЛЬЗОВАТЕЛЬСКИЕ ШАБЛОНЫ (isCustom = 1)
+    // ═══════════════════════════════════════════════════════════
+
+    Future<List<WorkoutTemplate>> getCustomTemplates(int profileId) async {
+      final db = await database;
+      final maps = await db.query(
+        'workout_templates',
+        where: 'profileId = ? AND isCustom = 1',
+        whereArgs: [profileId],
+        orderBy: 'createdAt DESC',
+      );
+      return maps.map((m) => WorkoutTemplate.fromMap(m)).toList();
+    }
+
+    Future<List<WorkoutTemplate>> getAutoTemplates(int profileId) async {
+      final db = await database;
+      final maps = await db.query(
+        'workout_templates',
+        where: 'profileId = ? AND isCustom = 0',
+        whereArgs: [profileId],
+        orderBy: 'createdAt ASC',
+      );
+      return maps.map((m) => WorkoutTemplate.fromMap(m)).toList();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  СОЗДАНИЕ ШАБЛОНА ИЗ ЗАВЕРШЁННОЙ ТРЕНИРОВКИ
+    // ═══════════════════════════════════════════════════════════
+
+    Future<int> createTemplateFromWorkoutDay({
+      required int profileId,
+      required int workoutDayId,
+      required String templateName,
+      required String type,
+      required int estimatedMinutes,
+    }) async {
+      final db = await database;
+
+      final templateId = await db.insert('workout_templates', {
+        'profileId': profileId,
+        'name': templateName,
+        'type': type,
+        'estimatedMinutes': estimatedMinutes,
+        'notes': null,
+        'createdAt': DateTime.now().toIso8601String(),
+        'isCustom': 1,
+      });
+
+      final workoutExs = await getWorkoutExercises(workoutDayId);
+
+      for (final we in workoutExs) {
+        final sets = await getWorkoutSets(we.id!);
+
+        String repsStr = we.reps;
+        if (sets.isNotEmpty) {
+          final r = sets.first.reps;
+          if (r != null) repsStr = '$r';
+        }
+
+        await db.insert('template_items', {
+          'templateId': templateId,
+          'itemType': we.itemType,
+          'itemId': we.itemId,
+          'order': we.order,
+          'sets': we.sets,
+          'reps': repsStr,
+          'restSeconds': we.restSeconds,
+          'durationSeconds': we.durationSeconds,
+          'isCoolDown': we.isCoolDown ? 1 : 0,
+          'replacedByItemId': we.replacedByItemId,
+          'replacementReason': we.replacementReason,
+          'replacementPermanent': we.replacementPermanent ? 1 : 0,
+        });
       }
 
-      await db.insert('template_items', {
-        'templateId': templateId,
-        'itemType': we.itemType,
-        'itemId': we.itemId,
-        'order': we.order,
-        'sets': we.sets,
-        'reps': repsStr,
-        'restSeconds': we.restSeconds,
-        'durationSeconds': we.durationSeconds,
-        'isCoolDown': we.isCoolDown ? 1 : 0,
-        'replacedByItemId': we.replacedByItemId,
-        'replacementReason': we.replacementReason,
-        'replacementPermanent': we.replacementPermanent ? 1 : 0,
-      });
+      return templateId;
     }
 
-    return templateId;
+    Future<int> deletePlannedWorkoutDays(int profileId) async {
+      final db = await database;
+      return await db.delete(
+        'workout_days',
+        where: 'profileId = ? AND status = ?',
+        whereArgs: [profileId, 'planned'],
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  ИСТОРИЯ ПО УПРАЖНЕНИЮ (для прогрессии)
+    // ═══════════════════════════════════════════════════════════
+
+    Future<WorkoutSet?> getLastCompletedSetForExercise({
+      required int profileId,
+      required int exerciseId,
+      int daysLimit = 60,
+    }) async {
+      final db = await database;
+
+      final from = DateTime.now()
+          .subtract(Duration(days: daysLimit))
+          .toIso8601String();
+
+      final result = await db.rawQuery('''
+        SELECT ws.*
+        FROM workout_sets ws
+        JOIN workout_exercises we ON we.id = ws.workoutExerciseId
+        JOIN workout_days wd ON wd.id = we.workoutDayId
+        WHERE wd.profileId = ?
+          AND wd.status = 'completed'
+          AND wd.date >= ?
+          AND (we.replacedByItemId = ? OR we.itemId = ?)
+          AND we.itemType = 'exercise'
+          AND we.isCoolDown = 0
+          AND ws.completed = 1
+          AND ws.weight IS NOT NULL
+        ORDER BY wd.date DESC, ws."order" ASC
+        LIMIT 1
+      ''', [profileId, from, exerciseId, exerciseId]);
+
+      if (result.isEmpty) return null;
+      return WorkoutSet.fromMap(result.first);
+    }
+
+    Future<Set<int>> getRecentExerciseIds({
+      required int profileId,
+      int daysLimit = 14,
+    }) async {
+      final db = await database;
+
+      final from = DateTime.now()
+          .subtract(Duration(days: daysLimit))
+          .toIso8601String();
+
+      final maps = await db.rawQuery('''
+        SELECT DISTINCT
+          COALESCE(we.replacedByItemId, we.itemId) AS exId
+        FROM workout_exercises we
+        JOIN workout_days wd ON wd.id = we.workoutDayId
+        WHERE wd.profileId = ?
+          AND wd.date >= ?
+          AND we.itemType = 'exercise'
+          AND we.isCoolDown = 0
+      ''', [profileId, from]);
+
+      return maps
+          .map((m) => m['exId'] as int?)
+          .whereType<int>()
+          .toSet();
+    }
+
+    Future<List<WorkoutSet>> getLastWorkoutExerciseSets({
+      required int profileId,
+      required int exerciseId,
+      int daysLimit = 60,
+    }) async {
+      final db = await database;
+
+      final from = DateTime.now()
+          .subtract(Duration(days: daysLimit))
+          .toIso8601String();
+
+      final weResult = await db.rawQuery('''
+        SELECT we.id
+        FROM workout_exercises we
+        JOIN workout_days wd ON wd.id = we.workoutDayId
+        WHERE wd.profileId = ?
+          AND wd.status = 'completed'
+          AND wd.date >= ?
+          AND (we.replacedByItemId = ? OR we.itemId = ?)
+          AND we.itemType = 'exercise'
+          AND we.isCoolDown = 0
+        ORDER BY wd.date DESC, wd.id DESC
+        LIMIT 1
+      ''', [profileId, from, exerciseId, exerciseId]);
+
+      if (weResult.isEmpty) return [];
+
+      final weId = weResult.first['id'] as int?;
+      if (weId == null) return [];
+
+      final sets = await getWorkoutSets(weId);
+      return sets;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  ФОТО ТРАНСФОРМАЦИИ
+    // ═══════════════════════════════════════════════════════════
+
+    Future<int> addTransformationPhoto(TransformationPhoto photo) async {
+      final db = await database;
+      return await db.insert('transformations', photo.toMap());
+    }
+
+    Future<List<TransformationPhoto>> getTransformationPhotos(int profileId) async {
+      final db = await database;
+      final maps = await db.query(
+        'transformations',
+        where: 'profileId = ?',
+        whereArgs: [profileId],
+        orderBy: 'monthNumber ASC',
+      );
+      return maps.map((m) => TransformationPhoto.fromMap(m)).toList();
+    }
+
+    Future<int> deleteTransformationPhoto(int id) async {
+      final db = await database;
+      return await db.delete(
+        'transformations',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  ЗАКРЫТИЕ
+    // ═══════════════════════════════════════════════════════════
+
+    Future<void> close() async {
+      final db = await instance.database;
+      await db.close();
+    }
   }
-
-  Future<int> deletePlannedWorkoutDays(int profileId) async {
-    final db = await database;
-    return await db.delete(
-      'workout_days',
-      where: 'profileId = ? AND status = ?',
-      whereArgs: [profileId, 'planned'],
-    );
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  //  ИСТОРИЯ ПО УПРАЖНЕНИЮ (для прогрессии)
-  // ═══════════════════════════════════════════════════════════
-
-  Future<WorkoutSet?> getLastCompletedSetForExercise({
-    required int profileId,
-    required int exerciseId,
-    int daysLimit = 60,
-  }) async {
-    final db = await database;
-
-    final from = DateTime.now()
-        .subtract(Duration(days: daysLimit))
-        .toIso8601String();
-
-    final result = await db.rawQuery('''
-      SELECT ws.*
-      FROM workout_sets ws
-      JOIN workout_exercises we ON we.id = ws.workoutExerciseId
-      JOIN workout_days wd ON wd.id = we.workoutDayId
-      WHERE wd.profileId = ?
-        AND wd.status = 'completed'
-        AND wd.date >= ?
-        AND (we.replacedByItemId = ? OR we.itemId = ?)
-        AND we.itemType = 'exercise'
-        AND we.isCoolDown = 0
-        AND ws.completed = 1
-        AND ws.weight IS NOT NULL
-      ORDER BY wd.date DESC, ws."order" ASC
-      LIMIT 1
-    ''', [profileId, from, exerciseId, exerciseId]);
-
-    if (result.isEmpty) return null;
-    return WorkoutSet.fromMap(result.first);
-  }
-
-  Future<Set<int>> getRecentExerciseIds({
-    required int profileId,
-    int daysLimit = 14,
-  }) async {
-    final db = await database;
-
-    final from = DateTime.now()
-        .subtract(Duration(days: daysLimit))
-        .toIso8601String();
-
-    final maps = await db.rawQuery('''
-      SELECT DISTINCT
-        COALESCE(we.replacedByItemId, we.itemId) AS exId
-      FROM workout_exercises we
-      JOIN workout_days wd ON wd.id = we.workoutDayId
-      WHERE wd.profileId = ?
-        AND wd.date >= ?
-        AND we.itemType = 'exercise'
-        AND we.isCoolDown = 0
-    ''', [profileId, from]);
-
-    return maps
-        .map((m) => m['exId'] as int?)
-        .whereType<int>()
-        .toSet();
-  }
-
-  /// Получить ВСЕ подходы последней завершённой тренировки
-  /// для указанного упражнения (для прогрессии).
-  Future<List<WorkoutSet>> getLastWorkoutExerciseSets({
-    required int profileId,
-    required int exerciseId,
-    int daysLimit = 60,
-  }) async {
-    final db = await database;
-
-    final from = DateTime.now()
-        .subtract(Duration(days: daysLimit))
-        .toIso8601String();
-
-    final weResult = await db.rawQuery('''
-      SELECT we.id
-      FROM workout_exercises we
-      JOIN workout_days wd ON wd.id = we.workoutDayId
-      WHERE wd.profileId = ?
-        AND wd.status = 'completed'
-        AND wd.date >= ?
-        AND (we.replacedByItemId = ? OR we.itemId = ?)
-        AND we.itemType = 'exercise'
-        AND we.isCoolDown = 0
-      ORDER BY wd.date DESC, wd.id DESC
-      LIMIT 1
-    ''', [profileId, from, exerciseId, exerciseId]);
-
-    if (weResult.isEmpty) return [];
-
-    final weId = weResult.first['id'] as int?;
-    if (weId == null) return [];
-
-    final sets = await getWorkoutSets(weId);
-    return sets;
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  //  ЗАКРЫТИЕ
-  // ═══════════════════════════════════════════════════════════
-
-  Future<void> close() async {
-    final db = await instance.database;
-    await db.close();
-  }
-}
+  // ═══ ФАЙЛ database_helper.dart ЗАВЕРШЁН ═══

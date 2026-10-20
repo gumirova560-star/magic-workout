@@ -1,16 +1,16 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // ⚠️ Для вибрации
 
-/// Таймер отдыха между подходами.
 class RestTimer extends StatefulWidget {
   final int seconds;
-  final VoidCallback? onFinished;
+  final VoidCallback onFinished;
   final VoidCallback? onSkip;
 
   const RestTimer({
     super.key,
     required this.seconds,
-    this.onFinished,
+    required this.onFinished,
     this.onSkip,
   });
 
@@ -26,17 +26,25 @@ class _RestTimerState extends State<RestTimer> {
   void initState() {
     super.initState();
     _remaining = widget.seconds;
-    _start();
+    _startTimer();
   }
 
-  void _start() {
+  void _startTimer() {
+    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (_remaining <= 1) {
-        t.cancel();
-        setState(() => _remaining = 0);
-        widget.onFinished?.call();
-      } else {
+      if (!mounted) return;
+
+      if (_remaining > 0) {
         setState(() => _remaining--);
+
+        // ⚠️ Вибрация за 3 и 1 секунду до конца
+        if (_remaining == 3 || _remaining == 1) {
+          HapticFeedback.mediumImpact();
+        }
+      } else {
+        t.cancel();
+        HapticFeedback.heavyImpact(); // ⚠️ Вибрация в конце
+        widget.onFinished();
       }
     });
   }
@@ -47,95 +55,57 @@ class _RestTimerState extends State<RestTimer> {
     super.dispose();
   }
 
-  String _format(int total) {
-    final m = total ~/ 60;
-    final s = total % 60;
-    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final progress = _remaining / widget.seconds;
+    final progress = widget.seconds > 0 ? _remaining / widget.seconds : 0.0;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            theme.colorScheme.primary,
-            theme.colorScheme.primary.withOpacity(0.7),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(20),
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF6C5CE7).withOpacity(0.3), width: 1.5),
       ),
       child: Row(
         children: [
-          // Круговой прогресс
-          SizedBox(
-            width: 52,
-            height: 52,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                CircularProgressIndicator(
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox(
+                width: 50,
+                height: 50,
+                child: CircularProgressIndicator(
                   value: progress,
                   strokeWidth: 4,
-                  backgroundColor: Colors.white.withOpacity(0.3),
-                  valueColor:
-                      const AlwaysStoppedAnimation<Color>(Colors.white),
+                  backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+                  color: const Color(0xFF6C5CE7),
                 ),
-                const Icon(Icons.timer_rounded,
-                    color: Colors.white, size: 22),
-              ],
-            ),
-          ),
-          const SizedBox(width: 14),
-
-          // Время
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Отдых',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                Text(
-                  _format(_remaining),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Пропустить
-          TextButton(
-            onPressed: () {
-              _timer?.cancel();
-              widget.onSkip?.call();
-            },
-            style: TextButton.styleFrom(
-              backgroundColor: Colors.white.withOpacity(0.2),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
               ),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            ),
-            child: const Text('Пропустить',
-                style: TextStyle(fontWeight: FontWeight.w600)),
+              Text(
+                '$_remaining',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+            ],
           ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              'Отдых',
+              style: theme.textTheme.headlineMedium?.copyWith(fontSize: 16),
+            ),
+          ),
+          if (widget.onSkip != null)
+            TextButton(
+              onPressed: () {
+                _timer?.cancel();
+                widget.onSkip!();
+              },
+              child: const Text('Пропустить'),
+            ),
         ],
       ),
     );

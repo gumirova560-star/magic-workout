@@ -167,7 +167,9 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
       cycleNumber: _day?.cycleNumber,
     );
 
-    if (prevDays.isEmpty) return (status: 'empty', weightFails: [], repsFails: []);
+    if (prevDays.isEmpty) {
+      return (status: 'empty', weightFails: const <String>[], repsFails: const <String>[]);
+    }
 
     bool weightFailed = false;
     bool repsFailed = false;
@@ -1166,7 +1168,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     setState(() => _setsData[item.id!] = [SetData(completed: true)]);
     _showMessage('Заминка выполнена ✓');
   }
-// ═══ ЧАСТЬ 3.1 ЗАКОНЧИЛАСЬ ═══
+// ═══ ЧАСТЬ 3 ЗАКОНЧИЛАСЬ ═══
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1740,4 +1742,544 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
       ),
     );
   }
-// ═══ ЧАСТЬ 3.2 ЗАКОНЧИЛАСЬ ═══
+// ═══ ЧАСТЬ 4 (ПРОДОЛЖЕНИЕ) ═══
+  Widget _buildCompletedBanner(BuildContext context) {
+    final day = _day;
+    final months = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+    final dateStr = day != null ? '${day.date.day} ${months[day.date.month - 1]} ${day.date.year}' : '';
+    final minutes = day?.durationMinutes ?? 0;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [Color(0xFF00B894), Color(0xFF55EFC4)]),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: const Color(0xFF00B894).withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6))],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+            child: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 24),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Тренировка завершена ✓', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Text('$dateStr · $minutes мин', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final mainCount = _items.where((i) => !i.isCoolDown).length;
+    int completedSets = 0;
+    int totalSets = 0;
+    for (final sets in _setsData.values) {
+      for (final s in sets) {
+        totalSets++;
+        if (s.completed) completedSets++;
+      }
+    }
+    final minutesText = _isViewMode ? '${_day?.durationMinutes ?? 0}' : '${_profile?.sessionMinutes ?? 45}';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [theme.colorScheme.primary, theme.colorScheme.primary.withOpacity(0.7)]),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          _infoItem(context, Icons.fitness_center, '$mainCount', 'упражнений'),
+          _infoDivider(),
+          _infoItem(context, Icons.check_circle_rounded, '$completedSets/$totalSets', 'подходов'),
+          _infoDivider(),
+          _infoItem(context, Icons.timer, minutesText, 'минут'),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoItem(BuildContext context, IconData icon, String value, String label) {
+    return Expanded(
+      child: Column(
+        children: [
+          Icon(icon, color: Colors.white, size: 22),
+          const SizedBox(height: 6),
+          Text(value, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
+          Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoDivider() => Container(width: 1, height: 40, color: Colors.white.withOpacity(0.2));
+
+  Widget _buildItemCard(BuildContext context, WorkoutExercise item, {int? index}) {
+    if (item.itemType == 'exercise') {
+      return _buildExerciseCard(context, item, index: index);
+    } else {
+      return _buildStretchCard(context, item);
+    }
+  }
+
+  Widget _buildExerciseCard(BuildContext context, WorkoutExercise item, {int? circleIndex, int? index}) {
+    final theme = Theme.of(context);
+    final effectiveId = item.replacedByItemId ?? item.itemId;
+    final ex = _exerciseMap[effectiveId];
+    if (ex == null) return const SizedBox.shrink();
+
+    final isCardio = _isCardio(ex);
+    final isTimed = _isTimed(ex.name);
+    final baseZone = _getBaseZone(ex);
+    final defaultReps = _parseReps(item.reps);
+
+    if (!_setsData.containsKey(item.id!)) {
+      _setsData[item.id!] = List.generate(item.sets, (_) => SetData(reps: defaultReps, completed: false));
+    }
+    final sets = _setsData[item.id!]!;
+    if (sets.isEmpty) {
+      sets.add(SetData(reps: defaultReps, completed: false));
+    }
+
+    final List<int> setIndexesToShow = circleIndex != null
+        ? (circleIndex < sets.length ? [circleIndex] : [])
+        : List.generate(sets.length, (i) => i);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              onTap: _isViewMode ? null : () => _openExerciseMenu(item, ex),
+              borderRadius: BorderRadius.circular(12),
+              child: Row(
+                children: [
+                  if (index != null) ...[
+                    Container(
+                      width: 24,
+                      height: 24,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(color: theme.colorScheme.primary.withOpacity(0.1), shape: BoxShape.circle),
+                      child: Text('$index', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: isCardio
+                            ? const [Color(0xFFE17055), Color(0xFFFAB1A0)]
+                            : const [Color(0xFF6C5CE7), Color(0xFFA29BFE)],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(isCardio ? Icons.directions_run_rounded : Icons.fitness_center, color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(ex.name, style: theme.textTheme.headlineMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
+                              if (!isCardio) ...[
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    if (baseZone != null)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(color: const Color(0xFF6C5CE7).withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                                        child: Text('БАЗА - ${baseZone.toUpperCase()}', style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF6C5CE7))),
+                                      )
+                                    else ...[
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(color: const Color(0xFF00B894).withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                                        child: const Text('ИЗОЛЯЦИЯ', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF00B894))),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        ex.muscleGroups.map((g) => _groupLabel(g)).join(' + ').toUpperCase(),
+                                        style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.info_outline_rounded, color: theme.colorScheme.primary, size: 22),
+                          onPressed: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => ExerciseDetailScreen(exercise: ex)));
+                          },
+                          tooltip: 'Детали упражнения',
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (!_isViewMode) Icon(Icons.more_vert_rounded, color: theme.colorScheme.onSurface.withOpacity(0.4)),
+                ],
+              ),
+            ),
+            if (ex.description.isNotEmpty && circleIndex == null) ...[
+              const SizedBox(height: 10),
+              Text(
+                ex.description,
+                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.7)),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+            const SizedBox(height: 14),
+
+            if (setIndexesToShow.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text('Нет подходов для отображения', style: TextStyle(color: Colors.grey)),
+              )
+            else
+              for (final i in setIndexesToShow)
+                SetRow(
+                  key: ValueKey('${item.id}_$i'),
+                  setNumber: i + 1,
+                  completed: sets[i].completed,
+                  initialWeight: sets[i].weight,
+                  initialReps: sets[i].reps ?? defaultReps,
+                  readOnly: _isViewMode,
+                  isCardio: isCardio,
+                  isTimed: isTimed,
+                  targetReps: item.reps,
+                  onChanged: (data) async {
+                    if (item.id == null || _isViewMode) return;
+
+                    var updatedData = data;
+                    if (data.completed && data.reps == null && defaultReps != null) {
+                      updatedData = SetData(weight: data.weight, reps: defaultReps, completed: data.completed);
+                    }
+
+                    setState(() => sets[i] = updatedData);
+                    final ids = _setIds[item.id!];
+                    if (ids != null && i < ids.length) {
+                      if (ids[i] == 0) {
+                        final newId = await DatabaseHelper.instance.addWorkoutSet(
+                          WorkoutSet(
+                            workoutExerciseId: item.id!,
+                            order: i + 1,
+                            weight: updatedData.weight,
+                            reps: updatedData.reps,
+                            completed: updatedData.completed,
+                          ),
+                        );
+                        if (mounted) setState(() => ids[i] = newId);
+                      } else {
+                        await DatabaseHelper.instance.updateWorkoutSet(
+                          WorkoutSet(
+                            id: ids[i],
+                            workoutExerciseId: item.id!,
+                            order: i + 1,
+                            weight: updatedData.weight,
+                            reps: updatedData.reps,
+                            completed: updatedData.completed,
+                          ),
+                        );
+                      }
+                    }
+                    if (circleIndex != null && item.id != null) _tryAutoCollapse(item, circleIndex);
+                  },
+                  onComplete: () {
+                    if (_started && !_isViewMode && !item.isCoolDown) {
+                      _startRestTimer();
+                    }
+                    if (circleIndex != null && item.id != null) _tryAutoCollapse(item, circleIndex);
+                  },
+                  onDelete: circleIndex == null ? () => _deleteSetFromExercise(item, i) : null,
+                ),
+            if (!_isViewMode && _started && circleIndex == null && !isCardio)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _addSetToExercise(item),
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('Добавить подход'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _tryAutoCollapse(WorkoutExercise item, int circleIndex) {
+    if (!_hasBlocks) return;
+    final idx = _items.indexOf(item);
+    if (idx < 0) return;
+    final blockNum = _pendingBlocks[idx] ?? 1;
+    final blockItems = <WorkoutExercise>[];
+    for (int i = 0; i < _items.length; i++) {
+      if (_items[i].isCoolDown) continue;
+      if ((_pendingBlocks[i] ?? 1) != blockNum) continue;
+      blockItems.add(_items[i]);
+    }
+    if (_isCircleComplete(blockItems, circleIndex) && _started) {
+      final key = _circleKey(blockNum, circleIndex + 1);
+      if (!_collapsedCircles.contains(key)) setState(() => _collapsedCircles.add(key));
+    }
+  }
+
+  Widget _buildStretchCard(BuildContext context, WorkoutExercise item) {
+    final theme = Theme.of(context);
+    final st = _stretchMap[item.itemId];
+    if (st == null) return const SizedBox.shrink();
+    final sets = _setsData[item.id!] ?? [SetData(completed: false)];
+    final isDone = sets.isNotEmpty && sets.first.completed;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: (_started && !_isViewMode) ? () => _startStretchTimer(item, st) : null,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFF00B894), Color(0xFF55EFC4)]),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(isDone ? Icons.check_rounded : Icons.self_improvement, color: Colors.white, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: Text(st.name, style: theme.textTheme.headlineMedium, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                        InkWell(
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StretchDetailScreen(stretch: st))),
+                          borderRadius: BorderRadius.circular(20),
+                          child: Padding(
+                            padding: const EdgeInsets.all(6),
+                            child: Icon(Icons.info_outline_rounded, size: 20, color: theme.colorScheme.primary),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${st.durationLabel}${st.bothSides ? " × 2 стороны" : ""}',
+                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6)),
+                    ),
+                  ],
+                ),
+              ),
+              if (isDone)
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: const Color(0xFF00B894).withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.check_circle_rounded, color: Color(0xFF00B894), size: 20),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(color: const Color(0xFF00B894).withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                  child: const Text('Заминка', style: TextStyle(color: Color(0xFF00B894), fontSize: 11, fontWeight: FontWeight.w700)),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StretchTimerDialog extends StatefulWidget {
+  final String name;
+  final int totalSeconds;
+  final bool bothSides;
+  const _StretchTimerDialog({required this.name, required this.totalSeconds, required this.bothSides});
+
+  @override
+  State<_StretchTimerDialog> createState() => _StretchTimerDialogState();
+}
+
+class _StretchTimerDialogState extends State<_StretchTimerDialog> {
+  late int _remaining;
+  Timer? _timer;
+  bool _finished = false;
+  bool _paused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _remaining = widget.totalSeconds;
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted || _paused) return;
+      if (_remaining > 0) {
+        setState(() => _remaining--);
+      } else {
+        setState(() => _finished = true);
+        t.cancel();
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted) Navigator.pop(context, true);
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final progress = widget.totalSeconds > 0 ? _remaining / widget.totalSeconds : 0.0;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(widget.name, style: theme.textTheme.headlineMedium, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: 140,
+              height: 140,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    width: 140,
+                    height: 140,
+                    child: CircularProgressIndicator(
+                      value: progress,
+                      strokeWidth: 8,
+                      backgroundColor: theme.colorScheme.primary.withOpacity(0.15),
+                      valueColor: AlwaysStoppedAnimation(
+                        _finished
+                            ? const Color(0xFF00B894)
+                            : _paused
+                                ? const Color(0xFFFDCB6E)
+                                : theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    _finished ? '✓' : '$_remaining',
+                    style: theme.textTheme.displaySmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: _finished
+                          ? const Color(0xFF00B894)
+                          : _paused
+                              ? const Color(0xFFFDCB6E)
+                              : theme.colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (_paused && !_finished)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  '⏸ Пауза',
+                  style: theme.textTheme.bodySmall?.copyWith(color: const Color(0xFFFDCB6E), fontWeight: FontWeight.w700),
+                ),
+              ),
+            if (widget.bothSides && !_finished)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Выполните для обеих сторон',
+                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6)),
+                ),
+              ),
+            const SizedBox(height: 20),
+            if (!_finished)
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => setState(() => _paused = !_paused),
+                  icon: Icon(_paused ? Icons.play_arrow_rounded : Icons.pause_rounded, size: 22),
+                  label: Text(_paused ? 'Продолжить' : 'Пауза'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _paused ? theme.colorScheme.primary : const Color(0xFFFDCB6E),
+                    side: BorderSide(
+                      color: _paused
+                          ? theme.colorScheme.primary.withOpacity(0.5)
+                          : const Color(0xFFFDCB6E).withOpacity(0.5),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            if (!_finished) const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Отмена'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _finished ? const Color(0xFF00B894) : theme.colorScheme.primary,
+                    ),
+                    child: Text(_finished ? 'Готово ✓' : 'Завершить'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+// ═══ ФАЙЛ workout_detail_screen.dart ЗАВЕРШЁН ═══

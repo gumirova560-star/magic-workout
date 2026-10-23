@@ -4,13 +4,13 @@ import '../../data/fairy_mood.dart';
 import '../../models/user_profile.dart';
 import '../../models/workout_day.dart';
 import '../../services/database_helper.dart';
-import '../../services/workout_generator.dart' hide DatabaseHelper; // 👈 Скрываем, чтобы не было конфликта
+import '../../services/workout_generator.dart' hide DatabaseHelper;
 import '../../services/week_analyzer.dart';
 import '../../services/fairy_reaction_service.dart';
 import '../../services/fairy_stats_service.dart';
 import '../../services/achievement_service.dart';
 import '../yoga/yoga_screen.dart';
-// import '../trainer/trainer_screen.dart'; // ⚠️ ВРЕМЕННО ЗАКОММЕНТИРОВАНО (файла не существует)
+import '../trainer/trainer_screen.dart'; // 👈 Вернули импорт
 import 'workout_detail_screen.dart';
 import 'my_templates_screen.dart';
 import 'widgets/focus_areas_dialog.dart';
@@ -242,6 +242,12 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 
   Future<void> _openDay(WorkoutDay day) async {
+    final isUnlocked = _isWeekUnlocked(day.weekNumber ?? 1);
+    if (!isUnlocked) {
+      _showMessage('Сначала завершите предыдущую неделю!');
+      return;
+    }
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -321,7 +327,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   void _showMessage(String text) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
-
+// ═══ ЧАСТЬ 1 ЗАКОНЧИЛАСЬ ═══
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -331,8 +337,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       appBar: AppBar(
         title: const Text('Тренировки'),
         actions: [
-          // ⚠️ КНОПКА ТРЕНЕРСКОЙ ВРЕМЕННО ЗАКОММЕНТИРОВАНА
-          /*
           IconButton(
             tooltip: 'Шпаргалка от Феи',
             icon: const Icon(Icons.auto_awesome_rounded, color: Color(0xFFFDCB6E)),
@@ -343,7 +347,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               );
             },
           ),
-          */
           IconButton(tooltip: 'Продолжить тренировку', onPressed: _continueInProgress, icon: const Icon(Icons.play_circle_outline_rounded)),
           IconButton(tooltip: 'Последняя завершённая', onPressed: _openLastCompleted, icon: const Icon(Icons.history_rounded)),
         ],
@@ -458,7 +461,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       opacity: isUnlocked ? 1.0 : 0.6,
       child: Card(
         child: InkWell(
-          onTap: () => _openDay(day),
+          onTap: isUnlocked ? () => _openDay(day) : () => _showMessage('Сначала завершите предыдущую неделю!'),
           borderRadius: BorderRadius.circular(20),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -713,3 +716,4 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     );
   }
 }
+// ═══ ФАЙЛ workout_screen.dart ЗАВЕРШЁН ═══

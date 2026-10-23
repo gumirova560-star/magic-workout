@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../data/fairy_mood.dart';
 import '../../services/database_helper.dart';
 import '../../services/week_analyzer.dart';
 
@@ -34,8 +35,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
       return;
     }
 
-    final trends =
-        await WeekAnalyzer.analyzeExerciseTrends(profiles.first.id!);
+    final trends = await WeekAnalyzer.analyzeExerciseTrends(profiles.first.id!);
 
     if (!mounted) return;
     setState(() {
@@ -56,13 +56,89 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
               ? _buildEmpty(context)
               : RefreshIndicator(
                   onRefresh: _load,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _trends.length,
-                    itemBuilder: (_, i) =>
-                        _buildTrendCard(context, _trends[i]),
-                  ),
+                  child: _buildGroupedList(context),
                 ),
+    );
+  }
+
+  // 👇 ГРУППИРОВКА СПИСКА
+  Widget _buildGroupedList(BuildContext context) {
+    final weightTrends = _trends.where((t) => t.isWeightBased).toList();
+    final functionalTrends = _trends.where((t) => !t.isWeightBased).toList();
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        if (weightTrends.isNotEmpty) ...[
+          _buildSectionHeader(
+            context,
+            title: 'Силовой прогресс',
+            subtitle: 'Упражнения с весом (кг)',
+            icon: Icons.fitness_center_rounded,
+            color: const Color(0xFF6C5CE7),
+          ),
+          ...weightTrends.map((t) => _buildTrendCard(context, t)),
+        ],
+
+        if (weightTrends.isNotEmpty && functionalTrends.isNotEmpty)
+          const SizedBox(height: 24),
+
+        if (functionalTrends.isNotEmpty) ...[
+          _buildSectionHeader(
+            context,
+            title: 'Функциональный прогресс',
+            subtitle: 'Время / повторения / кардио',
+            icon: Icons.timer_rounded,
+            color: const Color(0xFF00B894),
+          ),
+          ...functionalTrends.map((t) => _buildTrendCard(context, t)),
+        ],
+      ],
+    );
+  }
+
+  // 👇 ЗАГОЛОВОК СЕКЦИИ
+  Widget _buildSectionHeader(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+  }) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12, left: 4, top: 8),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              Text(
+                subtitle,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurface.withOpacity(0.6),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -109,8 +185,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                       Text(
                         'Использовано: ${trend.timesUsed} раз',
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color:
-                              theme.colorScheme.onSurface.withOpacity(0.6),
+                          color: theme.colorScheme.onSurface.withOpacity(0.6),
                         ),
                       ),
                     ],
@@ -154,8 +229,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
             // ═══ Рекомендация ═══
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: color.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(10),
@@ -183,9 +257,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
     bool bold = false,
   }) {
     final theme = Theme.of(context);
-    final text = value != null
-        ? '${_formatValue(value)} $unit'
-        : '—';
+    final text = value != null ? '${_formatValue(value)} $unit' : '—';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -218,6 +290,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
     return v.toStringAsFixed(1);
   }
 
+  // 👇 ОБНОВЛЕННАЯ ЗАГЛУШКА С ФЕЕЙ
   Widget _buildEmpty(BuildContext context) {
     final theme = Theme.of(context);
     return Center(
@@ -226,22 +299,30 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.insights_rounded,
-              size: 80,
-              color: theme.colorScheme.primary.withOpacity(0.4),
+            Image.asset(
+              FairyMood.think.asset,
+              width: 120,
+              height: 120,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => Icon(
+                Icons.insights_rounded,
+                size: 80,
+                color: theme.colorScheme.primary.withOpacity(0.4),
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             Text(
-              'Пока нет данных',
+              'Идет анализ...',
               style: theme.textTheme.displaySmall,
+              textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Text(
-              'Анализ появится после 2+ тренировок\nс одним упражнением',
+              'Ждем завершения 3-й недели текущего цикла, чтобы сравнить результаты с 1-й неделей и показать твой прогресс.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurface.withOpacity(0.6),
+                height: 1.5,
               ),
             ),
           ],

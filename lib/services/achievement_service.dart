@@ -125,14 +125,8 @@ class AchievementService {
     final totalWorkouts = completedWorkouts.length;
     final totalYoga = completedWorkouts.where((d) => d.type == 'yoga').length;
 
-    int totalSets = 0;
-    for (final day in completedWorkouts) {
-      final exercises = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
-      for (final ex in exercises) {
-        final sets = await DatabaseHelper.instance.getWorkoutSets(ex.id!);
-        totalSets += sets.where((s) => s.completed).length;
-      }
-    }
+    // ⚠️ ОПТИМИЗАЦИЯ: Теперь это один быстрый SQL-запрос вместо тройного цикла
+    final totalSets = await DatabaseHelper.instance.getTotalCompletedSets(profileId);
 
     // Проверяем каждый бейдж
     for (final ach in allAchievements) {
@@ -238,3 +232,4 @@ class AchievementService {
     return ((date.difference(firstDayOfYear).inDays + daysOffset) / 7).ceil();
   }
 }
+// ═══ ФАЙЛ achievement_service.dart ЗАВЕРШЁН ═══

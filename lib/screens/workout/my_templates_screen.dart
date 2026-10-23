@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../models/workout_template.dart';
+import '../../models/workout_day.dart'; // ⚠️ Импорт WorkoutDay
 import '../../services/database_helper.dart';
 import '../../services/fairy_reaction_service.dart';
 import 'workout_detail_screen.dart';
 
-/// Экран «Мои шаблоны» — только пользовательские (isCustom = 1).
-///
-/// Тап на шаблон → начать по нему тренировку.
-/// Долгий тап (или иконка) → удалить.
 class MyTemplatesScreen extends StatefulWidget {
   final int profileId;
 
@@ -56,15 +53,31 @@ class _MyTemplatesScreenState extends State<MyTemplatesScreen> {
   }
 
   Future<void> _openTemplate(WorkoutTemplate template) async {
+    // ⚠️ Создаем временный WorkoutDay из шаблона
+    final newDay = WorkoutDay(
+      profileId: widget.profileId,
+      templateId: template.id,
+      name: template.name,
+      type: template.type,
+      status: 'planned',
+      date: DateTime.now(),
+    );
+
+    final newDayId = await DatabaseHelper.instance.createWorkoutDay(newDay);
+    final savedDay = newDay.copyWith(id: newDayId);
+
+    if (!mounted) return;
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => WorkoutDetailScreen(
-          template: template,
+          workoutDay: savedDay, // ⚠️ Передаем WorkoutDay
           profileId: widget.profileId,
         ),
       ),
     );
+
     if (result == true && mounted) _loadTemplates();
   }
 
@@ -128,15 +141,10 @@ class _MyTemplatesScreenState extends State<MyTemplatesScreen> {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════
-  //  ПУСТОЕ СОСТОЯНИЕ
-  // ═══════════════════════════════════════════════════════════
-
   Widget _buildEmptyState(BuildContext context) {
     final theme = Theme.of(context);
 
     return ListView(
-      // Нужно, чтобы pull-to-refresh работал
       physics: const AlwaysScrollableScrollPhysics(),
       children: [
         SizedBox(
@@ -175,14 +183,10 @@ class _MyTemplatesScreenState extends State<MyTemplatesScreen> {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════
-  //  СПИСОК ШАБЛОНОВ
-  // ═══════════════════════════════════════════════════════════
-
   Widget _buildList(BuildContext context) {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: _templates.length + 1, // +1 для заголовка
+      itemCount: _templates.length + 1,
       itemBuilder: (context, i) {
         if (i == 0) return _buildHeader(context);
         return _templateCard(context, _templates[i - 1]);
@@ -237,7 +241,6 @@ class _MyTemplatesScreenState extends State<MyTemplatesScreen> {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              // ═══ Иконка ═══
               Container(
                 width: 52,
                 height: 52,
@@ -255,7 +258,6 @@ class _MyTemplatesScreenState extends State<MyTemplatesScreen> {
               ),
               const SizedBox(width: 16),
 
-              // ═══ Название + инфо ═══
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -279,7 +281,6 @@ class _MyTemplatesScreenState extends State<MyTemplatesScreen> {
                 ),
               ),
 
-              // ═══ Кнопка удалить ═══
               IconButton(
                 onPressed: () => _deleteTemplate(template),
                 icon: Icon(

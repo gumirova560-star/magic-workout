@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../models/user_profile.dart';
 import '../../services/database_helper.dart';
+import '../main_screen.dart'; // ⚠️ ИМПОРТ ДЛЯ ПЕРЕХОДА
 
 class ProfileEditScreen extends StatefulWidget {
   final UserProfile? profile;
@@ -14,6 +16,11 @@ class ProfileEditScreen extends StatefulWidget {
 class _ProfileEditScreenState extends State<ProfileEditScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+
+  // Контроллеры для гибридных полей
+  late TextEditingController _ageController;
+  late TextEditingController _heightController;
+  late TextEditingController _weightController;
 
   String _gender = 'female';
   int _age = 30;
@@ -48,11 +55,18 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       _focusAreas.addAll(p.focusAreas.take(_maxFocusAreas));
       _limitations.addAll(p.limitations);
     }
+
+    _ageController = TextEditingController(text: _age.toString());
+    _heightController = TextEditingController(text: _height.toInt().toString());
+    _weightController = TextEditingController(text: _weight.toStringAsFixed(_weight % 1 == 0 ? 0 : 1));
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _ageController.dispose();
+    _heightController.dispose();
+    _weightController.dispose();
     super.dispose();
   }
 
@@ -82,12 +96,22 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       } else {
         await DatabaseHelper.instance.updateProfile(profile);
       }
-      if (mounted) Navigator.pop(context, true);
+
+      if (!mounted) return;
+
+      // ⚠️ ЕСЛИ ЭТО СОЗДАНИЕ (или если пришли из онбординга) — перекидываем на MainScreen
+      if (widget.profile == null) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainScreen()),
+          (route) => false,
+        );
+      } else {
+        // Если это редактирование из Настроек — просто возвращаемся назад
+        Navigator.pop(context, true);
+      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
       }
     }
   }
@@ -98,83 +122,91 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     final isEdit = widget.profile != null;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(isEdit ? 'Редактировать' : 'Создать профиль'),
-      ),
+      appBar: AppBar(title: Text(isEdit ? 'Редактировать' : 'Создать профиль')),
       body: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // ═══ ИМЯ ═══
             TextFormField(
               controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Имя профиля',
-                hintText: 'Я, Жена, Муж...',
-                prefixIcon: Icon(Icons.person_rounded),
-              ),
+              decoration: const InputDecoration(labelText: 'Имя профиля', hintText: 'Я, Жена, Муж...', prefixIcon: Icon(Icons.person_rounded)),
               validator: (v) => v?.isEmpty ?? true ? 'Введите имя' : null,
             ),
             const SizedBox(height: 24),
 
-            // ═══ ПОЛ ═══
             _sectionTitle('Пол'),
             Row(
               children: [
-                Expanded(
-                  child: _choiceButton(
-                    label: 'Женский',
-                    icon: Icons.female_rounded,
-                    isSelected: _gender == 'female',
-                    onTap: () => setState(() => _gender = 'female'),
-                  ),
-                ),
+                Expanded(child: _choiceButton(label: 'Женский', icon: Icons.female_rounded, isSelected: _gender == 'female', onTap: () => setState(() => _gender = 'female'))),
                 const SizedBox(width: 12),
-                Expanded(
-                  child: _choiceButton(
-                    label: 'Мужской',
-                    icon: Icons.male_rounded,
-                    isSelected: _gender == 'male',
-                    onTap: () => setState(() => _gender = 'male'),
-                  ),
-                ),
+                Expanded(child: _choiceButton(label: 'Мужской', icon: Icons.male_rounded, isSelected: _gender == 'male', onTap: () => setState(() => _gender = 'male'))),
               ],
             ),
             const SizedBox(height: 24),
 
-            // ═══ ВОЗРАСТ / РОСТ / ВЕС ═══
             _sectionTitle('Параметры'),
-            _buildSlider(
+
+            // ⚠️ Гибридные поля: Ползунок + Текстовое поле
+            _buildHybridSlider(
               label: 'Возраст',
+              controller: _ageController,
               value: _age.toDouble(),
               min: 14,
               max: 90,
               divisions: 76,
               unit: 'лет',
-              onChanged: (v) => setState(() => _age = v.toInt()),
+              onChanged: (v) {
+                setState(() => _age = v.toInt());
+                _ageController.text = _age.toString();
+              },
+              onTextChanged: (text) {
+                final parsed = int.tryParse(text);
+                if (parsed != null && parsed >= 14 && parsed <= 90) {
+                  setState(() => _age = parsed);
+                }
+              },
             ),
-            _buildSlider(
+            _buildHybridSlider(
               label: 'Рост',
+              controller: _heightController,
               value: _height,
               min: 130,
               max: 220,
               divisions: 90,
               unit: 'см',
-              onChanged: (v) => setState(() => _height = v),
+              onChanged: (v) {
+                setState(() => _height = v);
+                _heightController.text = _height.toInt().toString();
+              },
+              onTextChanged: (text) {
+                final parsed = double.tryParse(text);
+                if (parsed != null && parsed >= 130 && parsed <= 220) {
+                  setState(() => _height = parsed);
+                }
+              },
             ),
-            _buildSlider(
+            _buildHybridSlider(
               label: 'Вес',
+              controller: _weightController,
               value: _weight,
               min: 35,
               max: 200,
               divisions: 165,
               unit: 'кг',
-              onChanged: (v) => setState(() => _weight = v),
+              onChanged: (v) {
+                setState(() => _weight = v);
+                _weightController.text = _weight.toStringAsFixed(_weight % 1 == 0 ? 0 : 1);
+              },
+              onTextChanged: (text) {
+                final parsed = double.tryParse(text);
+                if (parsed != null && parsed >= 35 && parsed <= 200) {
+                  setState(() => _weight = parsed);
+                }
+              },
             ),
             const SizedBox(height: 24),
 
-            // ═══ УРОВЕНЬ ═══
             _sectionTitle('Уровень подготовки'),
             ..._buildOptions(
               options: [
@@ -187,7 +219,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             ),
             const SizedBox(height: 24),
 
-            // ═══ ЦЕЛЬ ═══
             _sectionTitle('Цель'),
             ..._buildOptions(
               options: [
@@ -201,10 +232,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             ),
             const SizedBox(height: 24),
 
-            // ⚠️ Блок «ФОКУСНЫЕ ЗОНЫ» УДАЛЁН — теперь выбор зон
-            //    при генерации плана (диалог).
-
-            // ═══ ОГРАНИЧЕНИЯ ═══
             _sectionTitle('Ограничения / травмы'),
             Wrap(
               spacing: 8,
@@ -218,7 +245,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             ),
             const SizedBox(height: 24),
 
-            // ═══ ИНВЕНТАРЬ ═══
             _sectionTitle('Инвентарь'),
             ..._buildOptions(
               options: [
@@ -232,7 +258,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             ),
             const SizedBox(height: 24),
 
-            // ═══ ДНЕЙ В НЕДЕЛЮ ═══
             _sectionTitle('Дней в неделю'),
             _buildSlider(
               label: 'Тренировок',
@@ -245,7 +270,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             ),
             const SizedBox(height: 24),
 
-            // ═══ ВРЕМЯ ТРЕНИРОВКИ ═══
             _sectionTitle('Время тренировки'),
             _buildSlider(
               label: 'Длительность',
@@ -254,12 +278,10 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
               max: 90,
               divisions: 4,
               unit: 'мин',
-              onChanged: (v) =>
-                  setState(() => _sessionMinutes = v.toInt()),
+              onChanged: (v) => setState(() => _sessionMinutes = v.toInt()),
             ),
             const SizedBox(height: 32),
 
-            // ═══ СОХРАНИТЬ ═══
             ElevatedButton.icon(
               onPressed: _save,
               icon: const Icon(Icons.check_rounded),
@@ -275,69 +297,42 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   Widget _sectionTitle(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Text(
-        text,
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-      ),
+      child: Text(text, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
     );
   }
 
-  Widget _choiceButton({
-    required String label,
-    required IconData icon,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
+  Widget _choiceButton({required String label, required IconData icon, required bool isSelected, required VoidCallback onTap}) {
     final theme = Theme.of(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: isSelected
-              ? theme.colorScheme.primary.withOpacity(0.15)
-              : theme.colorScheme.surface,
-          border: Border.all(
-            color: isSelected
-                ? theme.colorScheme.primary
-                : theme.colorScheme.onSurface.withOpacity(0.15),
-            width: isSelected ? 2 : 1,
-          ),
+          color: isSelected ? theme.colorScheme.primary.withOpacity(0.15) : theme.colorScheme.surface,
+          border: Border.all(color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.15), width: isSelected ? 2 : 1),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
           children: [
-            Icon(
-              icon,
-              color: isSelected
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.onSurface.withOpacity(0.6),
-            ),
+            Icon(icon, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.6)),
             const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontWeight:
-                    isSelected ? FontWeight.w600 : FontWeight.w500,
-                color: isSelected
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurface,
-              ),
-            ),
+            Text(label, style: TextStyle(fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSlider({
+  Widget _buildHybridSlider({
     required String label,
+    required TextEditingController controller,
     required double value,
     required double min,
     required double max,
     required int divisions,
     required String unit,
     required ValueChanged<double> onChanged,
+    required ValueChanged<String> onTextChanged,
   }) {
     final theme = Theme.of(context);
     return Padding(
@@ -349,32 +344,50 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(label, style: theme.textTheme.bodyLarge),
-              Text(
-                '${value.toInt()} $unit',
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: theme.colorScheme.primary,
+              SizedBox(
+                width: 80,
+                height: 36,
+                child: TextField(
+                  controller: controller,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700, color: theme.colorScheme.primary),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onChanged: onTextChanged,
                 ),
               ),
+              Text(unit, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6))),
             ],
           ),
-          Slider(
-            value: value,
-            min: min,
-            max: max,
-            divisions: divisions,
-            onChanged: onChanged,
-          ),
+          Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged),
         ],
       ),
     );
   }
 
-  List<Widget> _buildOptions({
-    required List<(String, String, IconData)> options,
-    required String selected,
-    required ValueChanged<String> onSelected,
-  }) {
+  Widget _buildSlider({required String label, required double value, required double min, required double max, required int divisions, required String unit, required ValueChanged<double> onChanged}) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text(label, style: theme.textTheme.bodyLarge),
+            Text('${value.toInt()} $unit', style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700, color: theme.colorScheme.primary)),
+          ]),
+          Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildOptions({required List<(String, String, IconData)> options, required String selected, required ValueChanged<String> onSelected}) {
     return options.map((opt) {
       final (value, label, icon) = opt;
       final isSelected = selected == value;
@@ -385,45 +398,19 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         child: GestureDetector(
           onTap: () => onSelected(value),
           child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: isSelected
-                  ? theme.colorScheme.primary.withOpacity(0.12)
-                  : theme.colorScheme.surface,
-              border: Border.all(
-                color: isSelected
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurface.withOpacity(0.1),
-                width: isSelected ? 2 : 1,
-              ),
+              color: isSelected ? theme.colorScheme.primary.withOpacity(0.12) : theme.colorScheme.surface,
+              border: Border.all(color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.1), width: isSelected ? 2 : 1),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Row(
               children: [
-                Icon(
-                  icon,
-                  color: isSelected
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurface.withOpacity(0.6),
-                ),
+                Icon(icon, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.6)),
                 const SizedBox(width: 12),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.w500,
-                    color: isSelected
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.onSurface,
-                  ),
-                ),
+                Text(label, style: TextStyle(fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface)),
                 const Spacer(),
-                if (isSelected)
-                  Icon(
-                    Icons.check_circle_rounded,
-                    color: theme.colorScheme.primary,
-                  ),
+                if (isSelected) Icon(Icons.check_circle_rounded, color: theme.colorScheme.primary),
               ],
             ),
           ),
@@ -438,11 +425,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       label: Text(label),
       selected: isSelected,
       onSelected: (v) => setState(() {
-        if (v) {
-          collection.add(value);
-        } else {
-          collection.remove(value);
-        }
+        if (v) { collection.add(value); } else { collection.remove(value); }
       }),
     );
   }

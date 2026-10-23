@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/yoga_session.dart';
 import '../../services/database_helper.dart';
-import '../../services/fairy_reaction_service.dart';
-import '../../data/fairy_mood.dart';
-import '../../widgets/fairy_bubble.dart';
+import '../../widgets/fairy_bubble.dart'; // ⚠️ ИМПОРТ ФЕИ
 import 'session_detail_screen.dart';
 import 'stretch_list_screen.dart';
 
@@ -21,25 +19,7 @@ class _YogaScreenState extends State<YogaScreen> {
   @override
   void initState() {
     super.initState();
-
-    // Блокируем фразы, пока грузятся данные
-    FairyReactionService().holdScreenPhrases();
-
-    _loadSessions().then((_) {
-      if (!mounted) return;
-
-      FairyReactionService().releaseScreenPhrases();
-
-      // Задержка для 100% удаления старого пузыря
-      Future.delayed(const Duration(milliseconds: 300), () {
-        if (mounted) {
-          FairyReactionService().say(
-            'Дыши глубже, расслабься и почувствуй свое тело 🧘‍♀️',
-            mood: FairyMood.yoga,
-          );
-        }
-      });
-    });
+    _loadSessions();
   }
 
   Future<void> _loadSessions() async {
@@ -95,6 +75,7 @@ class _YogaScreenState extends State<YogaScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Йога и растяжка')),
+      // ⚠️ ОБОРАЧИВАЕМ В STACK, ЧТОБЫ ВСТАВИТЬ ФЕЮ
       body: Stack(
         children: [
           _loading
@@ -123,6 +104,8 @@ class _YogaScreenState extends State<YogaScreen> {
                     ],
                   ),
                 ),
+
+          // ⚠️ ФЕЯ ТЕПЕРЬ ЗДЕСЬ (ПОВЕРХ ЭКРАНА ЙОГИ)
           const FairyBubble(screenKey: 'yoga'),
         ],
       ),

@@ -1,15 +1,17 @@
 class WorkoutDay {
   int? id;
   int profileId;
-  int? templateId;             // если создан из шаблона
-  String name;                 // «День ног», «Йога для спины»
-  String type;                 // 'strength' | 'yoga' | 'mixed'
+  int? templateId;
+  String name;
+  String type;
   DateTime date;
-  String status;               // 'planned' | 'in_progress' | 'completed' | 'skipped'
-  int? durationMinutes;        // фактическое время
+  String status;
+  int? durationMinutes;
   String? notes;
   DateTime? startedAt;
   DateTime? completedAt;
+  int? weekNumber;
+  int? cycleNumber;
 
   WorkoutDay({
     this.id,
@@ -23,6 +25,8 @@ class WorkoutDay {
     this.notes,
     this.startedAt,
     this.completedAt,
+    this.weekNumber,
+    this.cycleNumber,
   }) : date = date ?? DateTime.now();
 
   Map<String, dynamic> toMap() {
@@ -38,6 +42,8 @@ class WorkoutDay {
       'notes': notes,
       'startedAt': startedAt?.toIso8601String(),
       'completedAt': completedAt?.toIso8601String(),
+      'weekNumber': weekNumber,
+      'cycleNumber': cycleNumber,
     };
   }
 
@@ -52,27 +58,17 @@ class WorkoutDay {
       status: map['status'] ?? 'planned',
       durationMinutes: map['durationMinutes'],
       notes: map['notes'],
-      startedAt: map['startedAt'] != null
-          ? DateTime.parse(map['startedAt'])
-          : null,
-      completedAt: map['completedAt'] != null
-          ? DateTime.parse(map['completedAt'])
-          : null,
+      startedAt: map['startedAt'] != null ? DateTime.parse(map['startedAt']) : null,
+      completedAt: map['completedAt'] != null ? DateTime.parse(map['completedAt']) : null,
+      weekNumber: map['weekNumber'],
+      cycleNumber: map['cycleNumber'],
     );
   }
 
   WorkoutDay copyWith({
-    int? id,
-    int? profileId,
-    int? templateId,
-    String? name,
-    String? type,
-    DateTime? date,
-    String? status,
-    int? durationMinutes,
-    String? notes,
-    DateTime? startedAt,
-    DateTime? completedAt,
+    int? id, int? profileId, int? templateId, String? name, String? type,
+    DateTime? date, String? status, int? durationMinutes, String? notes,
+    DateTime? startedAt, DateTime? completedAt, int? weekNumber, int? cycleNumber,
   }) {
     return WorkoutDay(
       id: id ?? this.id,
@@ -86,50 +82,37 @@ class WorkoutDay {
       notes: notes ?? this.notes,
       startedAt: startedAt ?? this.startedAt,
       completedAt: completedAt ?? this.completedAt,
+      weekNumber: weekNumber ?? this.weekNumber,
+      cycleNumber: cycleNumber ?? this.cycleNumber,
     );
   }
 
   String get statusLabel {
     switch (status) {
-      case 'planned':
-        return 'Запланирована';
-      case 'in_progress':
-        return 'В процессе';
-      case 'completed':
-        return 'Завершена';
-      case 'skipped':
-        return 'Пропущена';
-      default:
-        return 'Запланирована';
+      case 'planned': return 'Запланирована';
+      case 'in_progress': return 'В процессе';
+      case 'completed': return 'Завершена';
+      case 'skipped': return 'Пропущена';
+      default: return 'Запланирована';
     }
   }
 }
 
-// ═══════════════════════════════════════════════════
-//  УПРАЖНЕНИЕ В ДНЕ
-// ═══════════════════════════════════════════════════
-
 class WorkoutExercise {
   int? id;
   int workoutDayId;
-  String itemType;              // 'exercise' | 'stretch'
-  int itemId;                   // id Exercise или Stretch
+  String itemType;
+  int itemId;
   int order;
-
-  // ═══ Замена ═══
-  int? replacedByItemId;        // id нового упражнения
-  String? replacementReason;    // 'no_equipment' | 'too_hard' | 'too_easy' | 'dislike' | 'other'
-  bool replacementPermanent;    // заменить навсегда?
-
-  // ═══ Параметры ═══
+  int? replacedByItemId;
+  String? replacementReason;
+  bool replacementPermanent;
   int sets;
   String reps;
   int restSeconds;
-  int durationSeconds;          // для растяжки
-  bool isCoolDown;              // заминка?
+  int durationSeconds;
+  bool isCoolDown;
   String? notes;
-
-  // ⚠️ НОВОЕ: номер блока (1, 2, 3...)
   int? blockNumber;
 
   WorkoutExercise({
@@ -147,7 +130,7 @@ class WorkoutExercise {
     this.durationSeconds = 30,
     this.isCoolDown = false,
     this.notes,
-    this.blockNumber,             // ⚠️ НОВОЕ
+    this.blockNumber,
   });
 
   Map<String, dynamic> toMap() {
@@ -166,7 +149,7 @@ class WorkoutExercise {
       'durationSeconds': durationSeconds,
       'isCoolDown': isCoolDown ? 1 : 0,
       'notes': notes,
-      'blockNumber': blockNumber,     // ⚠️ НОВОЕ
+      'blockNumber': blockNumber,
     };
   }
 
@@ -186,26 +169,15 @@ class WorkoutExercise {
       durationSeconds: map['durationSeconds'] ?? 30,
       isCoolDown: map['isCoolDown'] == 1,
       notes: map['notes'],
-      blockNumber: map['blockNumber'],  // ⚠️ НОВОЕ
+      blockNumber: map['blockNumber'],
     );
   }
 
   WorkoutExercise copyWith({
-    int? id,
-    int? workoutDayId,
-    String? itemType,
-    int? itemId,
-    int? order,
-    int? replacedByItemId,
-    String? replacementReason,
-    bool? replacementPermanent,
-    int? sets,
-    String? reps,
-    int? restSeconds,
-    int? durationSeconds,
-    bool? isCoolDown,
-    String? notes,
-    int? blockNumber,               // ⚠️ НОВОЕ
+    int? id, int? workoutDayId, String? itemType, int? itemId, int? order,
+    int? replacedByItemId, String? replacementReason, bool? replacementPermanent,
+    int? sets, String? reps, int? restSeconds, int? durationSeconds,
+    bool? isCoolDown, String? notes, int? blockNumber,
   }) {
     return WorkoutExercise(
       id: id ?? this.id,
@@ -215,35 +187,28 @@ class WorkoutExercise {
       order: order ?? this.order,
       replacedByItemId: replacedByItemId ?? this.replacedByItemId,
       replacementReason: replacementReason ?? this.replacementReason,
-      replacementPermanent:
-          replacementPermanent ?? this.replacementPermanent,
+      replacementPermanent: replacementPermanent ?? this.replacementPermanent,
       sets: sets ?? this.sets,
       reps: reps ?? this.reps,
       restSeconds: restSeconds ?? this.restSeconds,
       durationSeconds: durationSeconds ?? this.durationSeconds,
       isCoolDown: isCoolDown ?? this.isCoolDown,
       notes: notes ?? this.notes,
-      blockNumber: blockNumber ?? this.blockNumber,  // ⚠️ НОВОЕ
+      blockNumber: blockNumber ?? this.blockNumber,
     );
   }
 
-  /// Какое упражнение реально выполняется — оригинал или замена
   int get effectiveItemId => replacedByItemId ?? itemId;
-
   bool get isReplaced => replacedByItemId != null;
 }
-
-// ═══════════════════════════════════════════════════
-//  ПОДХОД
-// ═══════════════════════════════════════════════════
 
 class WorkoutSet {
   int? id;
   int workoutExerciseId;
-  int order;                    // 1, 2, 3...
-  double? weight;               // кг
-  int? reps;                    // выполнено повторений
-  bool completed;               // галочка «сделано»
+  int order;
+  double? weight;
+  int? reps;
+  bool completed;
   String? notes;
 
   WorkoutSet({
@@ -281,13 +246,8 @@ class WorkoutSet {
   }
 
   WorkoutSet copyWith({
-    int? id,
-    int? workoutExerciseId,
-    int? order,
-    double? weight,
-    int? reps,
-    bool? completed,
-    String? notes,
+    int? id, int? workoutExerciseId, int? order,
+    double? weight, int? reps, bool? completed, String? notes,
   }) {
     return WorkoutSet(
       id: id ?? this.id,

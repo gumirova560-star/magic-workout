@@ -106,8 +106,10 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
         updated.name,
         gender: updated.gender,
       );
+
+      // ⚠️ Событие: профиль ИЗМЕНЁН
       FairyReactionService().trigger(
-        'profile_updated',
+        'profile_changed_ask', // Говорим, что профиль изменен, нужно обновить план
         nameOverride: updated.name,
       );
     }
@@ -192,7 +194,18 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
                     builder: (_) => const ProfileEditScreen(),
                   ),
                 );
-                if (result == true) _loadProfile();
+                if (result == true) {
+                  await _loadProfile();
+
+                  // ⚠️ Событие: профиль СОЗДАН
+                  final profiles = await DatabaseHelper.instance.getProfiles();
+                  if (profiles.isNotEmpty && mounted) {
+                    FairyReactionService().trigger(
+                      'profile_created',
+                      nameOverride: profiles.first.name,
+                    );
+                  }
+                }
               },
               icon: const Icon(Icons.add_rounded),
               label: const Text('Создать профиль'),

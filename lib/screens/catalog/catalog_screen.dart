@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/exercise.dart';
 import '../../services/database_helper.dart';
-import '../../services/fairy_reaction_service.dart';
-import '../../data/fairy_mood.dart';
 import '../exercise/exercise_detail_screen.dart';
 
 class CatalogScreen extends StatefulWidget {
@@ -23,18 +21,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
   @override
   void initState() {
     super.initState();
-
-    FairyReactionService().holdScreenPhrases();
-
-    _loadExercises().then((_) {
-      if (!mounted) return;
-
-      FairyReactionService().releaseScreenPhrases();
-      FairyReactionService().say(
-        'Здесь можно изучить весь список упражнений! 📚',
-        mood: FairyMood.wink, // ⚠️ Веселая фея
-      );
-    });
+    _loadExercises();
   }
 
   Future<void> _loadExercises() async {

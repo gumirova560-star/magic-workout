@@ -1,13 +1,6 @@
 import 'fairy_mood.dart';
 
 /// Фразы феи-наставника: экраны, события, контекст, streak.
-///
-/// Поддерживает род:
-///   {name}        — имя профиля
-///   {он_она}      — он / она
-///   {сделал_а}    — сделал / сделала
-///   {готов_а}     — готов / готова
-///   {устал_а}     — устал / устала
 class FairyPhrases {
   FairyPhrases._();
 
@@ -15,11 +8,7 @@ class FairyPhrases {
   static bool _isMale(String? gender) {
     if (gender == null) return false;
     final g = gender.toLowerCase().trim();
-    return g == 'male' ||
-        g == 'м' ||
-        g == 'мужской' ||
-        g == 'муж' ||
-        g == 'm';
+    return g == 'male' || g == 'м' || g == 'мужской' || g == 'муж' || g == 'm';
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -31,28 +20,30 @@ class FairyPhrases {
       'Привет, {name}! Я твоя фея-тренер! 🧚',
       'Расскажи о себе, {name} — я узнаю тебя лучше!',
       'Профиль — это твой путь к цели, {name}!',
-      'Сколько у тебя профилей, {name}? 😊',
     ],
-   'workout': [
-         '{name}, что сегодня тренируем? 💪',
-         '{готов_а} к тренировке, {name}? 🔥',
-         'Сегодня — отличный день для тренировки, {name}!',
-       ],
-        'workout_detail': [
-          'Поехали, {name}! 💪',
-          'Приступим, {name}! 🔥',
-          '{name}, вперёд — к результатам! 🚀',
-          'Тренировка ждёт, {name}! 💥',
-        ],
-   'yoga': [
-         'Время расслабиться, {name} 🧘',
-         'Дыхание ровное, {name} — начнём!',
-         '{name}, йога — это гармония тела и души.',
-       ],
+    'workout': [
+      '{name}, что сегодня тренируем? 💪',
+      '{готов_а} к тренировке, {name}? 🔥',
+      'Сегодня — отличный день для тренировки, {name}!',
+    ],
+    'workout_detail': [
+      'Поехали, {name}! 💪',
+      'Приступим, {name}! 🔥',
+      '{name}, вперёд — к результатам! 🚀',
+    ],
+    'catalog': [
+      'Здесь можно изучить все упражнения! 📚',
+      '{name}, выбирай упражнения и добавляй в план!',
+    ],
+    'yoga': [
+      'Время расслабиться, {name} 🧘',
+      'Дыхание ровное, {name} — начнём!',
+      '{name}, йога — это гармония тела и души.',
+    ],
     'progress': [
       'Смотри, как ты растёшь, {name}! 📈',
       'Твой прогресс вдохновляет, {name}!',
-      'Ты стал сильнее, {name} — я вижу!',
+      'Ты {сделал_а} огромный шаг вперёд, {name}!',
     ],
     'history': [
       'Твои прошлые победы, {name}! 🏆',
@@ -62,31 +53,27 @@ class FairyPhrases {
     'settings': [
       'Настрой меня под себя, {name}! ⚙️',
       'Тёмная тема — для вечерних тренировок, {name}!',
-      'Я подстроюсь под тебя, {name}!',
     ],
     'default': [
       'Привет, {name}! Я твоя фея-тренер! 🧚',
       'Рада тебя видеть, {name}!',
-      '{готов_а} к новым победам, {name}?',
     ],
   };
 
-   static FairyMood screenMood(String screenKey) {
-     switch (screenKey) {
-       case 'workout':
-         return FairyMood.wink;
-       case 'workout_detail':              // ⚠️ НОВОЕ
-         return FairyMood.wink;            // ⚠️ НОВОЕ
-       case 'yoga':
-         return FairyMood.think;
+  static FairyMood screenMood(String screenKey) {
+    switch (screenKey) {
+      case 'workout':
+      case 'workout_detail':
+        return FairyMood.wink;
+      case 'yoga':
+        return FairyMood.yoga; // Лотос
       case 'progress':
-        return FairyMood.party;
       case 'history':
         return FairyMood.party;
       case 'settings':
         return FairyMood.think;
-      case 'profiles':
-        return FairyMood.happy;
+      case 'catalog':
+        return FairyMood.wink;
       default:
         return FairyMood.happy;
     }
@@ -97,44 +84,38 @@ class FairyPhrases {
   // ═══════════════════════════════════════════════════════════
 
   static const Map<String, String> byEvent = {
-     'profile_created': 'Ура, профиль создан, {name}! 🎉 Можем перейти к тренировкам!',
+    'profile_created': 'Ура, профиль создан, {name}! 🎉',
     'profile_updated': 'Обновила твои данные, {name}! ✅',
     'plan_generated': 'План создан, {name}! Погнали феячить! 🧚✨',
-     'plan_updated': 'План обновлён, {name}! Время феячить! 🔥',
-      'profile_changed_ask': '{name}, ты {изменил_а} профиль, не забудь обновить план! 💡',
-         'plan_left_for_later': 'Хорошо, {name}! Обновим позже. 😊',
+    'plan_updated': 'План обновлён, {name}! Время феячить! 🔥',
+    'profile_changed_ask': '{name}, ты {изменил_а} профиль, не забудь обновить план! 💡',
     'workout_started': 'Отлично, {name}! Первый подход — твой! 💪',
-    'workout_completed': 'Супер, {name}! Ты {сделал_а} это! 🎉',
     'exercise_completed': 'Упражнение готово, {name}! 💪',
     'workout_deleted': 'Удалила тренировку.',
     'history_cleared': 'История очищена, {name}. Начнём заново! 🧚',
     'theme_changed': 'Красиво, {name}! Мне нравится! 🎨',
+
+    // 👇 НОВЫЕ СОБЫТИЯ ДЛЯ ТРЕНИРОВОК
+    'workout_completed': 'Супер, {name}! Ты {сделал_а} это! План выполнен на 100%! 🎉',
+    'workout_partial': 'Не расстраивайся, {name}! Даже часть тренировки — это шаг вперёд. Главное — ты пришёл! 💪',
+    'workout_overperformed': 'Вот это мощь, {name}! Ты поднял больше, чем мы планировали! Настоящий герой! 🔥',
   };
 
   static FairyMood eventMood(String eventKey) {
     switch (eventKey) {
       case 'profile_created':
-        return FairyMood.party;
-        case 'profile_changed_ask':
-                return FairyMood.think;
-              case 'plan_left_for_later':
-                return FairyMood.happy;
-      case 'profile_updated':
-        return FairyMood.happy;
       case 'plan_generated':
-              return FairyMood.party;
-            case 'plan_updated':
-              return FairyMood.party;
-            case 'workout_started':
-              return FairyMood.wink;
+      case 'plan_updated':
       case 'workout_completed':
+      case 'workout_overperformed': // 👈 Превысил план — восторг
         return FairyMood.party;
-      case 'exercise_completed':
-        return FairyMood.wink;
-      case 'workout_deleted':
-        return FairyMood.think;
+      case 'workout_partial': // 👈 Недоделал — просто поддержка
+        return FairyMood.happy;
+      case 'profile_changed_ask':
       case 'history_cleared':
         return FairyMood.think;
+      case 'workout_started':
+      case 'exercise_completed':
       case 'theme_changed':
         return FairyMood.wink;
       default:
@@ -149,47 +130,39 @@ class FairyPhrases {
   static const List<String> morning = [
     'Доброе утро, {name}! ☀️ Зарядка?',
     'Утро — лучшее время для тренировки, {name}!',
-    'Кофе, разминка — и вперёд, {name}! ☕',
   ];
 
   static const List<String> afternoon = [
     'Добрый день, {name}! Как настроение?',
     'Самое время для тренировки, {name}! 💪',
-    'Хорошего дня, {name}! Потренируемся?',
   ];
 
   static const List<String> evening = [
     'Добрый вечер, {name}! Лёгкая йога? 🧘',
     'Вечер — для расслабления, {name}.',
-    'Как прошёл день, {name}?',
   ];
 
   static const List<String> night = [
     'Поздно, {name}! Пора спать 😴',
     'Отдых — часть тренировки, {name}!',
-    'До завтра, {name}! 🌙',
   ];
 
   static const Map<String, List<String>> byGoal = {
     'lose_weight': [
       'Кардио-день, {name}! Погнали! 🔥',
       'Меньше отдыха — больше результата, {name}!',
-      'Ты сжигаешь калории, {name}! 💪',
     ],
     'gain_mass': [
       'Тяжелее — значит, сильнее, {name}! 💪',
       'Поешь после тренировки, {name}! 🍗',
-      'Прогрессия — твой друг, {name}!',
     ],
     'tone': [
       'Тонус — твоя цель, {name}! ✨',
       'Мягко, но регулярно, {name}!',
-      'Каждый день — шаг к форме, {name}!',
     ],
     'strength': [
       'Ты растёшь в силе, {name}! 💪',
       'Больше вес — больше результат, {name}!',
-      'Сила — это уверенность, {name}!',
     ],
   };
 
@@ -199,26 +172,22 @@ class FairyPhrases {
 
   static const List<String> streak3 = [
     'Ты в огне, {name}! 🔥 3 дня подряд!',
-    'Ни дня без тренировки, {name}! Так держать!',
-    'Дисциплина — твоё супер-оружие, {name}!',
+    'Ни дня без тренировки, {name}!',
   ];
 
   static const List<String> streak7 = [
     '🏆 Неделя тренировок, {name}! Ты чемпион!',
-    '{name}, 7 дней подряд! Невероятно!',
     'Целая неделя! {name}, ты супер! 💎',
   ];
 
   static const List<String> streak30 = [
     '💎 Месяц, {name}! Ты легенда!',
-    '{name}, 30 дней! Это подвиг! 🏆',
     'Месяц дисциплины, {name}! Горжусь!',
   ];
 
   static const List<String> comeback = [
     'Скучаю, {name}! Давай лёгкую тренировку?',
     'Ты давно не заходил, {name} 🥺',
-    'Всё ещё жду тебя, {name}! 🧚',
   ];
 
   // ═══════════════════════════════════════════════════════════
@@ -228,28 +197,22 @@ class FairyPhrases {
   static const Map<String, List<String>> bySituation = {
     'pre_workout': [
       'Погнали феячить, {name}! 🧚✨',
-      'Погнали феячить! 💪',
       '{name}, время феячить! 🧚🔥',
-      'Феячим, {name}! 🚀',
     ],
     'no_profile': [
       'Создай профиль, {name} — я подберу план! 🧚',
-      '{name}, расскажи о себе — и начнём!',
       'Без профиля я не смогу подобрать тренировки, {name}.',
     ],
-     'no_plan': [
-          '{name}, профиль готов! 🎉 Составим план?',
-          '{name}, остался последний шаг — создать план! 💪',
-          'Готова к плану, {name}? Нажми «Создать план» 🧚',
-        ],
+    'no_plan': [
+      '{name}, профиль готов! 🎉 Составим план?',
+      'Готова к плану, {name}? Нажми «Создать план» 🧚',
+    ],
     'has_plan_not_started': [
       'План ждёт тебя, {name}! Начнём тренировку?',
-      '{name}, {готов_а} начать? Открой «Мой план»!',
       'Не откладывай, {name} — тренировка готова! 🔥',
     ],
     'in_progress': [
       'Продолжай, {name}! Ты справляешься! 💪',
-      '{name}, ещё немного — и всё!',
       'Отличный темп, {name}!',
     ],
   };
@@ -259,11 +222,9 @@ class FairyPhrases {
       case 'pre_workout':
         return FairyMood.party;
       case 'no_profile':
-        return FairyMood.think;
       case 'no_plan':
         return FairyMood.think;
       case 'has_plan_not_started':
-        return FairyMood.wink;
       case 'in_progress':
         return FairyMood.wink;
       default:
@@ -278,28 +239,19 @@ class FairyPhrases {
   static const List<Map<String, String>> onboarding = [
     {
       'title': 'Привет! Я твоя фея-тренер!',
-      'text': 'Я помогу тебе составить план, '
-          'буду следить за прогрессом и подсказывать, что делать.',
+      'text': 'Я помогу тебе составить план, буду следить за прогрессом и подсказывать, что делать.',
     },
     {
       'title': 'Создай профиль 🧚',
-      'text': 'Расскажи о себе — пол, возраст, цели. '
-          'Я подберу тренировки именно под тебя!',
+      'text': 'Расскажи о себе — пол, возраст, цели. Я подберу тренировки именно под тебя!',
     },
     {
       'title': 'Получи план 💪',
-      'text': 'Нажми «Создать план» — я соберу программу '
-          'на неделю по твоим целям и инвентарю.',
-    },
-    {
-      'title': 'Следи за прогрессом 📈',
-      'text': 'В разделе «Прогресс» — графики роста, '
-          'история тренировок, статистика.',
+      'text': 'Нажми «Создать план» — я соберу программу на неделю по твоим целям и инвентарю.',
     },
     {
       'title': 'Погнали! 🎉',
-      'text': 'Я всегда рядом — внизу экрана. '
-          'Тапни по мне, если нужна подсказка!',
+      'text': 'Я всегда рядом — внизу экрана. Тапни по мне, если нужна подсказка!',
     },
   ];
 
@@ -316,18 +268,18 @@ class FairyPhrases {
     final isMale = _isMale(gender);
 
     return template
-            .replaceAll('{name}', n)
-            .replaceAll('{он_она}', isMale ? 'он' : 'она')
-            .replaceAll('{сделал_а}', isMale ? 'сделал' : 'сделала')
-            .replaceAll('{готов_а}', isMale ? 'готов' : 'готова')
-            .replaceAll('{устал_а}', isMale ? 'устал' : 'устала')
-            .replaceAll('{изменил_а}', isMale ? 'изменил' : 'изменила')
-            .replaceAll('{обновил_а}', isMale ? 'обновил' : 'обновила')
-            .replaceAll('{выбрал_а}', isMale ? 'выбрал' : 'выбрала')
-            .replaceAll('{начал_а}', isMale ? 'начал' : 'начала')
-            .replaceAll('{закончил_а}', isMale ? 'закончил' : 'закончила')
-            .replaceAll('{рад_а}', isMale ? 'рад' : 'рада')
-            .replaceAll('{должен_должна}', isMale ? 'должен' : 'должна');
+        .replaceAll('{name}', n)
+        .replaceAll('{он_она}', isMale ? 'он' : 'она')
+        .replaceAll('{сделал_а}', isMale ? 'сделал' : 'сделала')
+        .replaceAll('{готов_а}', isMale ? 'готов' : 'готова')
+        .replaceAll('{устал_а}', isMale ? 'устал' : 'устала')
+        .replaceAll('{изменил_а}', isMale ? 'изменил' : 'изменила')
+        .replaceAll('{обновил_а}', isMale ? 'обновил' : 'обновила')
+        .replaceAll('{выбрал_а}', isMale ? 'выбрал' : 'выбрала')
+        .replaceAll('{начал_а}', isMale ? 'начал' : 'начала')
+        .replaceAll('{закончил_а}', isMale ? 'закончил' : 'закончила')
+        .replaceAll('{рад_а}', isMale ? 'рад' : 'рада')
+        .replaceAll('{должен_должна}', isMale ? 'должен' : 'должна');
   }
 
   static List<String> forScreen(

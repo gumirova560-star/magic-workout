@@ -1,7 +1,7 @@
 import '../models/exercise.dart';
 
 /// База силовых упражнений.
-/// Часть 1: Ягодицы + Бёдра + Голень.
+/// Часть 1: Ягодицы + Бёдра + Голень + Стопы.
 List<Exercise> getExercisesPart1() {
   return [
     // ═══════════════════════════════════════════════════════════
@@ -221,7 +221,7 @@ List<Exercise> getExercisesPart1() {
     ),
 
     // ═══════════════════════════════════════════════════════════
-    //  БЁДРА (7)
+    //  БЁДРА (8)
     // ═══════════════════════════════════════════════════════════
 
     Exercise(
@@ -369,6 +369,60 @@ List<Exercise> getExercisesPart1() {
       imagePath: 'assets/exercises/pistol_squat.jpg',
     ),
 
+    Exercise(
+      name: 'Зашагивания на платформу',
+      muscleGroups: ['glutes', 'quads', 'hamstrings'],
+      equipment: ['dumbbells', 'bench'],
+      difficulty: 'intermediate',
+      description: 'Базовое упражнение для ног и ягодиц. Развивает баланс и силу.',
+      technique: '1. Встаньте перед платформой/скамьей\n'
+          '2. Поставьте одну ногу на платформу\n'
+          '3. Толкнитесь пяткой и поднимитесь\n'
+          '4. Медленно опуститесь\n'
+          '5. Повторите на другую ногу',
+      mistakes: '❌ Отталкивание нижней ногой\n'
+          '❌ Наклон корпуса вперёд',
+      tips: '• 10-12 повторений на каждую ногу\n'
+          '• Держите спину прямой',
+      imagePath: 'assets/exercises/step_ups.jpg',
+    ),
+
+    // ═══════════════════════════════════════════════════════════
+    //  НОВАЯ ИЗОЛЯЦИЯ НОГ И ЯГОДИЦ (2)
+    // ═══════════════════════════════════════════════════════════
+
+    Exercise(
+      name: 'Сведение ног в тренажёре',
+      muscleGroups: ['adductors'],
+      equipment: ['machine'],
+      difficulty: 'beginner',
+      description: 'Изоляция внутренней поверхности бедра.',
+      technique: '1. Сядьте в тренажёр\n'
+          '2. Сведите ноги\n'
+          '3. Задержитесь\n'
+          '4. Медленно разведите',
+      mistakes: '❌ Резкие движения\n'
+          '❌ Слишком большой вес',
+      tips: '• 15-20 повторений\n'
+          '• Работайте в медленном темпе',
+      imagePath: 'assets/exercises/hip_adduction.jpg',
+    ),
+
+    Exercise(
+      name: 'Отведение ноги в кроссовере',
+      muscleGroups: ['glutes'],
+      equipment: ['cable'],
+      difficulty: 'beginner',
+      description: 'Точечная проработка средней ягодичной мышцы.',
+      technique: '1. Закрепите манжету на ноге\n'
+          '2. Отведите ногу в сторону\n'
+          '3. Медленно верните',
+      mistakes: '❌ Наклон корпуса в сторону\n'
+          '❌ Инерция',
+      tips: '• 15 повторений на каждую ногу',
+      imagePath: 'assets/exercises/cable_abduction.jpg',
+    ),
+
     // ═══════════════════════════════════════════════════════════
     //  ГОЛЕНЬ (4)
     // ═══════════════════════════════════════════════════════════
@@ -452,8 +506,108 @@ List<Exercise> getExercisesPart1() {
           '• Растягивайте внизу',
       imagePath: 'assets/exercises/calf_raise_dumbbell.jpg',
     ),
+
+    // ═══════════════════════════════════════════════════════════
+    //  СТОПЫ И ГОЛЕНОСТОП (6) - НОВЫЙ БЛОК
+    // ═══════════════════════════════════════════════════════════
+
+    Exercise(
+      name: 'Сбор полотенца пальцами ног',
+      muscleGroups: ['feet', 'calves'],
+      equipment: ['bodyweight'],
+      difficulty: 'beginner',
+      description: 'Укрепляет мелкие мышцы стопы и своды. Профилактика плоскостопия.',
+      technique: '1. Сядьте на стул\n'
+          '2. Положите полотенце на пол перед собой\n'
+          '3. Пальцами ног собирайте полотенце к себе\n'
+          '4. Выполняйте 1-2 минуты на каждую ногу',
+      mistakes: '❌ Помогать руками\n'
+          '❌ Слишком быстрый темп',
+      tips: '• Можно усложнить, положив на полотенце небольшой груз',
+      imagePath: 'assets/exercises/towel_scrunches.jpg',
+    ),
+
+    Exercise(
+      name: 'Разгибание и сгибание пальцев ног',
+      muscleGroups: ['feet'],
+      equipment: ['bodyweight'],
+      difficulty: 'beginner',
+      description: 'Улучшает подвижность суставов пальцев и кровообращение.',
+      technique: '1. Сядьте или встаньте\n'
+          '2. Максимально поднимите пальцы ног вверх\n'
+          '3. Затем максимально подожмите их вниз\n'
+          '4. 20-30 повторений на каждую ногу',
+      mistakes: '❌ Сводить пальцы судорогой (работайте в комфортном темпе)',
+      tips: '• Отлично делать перед сном',
+      imagePath: 'assets/exercises/toe_flexion.jpg',
+    ),
+
+    Exercise(
+      name: 'Подъём на носки с акцентом на большой палец',
+      muscleGroups: ['feet', 'calves'],
+      equipment: ['bodyweight'],
+      difficulty: 'beginner',
+      description: 'Специфическая нагрузка на свод стопы и большую берцовую мышцу.',
+      technique: '1. Встаньте прямо\n'
+          '2. Перенесите вес на большие пальцы ног\n'
+          '3. Поднимитесь на носки\n'
+          '4. Медленно опуститесь\n'
+          '5. 15-20 повторений',
+      mistakes: '❌ Заваливать стопы на внешнюю сторону',
+      tips: '• Держитесь за опору для равновесия',
+      imagePath: 'assets/exercises/toe_calf_raise.jpg',
+    ),
+
+    Exercise(
+      name: 'Балансировка на одной ноге',
+      muscleGroups: ['feet', 'core'],
+      equipment: ['bodyweight'],
+      difficulty: 'beginner',
+      description: 'Укрепляет связки голеностопа и мелкие стабилизаторы стопы.',
+      technique: '1. Встаньте на одну ногу\n'
+          '2. Вторую ногу согните и поднимите\n'
+          '3. Держите равновесие 30-60 секунд\n'
+          '4. Поменяйте ноги',
+      mistakes: '❌ Заваливать стопу внутрь\n'
+          '❌ Смотреть вниз (смотрите вперёд)',
+      tips: '• Усложнение: закройте глаза или встаньте на подушку',
+      imagePath: 'assets/exercises/single_leg_balance.jpg',
+    ),
+
+    Exercise(
+      name: 'Ходьба на внешней стороне стопы',
+      muscleGroups: ['feet', 'calves'],
+      equipment: ['bodyweight'],
+      difficulty: 'beginner',
+      description: 'Укрепляет мышцы, отвечающие за правильную постановку стопы.',
+      technique: '1. Встаньте на внешнюю сторону стоп\n'
+          '2. Пройдитесь так 30-40 шагов вперёд\n'
+          '3. Развернитесь и пройдите обратно\n'
+          '4. Колени слегка согнуты',
+      mistakes: '❌ Слишком быстрая ходьба\n'
+          '❌ Заваливание на внешнее ребро слишком сильно (должно быть комфортно)',
+      tips: '• Отлично для разогрева стоп перед тренировкой',
+      imagePath: 'assets/exercises/walking_on_outer_feet.jpg',
+    ),
+
+    Exercise(
+      name: 'Мячик под стопой (ролл)',
+      muscleGroups: ['feet'],
+      equipment: ['bodyweight'],
+      difficulty: 'beginner',
+      description: 'Миофасциальный релиз. Снимает напряжение с подошвы (приятная реабилитация).',
+      technique: '1. Сядьте на стул\n'
+          '2. Положите теннисный мяч под стопу\n'
+          '3. Катайте мяч от пятки до пальцев\n'
+          '4. Давите так, чтобы чувствовался комфортный массаж\n'
+          '5. 1-2 минуты на ногу',
+      mistakes: '❌ Слишком сильно давить на пятку (будет больно)',
+      tips: '• Идеально после долгого дня на ногах',
+      imagePath: 'assets/exercises/foot_massage_ball.jpg',
+    ),
   ];
 }
+
 /// Часть 2: Пресс + Косые + Бицепс + Трицепс + Плечи.
 List<Exercise> getExercisesPart2() {
   return [
@@ -775,7 +929,7 @@ List<Exercise> getExercisesPart2() {
     ),
 
     // ═══════════════════════════════════════════════════════════
-    //  ТРИЦЕПС (4)
+    //  ТРИЦЕПС (5)
     // ═══════════════════════════════════════════════════════════
 
     Exercise(
@@ -859,8 +1013,25 @@ List<Exercise> getExercisesPart2() {
       imagePath: 'assets/exercises/french_press.jpg',
     ),
 
+    Exercise(
+      name: 'Разгибание рук на блоке',
+      muscleGroups: ['triceps'],
+      equipment: ['cable'],
+      difficulty: 'beginner',
+      description: 'Изолирующее упражнение для трицепса.',
+      technique: '1. Возьмите канат\n'
+          '2. Локти прижаты к корпусу\n'
+          '3. Разогните руки вниз\n'
+          '4. Медленно верните',
+      mistakes: '❌ Локти уходят в стороны\n'
+          '❌ Раскачивание корпуса',
+      tips: '• 12-15 повторений\n'
+          '• Контролируйте негативную фазу',
+      imagePath: 'assets/exercises/tricep_pushdown.jpg',
+    ),
+
     // ═══════════════════════════════════════════════════════════
-    //  ПЛЕЧИ (5)
+    //  ПЛЕЧИ (6)
     // ═══════════════════════════════════════════════════════════
 
     Exercise(
@@ -962,8 +1133,45 @@ List<Exercise> getExercisesPart2() {
           '• Дышите ровно',
       imagePath: 'assets/exercises/overhead_press.jpg',
     ),
+
+    Exercise(
+      name: 'Махи гантелью в наклоне (задняя дельта)',
+      muscleGroups: ['shoulders'],
+      equipment: ['dumbbells'],
+      difficulty: 'intermediate',
+      description: 'Изолирующее упражнение на задний пучок дельтовидной мышцы.',
+      technique: '1. Наклонитесь вперёд\n'
+          '2. Разведите руки с гантелями\n'
+          '3. Сведите лопатки',
+      mistakes: '❌ Круглая спина\n'
+          '❌ Рывки',
+      tips: '• 12-15 повторений\n'
+          '• Спина прямая',
+      imagePath: 'assets/exercises/rear_delt_fly_db.jpg',
+    ),
+
+    // ═══════════════════════════════════════════════════════════
+    //  НОВАЯ ИЗОЛЯЦИЯ ПРЕССА (1)
+    // ═══════════════════════════════════════════════════════════
+
+    Exercise(
+      name: 'Подъём ног в висе',
+      muscleGroups: ['abs'],
+      equipment: ['bodyweight'],
+      difficulty: 'advanced',
+      description: 'Изолирующее упражнение на нижнюю часть пресса.',
+      technique: '1. Повисните на турнике\n'
+          '2. Поднимите ноги до параллели\n'
+          '3. Медленно опустите',
+      mistakes: '❌ Раскачивание\n'
+          '❌ Использование инерции',
+      tips: '• 10-12 повторений\n'
+          '• Можно согнуть колени — проще',
+      imagePath: 'assets/exercises/hanging_leg_raise.jpg',
+    ),
   ];
 }
+
 /// Часть 3: Трапеции + Широчайшие + Поясница + Грудь + Кисти.
 List<Exercise> getExercisesPart3() {
   return [
@@ -1362,7 +1570,7 @@ List<Exercise> getExercisesPart3() {
 List<Exercise> getExercisesPart4() {
   return [
     // ═══════════════════════════════════════════════════════════
-    //  КАРДИО (4)
+    //  КАРДИО (15)
     // ═══════════════════════════════════════════════════════════
 
     Exercise(
@@ -1447,6 +1655,189 @@ List<Exercise> getExercisesPart4() {
           '• Ровное дыхание\n'
           '• Начните с 20 минут',
       imagePath: 'assets/exercises/elliptical.jpg',
+    ),
+
+    Exercise(
+      name: 'Ходьба на дорожке в горку',
+      muscleGroups: ['cardio', 'glutes', 'calves'],
+      equipment: ['machine'],
+      difficulty: 'beginner',
+      description: 'Сжигает калории без ударной нагрузки на колени.',
+      technique: '1. Установите угол наклона 5-10%\n'
+          '2. Скорость 4-6 км/ч\n'
+          '3. Не держитесь за поручни\n'
+          '4. Работайте руками',
+      mistakes: '❌ Сильно наклоняться вперёд\n'
+          '❌ Держаться за поручни',
+      tips: '• Отлично подходит для похудения\n'
+          '• Пульс в зоне жиросжигания',
+      imagePath: 'assets/exercises/treadmill_walk.jpg',
+    ),
+
+    Exercise(
+      name: 'Гребной тренажер',
+      muscleGroups: ['cardio', 'back', 'quads'],
+      equipment: ['machine'],
+      difficulty: 'intermediate',
+      description: 'Задействует 80% мышц тела, сжигает много калорий.',
+      technique: '1. Оттолкнитесь ногами\n'
+          '2. Затем потяните рукоятку к животу\n'
+          '3. Корпус отклоняется назад\n'
+          '4. Вернитесь в обратном порядке',
+      mistakes: '❌ Тянуть руками без работы ног\n'
+          '❌ Круглая спина',
+      tips: '• 15-20 минут в среднем темпе\n'
+          '• Дышите ровно',
+      imagePath: 'assets/exercises/rowing_machine.jpg',
+    ),
+
+    Exercise(
+      name: 'Степпер',
+      muscleGroups: ['cardio', 'glutes', 'calves'],
+      equipment: ['machine'],
+      difficulty: 'beginner',
+      description: 'Имитация подъема по лестнице. Отличная нагрузка на ягодицы.',
+      technique: '1. Встаньте на платформы\n'
+          '2. Держитесь за поручни\n'
+          '3. Шагайте в среднем темпе\n'
+          '4. Не наваливайтесь на руки',
+      mistakes: '❌ Полная постановка стопы\n'
+          '❌ Сгорбленная спина',
+      tips: '• 20 минут\n'
+          '• Работают ягодицы и голень',
+      imagePath: 'assets/exercises/stepper.jpg',
+    ),
+
+    Exercise(
+      name: 'Прыжки Джеки (Jumping Jacks)',
+      muscleGroups: ['cardio'],
+      equipment: ['bodyweight'],
+      difficulty: 'beginner',
+      description: 'Простое домашнее кардио для разогрева и жиросжигания.',
+      technique: '1. Прыжок — ноги врозь, руки вверх\n'
+          '2. Прыжок — ноги вместе, руки вниз\n'
+          '3. Работайте в быстром темпе',
+      mistakes: '❌ Приземление на прямые ноги\n'
+          '❌ Сутулость',
+      tips: '• 3 подхода по 45 секунд\n'
+          '• Можно вместо скакалки',
+      imagePath: 'assets/exercises/jumping_jacks.jpg',
+    ),
+
+    Exercise(
+      name: 'Берпи',
+      muscleGroups: ['cardio', 'full_body'],
+      equipment: ['bodyweight'],
+      difficulty: 'advanced',
+      description: 'Одно из самых интенсивных упражнений для сжигания жира.',
+      technique: '1. Упор лёжа\n'
+          '2. Отжимание\n'
+          '3. Прыжок ногами к рукам\n'
+          '4. Выпрыгивание вверх',
+      mistakes: '❌ Прогиб в спине\n'
+          '❌ Отсутствие прыжка',
+      tips: '• Выполняйте на время\n'
+          '• Следите за дыханием',
+      imagePath: 'assets/exercises/burpee.jpg',
+    ),
+
+    Exercise(
+      name: 'Бег на месте с высоким подниманием колен',
+      muscleGroups: ['cardio', 'abs'],
+      equipment: ['bodyweight'],
+      difficulty: 'intermediate',
+      description: 'Кардио с акцентом на пресс и координацию.',
+      technique: '1. Бегите на месте\n'
+          '2. Колени поднимайте до уровня таза\n'
+          '3. Руки работают как при беге',
+      mistakes: '❌ Наклон корпуса назад\n'
+          '❌ Медленный темп',
+      tips: '• 3 подхода по 30-40 секунд',
+      imagePath: 'assets/exercises/high_knees.jpg',
+    ),
+
+    Exercise(
+      name: 'Танцевальное кардио',
+      muscleGroups: ['cardio'],
+      equipment: ['bodyweight'],
+      difficulty: 'beginner',
+      description: 'Отличный способ сжечь калории под музыку без монотонности.',
+      technique: '1. Включите ритмичную музыку\n'
+          '2. Выполняйте произвольные активные движения\n'
+          '3. Не останавливайтесь 15-20 минут',
+      mistakes: '❌ Слишком вялые движения\n'
+          '❌ Отсутствие разминки',
+      tips: '• 15-20 минут\n'
+          '• Главное — не останавливаться',
+      imagePath: 'assets/exercises/dance_cardio.jpg',
+    ),
+
+    Exercise(
+      name: 'Махи канатом (Battle Ropes)',
+      muscleGroups: ['cardio', 'full_body', 'shoulders'],
+      equipment: ['machine'],
+      difficulty: 'intermediate',
+      description: 'Высокоинтенсивное функциональное кардио. Задействует всё тело.',
+      technique: '1. Возьмите концы каната\n'
+          '2. Ноги на ширине плеч, колени чуть согнуты\n'
+          '3. Делайте волнообразные движения руками вверх-вниз\n'
+          '4. Держите корпус стабильным',
+      mistakes: '❌ Работа только руками (должен работать весь корпус)\n'
+          '❌ Слишком высоко поднимать плечи',
+      tips: '• Работайте интервалами: 30 сек работы / 30 сек отдыха\n'
+          '• Следите за дыханием',
+      imagePath: 'assets/exercises/battle_ropes.jpg',
+    ),
+
+    Exercise(
+      name: 'Скалолаз (Mountain Climbers)',
+      muscleGroups: ['cardio', 'full_body'],
+      equipment: ['bodyweight'],
+      difficulty: 'intermediate',
+      description: 'Динамичное кардио с нагрузкой на кор и плечи.',
+      technique: '1. Примите упор лёжа\n'
+          '2. Поочерёдно подтягивайте колени к груди\n'
+          '3. Работайте в быстром темпе\n'
+          '4. Таз не поднимайте высоко',
+      mistakes: '❌ Провисание поясницы\n'
+          '❌ Слишком медленный темп',
+      tips: '• 3 подхода по 30-40 секунд\n'
+          '• Отлично сжигает жир',
+      imagePath: 'assets/exercises/mountain_climbers.jpg',
+    ),
+
+    Exercise(
+      name: 'Прыжки на тумбу',
+      muscleGroups: ['cardio', 'quads', 'glutes'],
+      equipment: ['bodyweight'],
+      difficulty: 'advanced',
+      description: 'Плиометрическое кардио для взрывной силы ног.',
+      technique: '1. Встаньте перед тумбой\n'
+          '2. Присядьте и выпрыгните на неё\n'
+          '3. Мягко приземлитесь\n'
+          '4. Сойдите вниз шагом',
+      mistakes: '❌ Жесткое приземление\n'
+          '❌ Слишком высокое препятствие',
+      tips: '• 10-12 прыжков\n'
+          '• Приземляйтесь на полную стопу',
+      imagePath: 'assets/exercises/box_jumps.jpg',
+    ),
+
+    Exercise(
+      name: 'Бой с тенью',
+      muscleGroups: ['cardio', 'shoulders'],
+      equipment: ['bodyweight'],
+      difficulty: 'beginner',
+      description: 'Имитация бокса. Отлично снимает стресс и сжигает калории.',
+      technique: '1. Встаньте в стойку\n'
+          '2. Наносите удары руками (джебы, хуки)\n'
+          '3. Двигайтесь на ногах\n'
+          '4. Работайте 3 раунда по 3 минуты',
+      mistakes: '❌ Зажатые плечи\n'
+          '❌ Отсутствие движения ногами',
+      tips: '• Дышите ровно\n'
+          '• Не выпрямляйте локти до конца',
+      imagePath: 'assets/exercises/shadow_boxing.jpg',
     ),
 
     // ═══════════════════════════════════════════════════════════

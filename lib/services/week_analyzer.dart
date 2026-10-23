@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'database_helper.dart';
 import '../models/workout_day.dart';
+import '../models/exercise.dart';
 
 // ═══════════════════════════════════════════════════════════
 //  СВОДКА ПО ПРОШЛОЙ НЕДЕЛЕ
@@ -27,15 +28,9 @@ class WeekSummary {
 
   String get recommendation {
     if (isEmpty) return '';
-    if (isFullWeek) {
-      return '💡 Рекомендую повысить вес на 5% — отличная неделя!';
-    }
-    if (missedCount >= 2) {
-      return '💡 Рекомендую понизить вес на 10% — чтобы вернуться в ритм';
-    }
-    if (missedCount == 1) {
-      return '💡 Неплохо! Оставь вес как есть или +2.5 кг, если легко';
-    }
+    if (isFullWeek) return '💡 Рекомендую повысить вес на 5% — отличная неделя!';
+    if (missedCount >= 2) return '💡 Рекомендую понизить вес на 10% — чтобы вернуться в ритм';
+    if (missedCount == 1) return '💡 Неплохо! Оставь вес как есть или +2.5 кг, если легко';
     return '';
   }
 }
@@ -54,6 +49,8 @@ class ExerciseTrend {
   final int timesUsed;
   final TrendDirection direction;
   final bool isWeightBased;
+  final bool isCardio;
+  final bool isTimed;
 
   ExerciseTrend({
     required this.exerciseId,
@@ -63,19 +60,25 @@ class ExerciseTrend {
     required this.timesUsed,
     required this.direction,
     required this.isWeightBased,
+    required this.isCardio,
+    required this.isTimed,
   });
 
-  String get unit => isWeightBased ? 'кг' : 'повт.';
+  String get unit {
+    if (isCardio) return 'мин';
+    if (isTimed) return 'сек';
+    return isWeightBased ? 'кг' : 'повт.';
+  }
 
   String get recommendation {
     if (!isWeightBased) {
       switch (direction) {
         case TrendDirection.up:
-          return '📈 Повторений больше! Отличный прогресс';
+          return '📈 Результат больше! Отличный прогресс';
         case TrendDirection.stagnation:
-          return '⏸ Стагнация — попробуй +2 повторения';
+          return '⏸ Стагнация — попробуй добавить время или темп';
         case TrendDirection.down:
-          return '📉 Меньше повторений — пересмотри технику';
+          return '📉 Результат меньше — пересмотри технику или отдохни';
         case TrendDirection.new_:
           return '🆕 Новое упражнение — набирай форму';
       }
@@ -132,14 +135,8 @@ class WeekAnalyzer {
     return DateTime(monday.year, monday.month, monday.day);
   }
 
-  // ═══ Прошлая неделя ═══
-
   static Future<WeekSummary> analyzeLastWeek(int profileId) async {
-    final days = await DatabaseHelper.instance.getWorkoutDays(
-      profileId: profileId,
-      limit: 100,
-    );
-
+    final days = await DatabaseHelper.instance.getWorkoutDays(profileId: profileId, limit: 100);
     final thisMonday = currentWeekStart();
     final lastMonday = thisMonday.subtract(const Duration(days: 7));
 
@@ -150,11 +147,7 @@ class WeekAnalyzer {
 
     final completed = lastWeek.where((d) => d.status == 'completed').toList();
     final missed = lastWeek.where((d) => d.status != 'completed').toList();
-
-    final totalMinutes = completed.fold<int>(
-      0,
-      (sum, d) => sum + (d.durationMinutes ?? 0),
-    );
+    final totalMinutes = completed.fold<int>(0, (sum, d) => sum + (d.durationMinutes ?? 0));
 
     return WeekSummary(
       completedCount: completed.length,
@@ -165,244 +158,165 @@ class WeekAnalyzer {
     );
   }
 
-  // ═══ Выполненные ID ═══
-
   static Future<Set<String>> completedInTwoWeeks(int profileId) async {
-    final days = await DatabaseHelper.instance.getWorkoutDays(
-      profileId: profileId,
-      limit: 100,
-    );
-
+    final days = await DatabaseHelper.instance.getWorkoutDays(profileId: profileId, limit: 100);
     final thisMonday = currentWeekStart();
     final from = thisMonday.subtract(const Duration(days: 14));
     final to = thisMonday.add(const Duration(days: 7));
-
     final set = <String>{};
     for (final d in days) {
       if (d.status != 'completed') continue;
       final dDate = DateTime(d.date.year, d.date.month, d.date.day);
-      final inWindow = !dDate.isBefore(from) && dDate.isBefore(to);
-      if (inWindow) set.add(d.name);
+      if (!dDate.isBefore(from) && dDate.isBefore(to)) set.add(d.name);
     }
     return set;
   }
 
   static Future<Set<int>> completedTemplateIdsInTwoWeeks(int profileId) async {
-    final days = await DatabaseHelper.instance.getWorkoutDays(
-      profileId: profileId,
-      limit: 100,
-    );
-
+    final days = await DatabaseHelper.instance.getWorkoutDays(profileId: profileId, limit: 100);
     final thisMonday = currentWeekStart();
     final from = thisMonday.subtract(const Duration(days: 14));
     final to = thisMonday.add(const Duration(days: 7));
-
     final set = <int>{};
     for (final d in days) {
-      if (d.status != 'completed') continue;
-      if (d.templateId == null) continue;
+      if (d.status != 'completed' || d.templateId == null) continue;
       final dDate = DateTime(d.date.year, d.date.month, d.date.day);
-      final inWindow = !dDate.isBefore(from) && dDate.isBefore(to);
-      if (inWindow) set.add(d.templateId!);
+      if (!dDate.isBefore(from) && dDate.isBefore(to)) set.add(d.templateId!);
     }
     return set;
   }
 
-  // ═══════════════════════════════════════════════════════════
-  //  ⚠️ СТАТУС ВЫПОЛНЕНИЯ ПО ШАБЛОНАМ (по сетам)
-  // ═══════════════════════════════════════════════════════════
-
-  static Future<({Set<int> fullyDone, Set<int> partial})>
-      workoutStatusInTwoWeeks(int profileId) async {
+  static Future<({Set<int> fullyDone, Set<int> partial})> workoutStatusInTwoWeeks(int profileId) async {
     final db = DatabaseHelper.instance;
-
-    final days = await db.getWorkoutDays(
-      profileId: profileId,
-      limit: 100,
-    );
-
+    final days = await db.getWorkoutDays(profileId: profileId, limit: 100);
     final thisMonday = currentWeekStart();
     final from = thisMonday.subtract(const Duration(days: 14));
     final to = thisMonday.add(const Duration(days: 7));
-
     final fullyDone = <int>{};
     final partial = <int>{};
 
     for (final day in days) {
       if (day.templateId == null) continue;
-
       final dDate = DateTime(day.date.year, day.date.month, day.date.day);
-      final inWindow = !dDate.isBefore(from) && dDate.isBefore(to);
-      if (!inWindow) continue;
-
+      if (dDate.isBefore(from) || !dDate.isBefore(to)) continue;
       final exercises = await db.getWorkoutExercises(day.id!);
       if (exercises.isEmpty) continue;
-
       int totalSets = 0;
       int doneSets = 0;
-
       for (final we in exercises) {
-        if (we.itemType != 'exercise') continue;
-        if (we.isCoolDown) continue;
-
-        final sets = await db.getWorkoutSets(we.id!);
-        for (final s in sets) {
-          totalSets++;
-          if (s.completed) doneSets++;
-        }
+        if (we.itemType != 'exercise' || we.isCoolDown) continue;
+        for (final s in await db.getWorkoutSets(we.id!)) { totalSets++; if (s.completed) doneSets++; }
       }
-
       if (totalSets == 0) continue;
-
-      debugPrint('📊 day=${day.id} tmpl=${day.templateId} '
-          'name="${day.name}" status=${day.status} '
-          'sets=$doneSets/$totalSets');
-
-      if (doneSets == totalSets) {
-        fullyDone.add(day.templateId!);
-      } else if (doneSets > 0) {
-        partial.add(day.templateId!);
-      }
+      if (doneSets == totalSets) fullyDone.add(day.templateId!);
+      else if (doneSets > 0) partial.add(day.templateId!);
     }
-
     partial.removeAll(fullyDone);
-
     return (fullyDone: fullyDone, partial: partial);
   }
 
-  static Future<int> missedLastWeek(int profileId) async {
-    final summary = await analyzeLastWeek(profileId);
-    return summary.missedCount;
-  }
+  static Future<int> missedLastWeek(int profileId) async => (await analyzeLastWeek(profileId)).missedCount;
 
-// ═══ ЧАСТЬ 1 — ЗАКОНЧЕНА ═══
-  // ═══════════════════════════════════════════════════════════
-  //  АНАЛИЗ ТРЕНДОВ ПО УПРАЖНЕНИЯМ
-  // ═══════════════════════════════════════════════════════════
-
-  static Future<List<ExerciseTrend>> analyzeExerciseTrends(
-    int profileId,
-  ) async {
-    debugPrint('═══════════════════════════════════════');
-    debugPrint('🔍 analyzeExerciseTrends: profileId=$profileId');
-
+  static Future<List<ExerciseTrend>> analyzeExerciseTrends(int profileId) async {
     final db = DatabaseHelper.instance;
-    final days = await db.getWorkoutDays(profileId: profileId, limit: 100);
+    final days = await db.getWorkoutDays(profileId: profileId, limit: 200);
+    if (days.isEmpty) return [];
 
-    debugPrint('🔍 Всего дней: ${days.length}');
+    int maxCycle = 0;
+    for (final d in days) {
+      if (d.status == 'completed' && d.cycleNumber != null) {
+        if (d.cycleNumber! > maxCycle) maxCycle = d.cycleNumber!;
+      }
+    }
 
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final week1Start = today.subtract(const Duration(days: 7));
-    final week2Start = today.subtract(const Duration(days: 14));
+    if (maxCycle == 0) return [];
 
-    final records = <int, List<_SetRecord>>{};
+    final currentCycleDays = days.where((d) => d.cycleNumber == maxCycle && d.status == 'completed').toList();
+    bool hasWeek3 = currentCycleDays.any((d) => d.weekNumber == 3);
 
-    for (final day in days) {
-      if (day.status != 'completed') continue;
+    if (!hasWeek3) return [];
 
+    final week1Sets = <int, List<WorkoutSet>>{};
+    final week3Sets = <int, List<WorkoutSet>>{};
+
+    for (final day in currentCycleDays) {
       final exercises = await db.getWorkoutExercises(day.id!);
-
       for (final we in exercises) {
         if (we.itemType != 'exercise' || we.isCoolDown) continue;
-
         final exId = we.replacedByItemId ?? we.itemId;
-        final sets = await db.getWorkoutSets(we.id!);
+        final sets = (await db.getWorkoutSets(we.id!)).where((s) => s.completed).toList();
+        if (sets.isEmpty) continue;
 
-        for (final s in sets) {
-          if (!s.completed) continue;
-          if (s.weight == null && s.reps == null) continue;
-
-          records.putIfAbsent(exId, () => []);
-          records[exId]!.add(_SetRecord(
-            date: day.date,
-            weight: s.weight,
-            reps: s.reps,
-          ));
+        if (day.weekNumber == 1) {
+          week1Sets.putIfAbsent(exId, () => []);
+          week1Sets[exId]!.addAll(sets);
+        } else if (day.weekNumber == 3) {
+          week3Sets.putIfAbsent(exId, () => []);
+          week3Sets[exId]!.addAll(sets);
         }
       }
     }
 
     final trends = <ExerciseTrend>[];
+    final allExIds = {...week1Sets.keys, ...week3Sets.keys};
 
-    for (final entry in records.entries) {
-      final exId = entry.key;
-      final recs = entry.value;
-
-      if (recs.length < 2) continue;
-
-      final hasWeight = recs.any((r) => r.weight != null);
-
-      final week1 = recs
-          .where((r) =>
-              !r.date.isBefore(week1Start) && !r.date.isAfter(today))
-          .toList();
-
-      final week2 = recs
-          .where((r) =>
-              !r.date.isBefore(week2Start) && r.date.isBefore(week1Start))
-          .toList();
-
-      double? avg1;
-      double? avg2;
-
-      if (hasWeight) {
-        avg1 = _avg(
-            week1.where((r) => r.weight != null).map((r) => r.weight!));
-        avg2 = _avg(
-            week2.where((r) => r.weight != null).map((r) => r.weight!));
-      } else {
-        avg1 = _avg(week1
-            .where((r) => r.reps != null)
-            .map((r) => r.reps!.toDouble()));
-        avg2 = _avg(week2
-            .where((r) => r.reps != null)
-            .map((r) => r.reps!.toDouble()));
-      }
-
-      TrendDirection dir;
-      if (avg1 == null || avg2 == null) {
-        dir = TrendDirection.new_;
-      } else {
-        final diff = avg1 - avg2;
-        final threshold = hasWeight ? 2.5 : 2.0;
-        if (diff >= threshold) {
-          dir = TrendDirection.up;
-        } else if (diff <= -threshold) {
-          dir = TrendDirection.down;
-        } else {
-          dir = TrendDirection.stagnation;
-        }
-      }
-
+    for (final exId in allExIds) {
       final ex = await db.getExerciseById(exId);
       if (ex == null) continue;
 
+      final sets1 = week1Sets[exId] ?? [];
+      final sets3 = week3Sets[exId] ?? [];
+
+      if (sets1.isEmpty && sets3.isEmpty) continue;
+
+      final hasWeight = (sets1.isNotEmpty ? sets1.any((s) => s.weight != null && s.weight! > 0) : false) ||
+                        (sets3.isNotEmpty ? sets3.any((s) => s.weight != null && s.weight! > 0) : false);
+
+      double? avg1, avg3;
+
+      if (hasWeight) {
+        avg1 = _avg(sets1.where((s) => s.weight != null).map((s) => s.weight!));
+        avg3 = _avg(sets3.where((s) => s.weight != null).map((s) => s.weight!));
+      } else {
+        avg1 = _avg(sets1.where((s) => s.reps != null).map((s) => s.reps!.toDouble()));
+        avg3 = _avg(sets3.where((s) => s.reps != null).map((s) => s.reps!.toDouble()));
+      }
+
+      if (avg1 == null && avg3 != null) {
+        avg1 = avg3;
+      } else if (avg1 != null && avg3 == null) {
+        avg3 = avg1;
+      }
+
+      TrendDirection dir;
+      if (avg1 == null || avg3 == null) {
+        dir = TrendDirection.new_;
+      } else {
+        final diff = avg3 - avg1;
+        final threshold = hasWeight ? 1.0 : 1.5;
+        if (diff >= threshold) dir = TrendDirection.up;
+        else if (diff <= -threshold) dir = TrendDirection.down;
+        else dir = TrendDirection.stagnation;
+      }
+
+      final isCardio = _isCardio(ex);
+      final isTimed = _isTimed(ex.name);
+
       trends.add(ExerciseTrend(
-        exerciseId: exId,
-        exerciseName: ex.name,
-        avgValueThisWeek: avg1,
-        avgValuePrevWeek: avg2,
-        timesUsed: recs.length,
-        direction: dir,
-        isWeightBased: hasWeight,
+        exerciseId: exId, exerciseName: ex.name,
+        avgValueThisWeek: avg3, avgValuePrevWeek: avg1,
+        timesUsed: sets1.length + sets3.length, direction: dir, isWeightBased: hasWeight,
+        isCardio: isCardio, isTimed: isTimed,
       ));
     }
 
     trends.sort((a, b) {
       int order(TrendDirection d) {
-        switch (d) {
-          case TrendDirection.up:
-            return 0;
-          case TrendDirection.new_:
-            return 1;
-          case TrendDirection.stagnation:
-            return 2;
-          case TrendDirection.down:
-            return 3;
-        }
+        if (d == TrendDirection.up) return 0;
+        if (d == TrendDirection.new_) return 1;
+        if (d == TrendDirection.stagnation) return 2;
+        return 3;
       }
-
       final cmp = order(a.direction).compareTo(order(b.direction));
       if (cmp != 0) return cmp;
       return (b.avgValueThisWeek ?? 0).compareTo(a.avgValueThisWeek ?? 0);
@@ -415,18 +329,33 @@ class WeekAnalyzer {
     if (values.isEmpty) return null;
     return values.reduce((a, b) => a + b) / values.length;
   }
+
+  // 👇 ИСПРАВЛЕННЫЕ МЕТОДЫ ОПРЕДЕЛЕНИЯ ТИПА
+  static bool _isCardio(Exercise ex) {
+    final lower = ex.name.toLowerCase();
+
+    if (lower.contains('бег') || lower.contains('дорожк') || lower.contains('скакалк') ||
+        lower.contains('эллипс') || lower.contains('велотренаж') || lower.contains('велоэргометр') ||
+        lower.contains('гребл') || lower.contains('степпер') || lower.contains('кардио') ||
+        lower.contains('канат') || lower.contains('скалолаз')) {
+      return true;
+    }
+
+    final coreGroups = ['abs', 'core', 'obliques'];
+    if (ex.muscleGroups.any((m) => coreGroups.contains(m))) return false;
+
+    return ex.muscleGroups.contains('cardio');
+  }
+
+  static bool _isTimed(String name) {
+    final lower = name.toLowerCase();
+    return lower.contains('планка') || lower.contains('plank') || _isCardioName(lower) ||
+           lower.contains('канат') || lower.contains('скалолаз');
+  }
+
+  static bool _isCardioName(String lowerName) {
+    return lowerName.contains('бег') || lowerName.contains('дорожк') || lowerName.contains('скакалк') ||
+        lowerName.contains('эллипс') || lowerName.contains('велотренаж') || lowerName.contains('велоэргометр') ||
+        lowerName.contains('гребл') || lowerName.contains('степпер') || lowerName.contains('кардио');
+  }
 }
-
-// ═══════════════════════════════════════════════════════════
-//  ВНУТРЕННЯЯ МОДЕЛЬ
-// ═══════════════════════════════════════════════════════════
-
-class _SetRecord {
-  final DateTime date;
-  final double? weight;
-  final int? reps;
-
-  _SetRecord({required this.date, this.weight, this.reps});
-}
-// ═══ ЧАСТЬ 2 — ЗАКОНЧЕНА ═══
-// ═══ ФАЙЛ week_analyzer.dart ЗАВЕРШЁН ═══

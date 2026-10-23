@@ -1,21 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'profiles/profiles_screen.dart';
 import 'workout/workout_screen.dart';
 import 'progress/progress_screen.dart';
 import 'history/history_screen.dart';
 import 'settings/settings_screen.dart';
-import 'catalog/catalog_screen.dart'; // ⚠️ Новый экран каталога
+import 'catalog/catalog_screen.dart';
 import '../widgets/fairy_bubble.dart';
 import '../services/database_helper.dart';
 
-/// Главный экран с нижней навигацией и феей-наставником.
-///
-/// Активный таб сохраняется в SharedPreferences — при F5 (Web)
-/// или перезапуске приложения возвращаемся на тот же таб.
-///
-/// ⚠️ Если сохранённого таба НЕТ, но профиль создан —
-///    открываем «Тренировки» (индекс 1).
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -26,12 +18,11 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   static const _keyLastTab = 'main_screen_last_tab';
 
-  int _currentIndex = 0;
+  int _currentIndex = 1; // ⚠️ По умолчанию Тренировки (индекс 1)
   bool _restored = false;
 
-  // ⚠️ Добавлен экран каталога (индекс 2)
+  // ⚠️ Убрали ProfilesScreen из нижнего меню
   final List<Widget> _screens = const [
-    ProfilesScreen(),
     WorkoutScreen(),
     CatalogScreen(),
     ProgressScreen(),
@@ -40,7 +31,6 @@ class _MainScreenState extends State<MainScreen> {
   ];
 
   final List<String> _screenKeys = const [
-    'profiles',
     'workout',
     'catalog',
     'progress',
@@ -58,16 +48,15 @@ class _MainScreenState extends State<MainScreen> {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getInt(_keyLastTab);
 
-    int initialIndex = 0;
+    int initialIndex = 1; // По умолчанию Тренировки
 
     if (saved != null && saved >= 0 && saved < _screens.length) {
       initialIndex = saved;
     } else {
-      // ⚠️ Сохранённого таба нет — проверяем наличие профиля
       try {
         final profiles = await DatabaseHelper.instance.getProfiles();
         if (profiles.isNotEmpty) {
-          initialIndex = 1; // Тренировки
+          initialIndex = 0; // Тренировки
         }
       } catch (_) {}
     }
@@ -95,13 +84,10 @@ class _MainScreenState extends State<MainScreen> {
     final theme = Theme.of(context);
 
     if (!_restored) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
-      // ⚠️ fit: StackFit.expand фиксит дерганье при исчезновении феи
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -116,11 +102,7 @@ class _MainScreenState extends State<MainScreen> {
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
-            ),
+            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, -4)),
           ],
         ),
         child: SafeArea(
@@ -129,49 +111,11 @@ class _MainScreenState extends State<MainScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildNavItem(
-                  context,
-                  index: 0,
-                  icon: Icons.person_outline_rounded,
-                  activeIcon: Icons.person_rounded,
-                  label: 'Профиль',
-                ),
-                _buildNavItem(
-                  context,
-                  index: 1,
-                  icon: Icons.fitness_center_outlined,
-                  activeIcon: Icons.fitness_center,
-                  label: 'Тренировки',
-                ),
-                // ⚠️ Новый таб "Каталог"
-                _buildNavItem(
-                  context,
-                  index: 2,
-                  icon: Icons.menu_book_outlined,
-                  activeIcon: Icons.menu_book_rounded,
-                  label: 'Каталог',
-                ),
-                _buildNavItem(
-                  context,
-                  index: 3,
-                  icon: Icons.insights_outlined,
-                  activeIcon: Icons.insights_rounded,
-                  label: 'Прогресс',
-                ),
-                _buildNavItem(
-                  context,
-                  index: 4,
-                  icon: Icons.history_outlined,
-                  activeIcon: Icons.history_rounded,
-                  label: 'История',
-                ),
-                _buildNavItem(
-                  context,
-                  index: 5,
-                  icon: Icons.settings_outlined,
-                  activeIcon: Icons.settings_rounded,
-                  label: 'Настройки',
-                ),
+                _buildNavItem(context, index: 0, icon: Icons.fitness_center_outlined, activeIcon: Icons.fitness_center, label: 'Тренировки'),
+                _buildNavItem(context, index: 1, icon: Icons.menu_book_outlined, activeIcon: Icons.menu_book_rounded, label: 'Каталог'),
+                _buildNavItem(context, index: 2, icon: Icons.insights_outlined, activeIcon: Icons.insights_rounded, label: 'Прогресс'),
+                _buildNavItem(context, index: 3, icon: Icons.history_outlined, activeIcon: Icons.history_rounded, label: 'История'),
+                _buildNavItem(context, index: 4, icon: Icons.settings_outlined, activeIcon: Icons.settings_rounded, label: 'Настройки'),
               ],
             ),
           ),
@@ -180,13 +124,7 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  Widget _buildNavItem(
-    BuildContext context, {
-    required int index,
-    required IconData icon,
-    required IconData activeIcon,
-    required String label,
-  }) {
+  Widget _buildNavItem(BuildContext context, {required int index, required IconData icon, required IconData activeIcon, required String label}) {
     final theme = Theme.of(context);
     final isActive = _currentIndex == index;
 
@@ -198,32 +136,15 @@ class _MainScreenState extends State<MainScreen> {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
           decoration: BoxDecoration(
-            color: isActive
-                ? theme.colorScheme.primary.withOpacity(0.12)
-                : Colors.transparent,
+            color: isActive ? theme.colorScheme.primary.withOpacity(0.12) : Colors.transparent,
             borderRadius: BorderRadius.circular(14),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                isActive ? activeIcon : icon,
-                color: isActive
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurface.withOpacity(0.5),
-                size: 22,
-              ),
+              Icon(isActive ? activeIcon : icon, color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.5), size: 22),
               const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                  color: isActive
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurface.withOpacity(0.5),
-                ),
-              ),
+              Text(label, style: TextStyle(fontSize: 10, fontWeight: isActive ? FontWeight.w600 : FontWeight.w500, color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.5))),
             ],
           ),
         ),
@@ -231,4 +152,3 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 }
-// ═══ ФАЙЛ main_screen.dart ЗАВЕРШЁН ═══

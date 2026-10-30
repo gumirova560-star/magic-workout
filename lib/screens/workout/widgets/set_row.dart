@@ -6,14 +6,27 @@ class SetData {
   final int? reps;
   final bool completed;
   SetData({this.weight, this.reps, this.completed = false});
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SetData &&
+          runtimeType == other.runtimeType &&
+          weight == other.weight &&
+          reps == other.reps &&
+          completed == other.completed;
+
+  @override
+  int get hashCode => weight.hashCode ^ reps.hashCode ^ completed.hashCode;
 }
 
 class SetRow extends StatefulWidget {
   final int setNumber;
+  final int setIndex; // 👈 ДОБАВИЛИ ИНДЕКС
   final double? initialWeight;
   final int? initialReps;
   final bool completed;
-  final ValueChanged<SetData> onChanged;
+  final void Function(int index, SetData data) onChanged; // 👈 ИЗМЕНИЛИ СИГНАТУРУ
   final VoidCallback? onComplete;
   final VoidCallback? onUncomplete;
   final bool readOnly;
@@ -25,6 +38,7 @@ class SetRow extends StatefulWidget {
   const SetRow({
     super.key,
     required this.setNumber,
+    required this.setIndex, // 👈
     this.initialWeight,
     this.initialReps,
     this.completed = false,
@@ -64,7 +78,6 @@ class _SetRowState extends State<SetRow> {
     _repsFocus = FocusNode();
     _completed = widget.completed;
 
-    // Очищаем "0" при клике на поле веса
     _weightFocus.addListener(() {
       if (_weightFocus.hasFocus && _weightController.text == '0') {
         _weightController.clear();
@@ -75,10 +88,11 @@ class _SetRowState extends State<SetRow> {
   @override
   void didUpdateWidget(covariant SetRow oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialWeight != widget.initialWeight && !_weightFocus.hasFocus) {
+    // Обновляем только если поле не в фокусе, чтобы не затирать ввод
+    if (!_weightFocus.hasFocus && oldWidget.initialWeight != widget.initialWeight) {
       _weightController.text = _formatWeight(widget.initialWeight);
     }
-    if (oldWidget.initialReps != widget.initialReps && !_repsFocus.hasFocus) {
+    if (!_repsFocus.hasFocus && oldWidget.initialReps != widget.initialReps) {
       _repsController.text = widget.initialReps?.toString() ?? '';
     }
     if (oldWidget.completed != widget.completed) {
@@ -97,7 +111,7 @@ class _SetRowState extends State<SetRow> {
 
   void _notifyChanged() {
     if (widget.readOnly) return;
-    widget.onChanged(SetData(
+    widget.onChanged(widget.setIndex, SetData( // 👈 Передаем индекс
       weight: double.tryParse(_weightController.text.replaceAll(',', '.')),
       reps: int.tryParse(_repsController.text),
       completed: _completed,
@@ -140,16 +154,13 @@ class _SetRowState extends State<SetRow> {
     final ro = widget.readOnly;
     final canDelete = !ro && widget.onDelete != null;
 
-    // 👇 УМНОЕ ОПРЕДЕЛЕНИЕ ЕДИНИЦ ИЗМЕРЕНИЯ (МИН/СЕК/ПОВТ)
     final targetStr = widget.targetReps?.toLowerCase() ?? '';
     final isTargetMinutes = targetStr.contains('мин');
     final isTargetSeconds = targetStr.contains('сек');
     final isTargetReps = targetStr.contains('повт');
 
-    // Скрываем поле ввода веса для кардио и упражнений на время (сек/мин)
     final isTimeBased = widget.isCardio || widget.isTimed || isTargetMinutes || isTargetSeconds;
 
-    // Настраиваем подсказки (hint) для поля ввода
     String repsHint = isTargetMinutes ? 'мин' : isTargetSeconds ? 'сек' : isTargetReps ? 'повт.' : widget.isCardio ? 'мин' : widget.isTimed ? 'сек' : 'повт.';
     String repsSuffix = isTargetMinutes ? 'мин' : isTargetSeconds ? 'сек' : isTargetReps ? 'повт.' : widget.isCardio ? 'мин' : widget.isTimed ? 'сек' : 'повт.';
 
@@ -169,7 +180,6 @@ class _SetRowState extends State<SetRow> {
         ),
         child: Row(
           children: [
-            // Номер подхода
             Container(
               width: 32,
               height: 32,
@@ -190,7 +200,6 @@ class _SetRowState extends State<SetRow> {
             ),
             const SizedBox(width: 10),
 
-            // Поле Веса (скрыто для кардио и упражнений на время)
             if (!isTimeBased) ...[
               Expanded(
                 child: ro
@@ -217,7 +226,6 @@ class _SetRowState extends State<SetRow> {
               const SizedBox(width: 8),
             ],
 
-            // Поле Повторений / Времени
             Expanded(
               child: ro
                   ? _readOnlyBox(theme, text: widget.initialReps != null ? '${widget.initialReps} $repsSuffix' : '— $repsHint')
@@ -246,7 +254,6 @@ class _SetRowState extends State<SetRow> {
             ),
             const SizedBox(width: 8),
 
-            // Кнопка завершения подхода
             GestureDetector(
               onTap: ro ? null : _toggleComplete,
               child: AnimatedContainer(
@@ -290,4 +297,3 @@ class _SetRowState extends State<SetRow> {
     );
   }
 }
-// ═══ ФАЙЛ set_row.dart ЗАВЕРШЁН ═══

@@ -21,7 +21,7 @@ class DatabaseHelper {
 
   DatabaseHelper._init();
 
-  static const int _dbVersion = 9; // 👈 ПОДНЯЛИ ВЕРСИЮ ДО 9
+  static const int _dbVersion = 9;
   static const String _dbName = 'workout_tracker.db';
 
   Future<Database> get database async {
@@ -197,7 +197,7 @@ class DatabaseHelper {
       print('🔄 База данных обновлена до версии 9');
     }
   }
-// ═══ ЧАСТЬ 1 ЗАКОНЧИЛАСЬ ═══
+
   // ═══════════════════════════════════════════════════════════
   //  ПРОФИЛИ
   // ═══════════════════════════════════════════════════════════
@@ -439,7 +439,7 @@ class DatabaseHelper {
     final db = await database;
     await db.delete('workout_days', where: 'profileId = ?', whereArgs: [profileId]);
   }
-// ═══ ЧАСТЬ 2 ЗАКОНЧИЛАСЬ ═══
+
   // ═══════════════════════════════════════════════════════════
   //  УПРАЖНЕНИЯ В ТРЕНИРОВКЕ
   // ═══════════════════════════════════════════════════════════
@@ -632,7 +632,7 @@ class DatabaseHelper {
   }
 
   // ═══════════════════════════════════════════════════════════
-  //  ИСТОРИЯ ПО УПРАЖНЕНИЮ
+  //  ИСТОРИЯ ПО УПРАЖНЕНИЮ (ИСПРАВЛЕНО)
   // ═══════════════════════════════════════════════════════════
 
   Future<WorkoutSet?> getLastCompletedSetForExercise({required int profileId, required int exerciseId, int daysLimit = 60}) async {
@@ -675,24 +675,48 @@ class DatabaseHelper {
     return maps.map((m) => m['exId'] as int?).whereType<int>().toSet();
   }
 
-  Future<List<WorkoutSet>> getLastWorkoutExerciseSets({required int profileId, required int exerciseId, int daysLimit = 60}) async {
+  /// 👇 ИСПРАВЛЕННЫЙ МЕТОД: ищет историю с весом (или без), без проверки статуса
+  Future<List<WorkoutSet>> getLastWorkoutExerciseSets({required int profileId, required int exerciseId, int daysLimit = 365}) async {
     final db = await database;
     final from = DateTime.now().subtract(Duration(days: daysLimit)).toIso8601String();
+
+    // Сначала ищем тренировку, где БЫЛ ВЕС
     final weResult = await db.rawQuery('''
       SELECT we.id
       FROM workout_exercises we
       JOIN workout_days wd ON wd.id = we.workoutDayId
+      JOIN workout_sets ws ON ws.workoutExerciseId = we.id
       WHERE wd.profileId = ?
-        AND wd.status = 'completed'
         AND wd.date >= ?
         AND (we.replacedByItemId = ? OR we.itemId = ?)
         AND we.itemType = 'exercise'
         AND we.isCoolDown = 0
-      ORDER BY wd.date DESC, wd.id DESC
+        AND ws.weight IS NOT NULL
+      ORDER BY wd.date DESC, wd.id DESC, ws."order" ASC
       LIMIT 1
     ''', [profileId, from, exerciseId, exerciseId]);
 
-    if (weResult.isEmpty) return [];
+    if (weResult.isEmpty) {
+      // Если с весом не нашли, ищем просто последнюю тренировку с этим упражнением
+      final fallback = await db.rawQuery('''
+        SELECT we.id
+        FROM workout_exercises we
+        JOIN workout_days wd ON wd.id = we.workoutDayId
+        WHERE wd.profileId = ?
+          AND wd.date >= ?
+          AND (we.replacedByItemId = ? OR we.itemId = ?)
+          AND we.itemType = 'exercise'
+          AND we.isCoolDown = 0
+        ORDER BY wd.date DESC, wd.id DESC
+        LIMIT 1
+      ''', [profileId, from, exerciseId, exerciseId]);
+
+      if (fallback.isEmpty) return [];
+      final fallbackId = fallback.first['id'] as int?;
+      if (fallbackId == null) return [];
+      return getWorkoutSets(fallbackId);
+    }
+
     final weId = weResult.first['id'] as int?;
     if (weId == null) return [];
     return getWorkoutSets(weId);
@@ -718,25 +742,25 @@ class DatabaseHelper {
   //  ФОТО ТРАНСФОРМАЦИИ
   // ═══════════════════════════════════════════════════════════
 
-  Future<int> addTransformationPhoto(TransformationPhoto photo) async {
-    final db = await database;
-    return await db.insert('transformations', photo.toMap());
-  }
+    Future<int> addTransformationPhoto(TransformationPhoto photo) async {
+      final db = await database;
+      return await db.insert('transformations', photo.toMap());
+    }
 
-  Future<List<TransformationPhoto>> getTransformationPhotos(int profileId) async {
-    final db = await database;
-    final maps = await db.query('transformations', where: 'profileId = ?', whereArgs: [profileId], orderBy: 'monthNumber ASC');
-    return maps.map((m) => TransformationPhoto.fromMap(m)).toList();
-  }
+    Future<List<TransformationPhoto>> getTransformationPhotos(int profileId) async {
+      final db = await database;
+      final maps = await db.query('transformations', where: 'profileId = ?', whereArgs: [profileId], orderBy: 'monthNumber ASC');
+      return maps.map((m) => TransformationPhoto.fromMap(m)).toList();
+    }
 
-  Future<int> deleteTransformationPhoto(int id) async {
-    final db = await database;
-    return await db.delete('transformations', where: 'id = ?', whereArgs: [id]);
-  }
+    Future<int> deleteTransformationPhoto(int id) async {
+      final db = await database;
+      return await db.delete('transformations', where: 'id = ?', whereArgs: [id]);
+    }
 
-  Future<void> close() async {
-    final db = await instance.database;
-    await db.close();
+    Future<void> close() async {
+      final db = await instance.database;
+      await db.close();
+    }
   }
-}
-// ═══ ФАЙЛ database_helper.dart ЗАВЕРШЁН ═══
+  // ═══ ФАЙЛ database_helper.dart ЗАВЕРШЁН ═══

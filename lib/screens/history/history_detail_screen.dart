@@ -3,6 +3,7 @@ import '../../models/exercise.dart';
 import '../../models/stretch.dart';
 import '../../models/workout_day.dart';
 import '../../services/database_helper.dart';
+import '../../data/base_exercises.dart'; // 👈 Импорт словаря
 
 class HistoryDetailScreen extends StatefulWidget {
   final WorkoutDay workout;
@@ -60,20 +61,6 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
     return lowerName.contains('бег') || lowerName.contains('дорожк') || lowerName.contains('скакалк') ||
         lowerName.contains('эллипс') || lowerName.contains('велотренаж') || lowerName.contains('велоэргометр') ||
         lowerName.contains('гребл') || lowerName.contains('степпер') || lowerName.contains('кардио');
-  }
-
-  String? _getBaseZone(Exercise ex) {
-    final keywords = ['присед', 'приседание', 'squat', 'выпад', 'lunge', 'становая', 'deadlift',
-      'румынск', 'romanian', 'жим', 'press', 'bench press', 'тяга', 'row', 'подтягив', 'pull-up',
-      'pullup', 'отжимание', 'push-up', 'pushup', 'берпи', 'burpee', 'планка', 'plank', 'скручивание', 'crunch'];
-    final lower = ex.name.toLowerCase();
-    if (!keywords.any((kw) => lower.contains(kw))) return null;
-    if (ex.muscleGroups.contains('glutes') || ex.muscleGroups.contains('legs')) return 'Ягодицы/Ноги';
-    if (ex.muscleGroups.contains('chest')) return 'Грудь';
-    if (ex.muscleGroups.contains('back')) return 'Спина';
-    if (ex.muscleGroups.contains('arms')) return 'Руки';
-    if (ex.muscleGroups.contains('abs') || ex.muscleGroups.contains('core')) return 'Пресс';
-    return 'База';
   }
 
   String _formatDate(DateTime date) {
@@ -157,10 +144,15 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
     final isCardio = _isCardio(ex);
     final isTimed = _isTimed(ex.name);
     final isTimeBased = isCardio || isTimed;
-    final baseZone = _getBaseZone(ex);
 
-    // Извлекаем целевое время из плана (например, из "70 сек" достаем "70")
-    String targetTime = we.reps.replaceAll(RegExp(r'[^0-9]'), '');
+    // 👇 Берем зону и русское название из словаря
+    final baseZone = getExerciseZone(ex);
+    final zoneLabel = getZoneLabel(baseZone);
+    final isBase = isBaseExercise(ex);
+
+    // 👇 Извлекаем ПЕРВОЕ число из плана (например, "15" из "15-18")
+    final match = RegExp(r'(\d+)').firstMatch(we.reps);
+    String targetTime = match?.group(1) ?? '';
     if (targetTime.isEmpty) targetTime = isTimed ? '60' : '15';
 
     String repsSuffix = ' повт.';
@@ -183,12 +175,33 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(ex.name, style: theme.textTheme.headlineMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
-                if (baseZone != null && !isCardio) ...[
+                if (!isCardio) ...[
                   const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(color: const Color(0xFF6C5CE7).withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-                    child: Text('БАЗА - ${baseZone.toUpperCase()}', style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF6C5CE7))),
+                  Row(
+                    children: [
+                      if (isBase)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(color: const Color(0xFF6C5CE7).withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                          child: Text('БАЗА - ${zoneLabel.toUpperCase()}', style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF6C5CE7))),
+                        )
+                      else ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(color: const Color(0xFF00B894).withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                          child: const Text('ИЗОЛЯЦИЯ', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF00B894))),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            ex.muscleGroups.map((g) => getZoneLabel(g)).join(' + ').toUpperCase(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
                 const SizedBox(height: 2),
@@ -202,10 +215,11 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
                 Container(width: 28, height: 28, alignment: Alignment.center, decoration: BoxDecoration(color: s.completed ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.08), borderRadius: BorderRadius.circular(8)), child: Text('${s.order}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: s.completed ? Colors.white : theme.colorScheme.onSurface.withOpacity(0.5)))),
                 const SizedBox(width: 10),
                 if (!isTimeBased) ...[
+                  // 👇 Показываем вес, если есть. Если нет — "— кг"
                   Text(s.weight != null ? '${s.weight!.toStringAsFixed(s.weight! % 1 == 0 ? 0 : 1)} кг' : '— кг', style: theme.textTheme.bodyMedium),
                   const SizedBox(width: 12),
                 ],
-                // 👇 Берем из подхода, если есть. Иначе — из плана (targetTime).
+                // 👇 Показываем реальные повторы или план
                 Text(
                   s.reps != null
                     ? '${s.reps}$repsSuffix'

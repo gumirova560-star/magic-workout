@@ -8,9 +8,8 @@ import '../../services/workout_generator.dart' hide DatabaseHelper;
 import '../../services/week_analyzer.dart';
 import '../../services/fairy_reaction_service.dart';
 import '../../services/fairy_stats_service.dart';
-import '../../services/achievement_service.dart';
 import '../yoga/yoga_screen.dart';
-import '../trainer/trainer_screen.dart'; // 👈 Вернули импорт
+import '../trainer/trainer_screen.dart';
 import 'workout_detail_screen.dart';
 import 'my_templates_screen.dart';
 import 'widgets/focus_areas_dialog.dart';
@@ -34,6 +33,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   bool _showCompletionBanner = false;
   int _currentWeekWorkouts = 0;
   int _currentWeekMinutes = 0;
+
+  bool _showBaseUpdateBanner = false; // 👈 Флаг для баннера обновления базы
 
   @override
   void initState() {
@@ -85,6 +86,23 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     if (profile.id == null) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_dismissedHashKey(profile.id!), _computeProfileHash(profile));
+  }
+
+  // 👇 Проверка, пора ли обновлять базу (каждые 2 цикла)
+  Future<void> _checkBaseUpdate(UserProfile profile) async {
+    final maxCycle = await DatabaseHelper.instance.getMaxCycleNumber(profile.id!);
+    final shouldShow = maxCycle >= 4 && maxCycle % 4 == 0;
+
+    if (shouldShow) {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'base_update_shown_${profile.id}_$maxCycle';
+      final alreadyShown = prefs.getBool(key) ?? false;
+
+      if (!alreadyShown && mounted) {
+        setState(() => _showBaseUpdateBanner = true);
+        await prefs.setBool(key, true);
+      }
+    }
   }
 
   Future<void> _loadData() async {
@@ -155,6 +173,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         _loading = false;
       });
 
+      // 👇 Проверяем, нужно ли обновить базу
+      await _checkBaseUpdate(active);
+
       final shouldHold = await _shouldSuggestPlanUpdate(active);
       if (shouldHold) FairyReactionService().holdScreenPhrases();
       await FairyReactionService().setActiveProfile(active.id, active.name, gender: active.gender);
@@ -177,6 +198,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         _currentWeekWorkouts = 0;
         _currentWeekMinutes = 0;
         _showCompletionBanner = false;
+        _showBaseUpdateBanner = false;
         _loading = false;
       });
       await FairyReactionService().setActiveProfile(null, null);
@@ -193,6 +215,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     FairyReactionService().releaseScreenPhrases();
   }
 
+// ═══ КОНЕЦ ЧАСТИ 1 ИЗ 3 ═══
+// ═══════════════════════════════════════════════════════════════
+// ЧАСТЬ 2 из 3 — Генерация плана, навигация и build
+// ═══════════════════════════════════════════════════════════════
+
   Future<void> _generatePlan({bool isUpdate = false}) async {
     if (_activeProfile == null) { _showMessage('Сначала создайте профиль'); return; }
 
@@ -203,6 +230,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         initial: _activeProfile!.focusAreas.toSet(),
         maxCount: 3,
         isWeightLoss: _activeProfile!.goal == 'lose_weight',
+        daysPerWeek: _activeProfile!.daysPerWeek,
       ),
     );
     if (selected == null || selected.isEmpty) return;
@@ -211,7 +239,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     await DatabaseHelper.instance.updateProfile(updatedProfile);
     if (!mounted) return;
     setState(() => _activeProfile = updatedProfile);
-    setState(() { _generating = true; _showCompletionBanner = false; });
+
+    setState(() { _generating = true; _showCompletionBanner = false; _showBaseUpdateBanner = false; });
 
     try {
       await FairyReactionService().setActiveProfile(_activeProfile!.id, _activeProfile!.name, gender: _activeProfile!.gender);
@@ -219,7 +248,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       if (freshProfile == null) { setState(() => _generating = false); _showMessage('Профиль не найден'); return; }
       setState(() => _activeProfile = freshProfile);
 
-      final newDays = await WorkoutGenerator.generateMonthPlan(freshProfile, smart: true);
+      final newDays = await WorkoutGenerator.generateMonthPlan(
+        freshProfile,
+        smart: true,
+      );
       final lastWeek = await WeekAnalyzer.analyzeLastWeek(freshProfile.id!);
       final streak = await FairyStatsService.getStreak();
 
@@ -231,10 +263,16 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         _streak = streak;
         _generating = false;
         _showCompletionBanner = false;
+        _showBaseUpdateBanner = false;
       });
 
       await _saveProfileHashAsAccepted(freshProfile);
       FairyReactionService().trigger(isUpdate ? 'plan_updated' : 'plan_generated', mood: FairyMood.party);
+
+      // Если это было обновление из-за базы, показываем сообщение об успехе
+      if (isUpdate) {
+         _showMessage('План обновлён! Базы заменены на новые.');
+      }
     } catch (e) {
       setState(() => _generating = false);
       _showMessage('Ошибка: $e');
@@ -327,7 +365,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   void _showMessage(String text) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
-// ═══ ЧАСТЬ 1 ЗАКОНЧИЛАСЬ ═══
+
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -358,6 +396,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           children: [
             _buildGreeting(context),
             const SizedBox(height: 20),
+
+            // 👇 БАННЕР ОБНОВЛЕНИЯ БАЗЫ (каждые 2 месяца)
+            if (_showBaseUpdateBanner) ...[
+              _buildBaseUpdateBanner(context),
+              const SizedBox(height: 20),
+            ],
+
             if (_monthDays.isNotEmpty) ...[
               _buildWeekChips(context),
               const SizedBox(height: 20),
@@ -405,6 +450,77 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       ),
     );
   }
+
+  // 👇 НОВЫЙ БАННЕР: Пора обновить базы
+  Widget _buildBaseUpdateBanner(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [Color(0xFFFDCB6E), Color(0xFFE17055)]),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(color: const Color(0xFFFDCB6E).withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 8)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.autorenew_rounded, color: Colors.white, size: 24),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Пора обновить базы! 🧚‍♀️',
+                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Ты занимаешься уже 2 месяца. Мышцы привыкают к одним и тем же упражнениям. Давай обновим базы, чтобы прогресс не остановился!',
+            style: TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () => setState(() => _showBaseUpdateBanner = false),
+                style: TextButton.styleFrom(foregroundColor: Colors.white70),
+                child: const Text('Позже'),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: _generating ? null : () => _generatePlan(isUpdate: true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xFFE17055),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: _generating
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFE17055)))
+                    : const Text('Обновить базы', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+// ═══ КОНЕЦ ЧАСТИ 2 ИЗ 3 ═══
+// ═══════════════════════════════════════════════════════════════
+// ЧАСТЬ 3 из 3 — UI-виджеты (приветствие, карточки, прогресс)
+// ЗАВЕРШАЕТ ФАЙЛ workout_screen.dart
+// ═══════════════════════════════════════════════════════════════
 
   Widget _buildWeekChips(BuildContext context) {
     final theme = Theme.of(context);
@@ -595,14 +711,40 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final hasPlan = _monthDays.isNotEmpty;
     return Row(
       children: [
-        Expanded(child: _actionCard(context, icon: hasPlan ? Icons.check_circle_rounded : Icons.auto_awesome_rounded, label: hasPlan ? 'План создан' : 'Создать план', gradient: hasPlan ? const LinearGradient(colors: [Color(0xFF00B894), Color(0xFF55EFC4)]) : const LinearGradient(colors: [Color(0xFF6C5CE7), Color(0xFFA29BFE)]), onTap: hasPlan ? null : (_generating ? null : _generatePlan), isLoading: _generating)),
+        Expanded(
+          child: _actionCard(
+            context,
+            icon: hasPlan ? Icons.check_circle_rounded : Icons.auto_awesome_rounded,
+            label: hasPlan ? 'План создан' : 'Создать план',
+            gradient: hasPlan
+                ? const LinearGradient(colors: [Color(0xFF00B894), Color(0xFF55EFC4)])
+                : const LinearGradient(colors: [Color(0xFF6C5CE7), Color(0xFFA29BFE)]),
+            onTap: hasPlan ? null : (_generating ? null : _generatePlan),
+            isLoading: _generating,
+          ),
+        ),
         const SizedBox(width: 12),
-        Expanded(child: _actionCard(context, icon: Icons.self_improvement_rounded, label: 'Йога', gradient: const LinearGradient(colors: [Color(0xFF00B894), Color(0xFF55EFC4)]), onTap: _openYoga)),
+        Expanded(
+          child: _actionCard(
+            context,
+            icon: Icons.self_improvement_rounded,
+            label: 'Йога',
+            gradient: const LinearGradient(colors: [Color(0xFF00B894), Color(0xFF55EFC4)]),
+            onTap: _openYoga,
+          ),
+        ),
       ],
     );
   }
 
-  Widget _actionCard(BuildContext context, {required IconData icon, required String label, required LinearGradient gradient, VoidCallback? onTap, bool isLoading = false}) {
+  Widget _actionCard(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required LinearGradient gradient,
+    VoidCallback? onTap,
+    bool isLoading = false,
+  }) {
     final isDisabled = onTap == null && !isLoading;
     return Opacity(
       opacity: isDisabled ? 0.9 : 1.0,
@@ -610,11 +752,23 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(gradient: gradient, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: gradient.colors.first.withOpacity(isDisabled ? 0.15 : 0.3), blurRadius: isDisabled ? 8 : 16, offset: const Offset(0, 8))]),
+          decoration: BoxDecoration(
+            gradient: gradient,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: gradient.colors.first.withOpacity(isDisabled ? 0.15 : 0.3),
+                blurRadius: isDisabled ? 8 : 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              isLoading ? const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3)) : Icon(icon, color: Colors.white, size: 28),
+              isLoading
+                  ? const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
+                  : Icon(icon, color: Colors.white, size: 28),
               const SizedBox(height: 12),
               Text(label, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
             ],
@@ -627,17 +781,43 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   Widget _buildCompletionBanner(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF00B894), Color(0xFF55EFC4)]), borderRadius: BorderRadius.circular(18), boxShadow: [BoxShadow(color: const Color(0xFF00B894).withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 8))]),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [Color(0xFF00B894), Color(0xFF55EFC4)]),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(color: const Color(0xFF00B894).withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 8)),
+        ],
+      ),
       child: Row(
         children: [
-          Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.emoji_events_rounded, color: Colors.white, size: 22)),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.emoji_events_rounded, color: Colors.white, size: 22),
+          ),
           const SizedBox(width: 12),
-          const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('План завершён! 💪', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)), SizedBox(height: 2), Text('Создать новый на следующий месяц?', style: TextStyle(color: Colors.white70, fontSize: 11))])),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('План завершён! 💪', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                SizedBox(height: 2),
+                Text('Создать новый на следующий месяц?', style: TextStyle(color: Colors.white70, fontSize: 11)),
+              ],
+            ),
+          ),
           const SizedBox(width: 8),
           ElevatedButton(
             onPressed: _generating ? null : _generatePlan,
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFF00B894), padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-            child: _generating ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00B894))) : const Text('Создать', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFF00B894),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: _generating
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00B894)))
+                : const Text('Создать', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
           ),
         ],
       ),
@@ -648,16 +828,33 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(color: theme.colorScheme.surface, borderRadius: BorderRadius.circular(20), border: Border.all(color: theme.colorScheme.primary.withOpacity(0.2), width: 2)),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: theme.colorScheme.primary.withOpacity(0.2), width: 2),
+      ),
       child: Column(
         children: [
           Icon(Icons.auto_awesome_rounded, size: 48, color: theme.colorScheme.primary.withOpacity(0.5)),
           const SizedBox(height: 12),
           Text('Плана пока нет', style: theme.textTheme.headlineMedium),
           const SizedBox(height: 8),
-          Text('Нажмите «Создать план» — приложение подберёт тренировки на месяц под ваш профиль', textAlign: TextAlign.center, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6))),
+          Text(
+            'Нажмите «Создать план» — приложение подберёт тренировки на месяц под ваш профиль',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6)),
+          ),
           const SizedBox(height: 20),
-          SizedBox(width: double.infinity, child: ElevatedButton.icon(onPressed: _generating ? null : _generatePlan, icon: _generating ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.auto_awesome_rounded), label: Text(_generating ? 'Создаём...' : 'Создать план'))),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _generating ? null : _generatePlan,
+              icon: _generating
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.auto_awesome_rounded),
+              label: Text(_generating ? 'Создаём...' : 'Создать план'),
+            ),
+          ),
         ],
       ),
     );
@@ -666,14 +863,36 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   Widget _buildStats(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: _statCard(context, icon: Icons.calendar_today_rounded, value: '$_currentWeekWorkouts', label: 'тренировок', color: const Color(0xFF6C5CE7))),
+        Expanded(
+          child: _statCard(
+            context,
+            icon: Icons.calendar_today_rounded,
+            value: '$_currentWeekWorkouts',
+            label: 'тренировок',
+            color: const Color(0xFF6C5CE7),
+          ),
+        ),
         const SizedBox(width: 12),
-        Expanded(child: _statCard(context, icon: Icons.timer_rounded, value: '$_currentWeekMinutes', label: 'минут', color: const Color(0xFF00B894))),
+        Expanded(
+          child: _statCard(
+            context,
+            icon: Icons.timer_rounded,
+            value: '$_currentWeekMinutes',
+            label: 'минут',
+            color: const Color(0xFF00B894),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _statCard(BuildContext context, {required IconData icon, required String value, required String label, required Color color}) {
+  Widget _statCard(
+    BuildContext context, {
+    required IconData icon,
+    required String value,
+    required String label,
+    required Color color,
+  }) {
     final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.all(16),
@@ -681,7 +900,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: color, size: 20)),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: color, size: 20),
+          ),
           const SizedBox(height: 12),
           Text(value, style: theme.textTheme.headlineMedium?.copyWith(color: theme.colorScheme.onSurface, fontSize: 22, fontWeight: FontWeight.w700)),
           const SizedBox(height: 2),
@@ -708,7 +931,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               const SizedBox(height: 24),
               Text('Нет профиля', style: theme.textTheme.displaySmall),
               const SizedBox(height: 8),
-              Text('Создайте профиль в Настройках, чтобы начать тренировки', textAlign: TextAlign.center, style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6))),
+              Text(
+                'Создайте профиль в Настройках, чтобы начать тренировки',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6)),
+              ),
             ],
           ),
         ),
@@ -716,4 +943,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     );
   }
 }
-// ═══ ФАЙЛ workout_screen.dart ЗАВЕРШЁН ═══
+// ═══════════════════════════════════════════════════════════════
+// КОНЕЦ ЧАСТИ 3 из 3 — ФАЙЛ workout_screen.dart ЗАВЕРШЁН
+// ═══════════════════════════════════════════════════════════════

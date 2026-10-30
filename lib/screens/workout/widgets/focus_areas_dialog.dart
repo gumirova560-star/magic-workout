@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 
-/// ⚠️ Диалог выбора фокусных зон при генерации плана.
 class FocusAreasDialog extends StatefulWidget {
   final Set<String> initial;
   final int maxCount;
-  final bool isWeightLoss; // 👈 ДОБАВЛЕНО: знаем, какая цель
+  final bool isWeightLoss;
+  final int daysPerWeek;
 
   const FocusAreasDialog({
     super.key,
-    this.initial = const {},
+    required this.initial,
     this.maxCount = 3,
-    this.isWeightLoss = false, // 👈 По умолчанию false
+    this.isWeightLoss = false,
+    required this.daysPerWeek,
   });
 
   @override
@@ -20,51 +21,50 @@ class FocusAreasDialog extends StatefulWidget {
 class _FocusAreasDialogState extends State<FocusAreasDialog> {
   late Set<String> _selected;
 
-  static const List<(String, String)> _zones = [
-    ('glutes', 'Ягодицы'),
-    ('abs', 'Пресс'),
-    ('arms', 'Руки'),
-    ('legs', 'Ноги'),
-    ('back', 'Спина'),
-    ('chest', 'Грудь'),
-    ('shoulders', 'Плечи'),
-    ('calves', 'Голень'),
-    ('cardio', 'Кардио'),
+  // 👇 8 ФОКУСНЫХ ЗОН (Руки и Плечи разделены)
+  final List<Map<String, String>> _allAreas = [
+    {'label': 'Ягодицы', 'tag': 'glutes'},
+    {'label': 'Ноги (Квадрицепс, Бицепс, Икры)', 'tag': 'legs'},
+    {'label': 'Пресс', 'tag': 'abs'},
+    {'label': 'Спина', 'tag': 'back'},
+    {'label': 'Грудь', 'tag': 'chest'},
+    {'label': 'Руки', 'tag': 'arms'},
+    {'label': 'Плечи', 'tag': 'shoulders'},
+    {'label': 'Кардио-день', 'tag': 'cardio'},
   ];
 
   @override
   void initState() {
     super.initState();
-    _selected = Set<String>.from(widget.initial);
+    // Миграция старых тегов (например, если раньше было quads или hamstrings)
+    _selected = widget.initial.map((s) {
+      if (_allAreas.any((a) => a['tag'] == s)) return s;
+      final byLabel = _allAreas.where((a) => a['label'] == s);
+      if (byLabel.isNotEmpty) return byLabel.first['tag']!;
 
-    // 👇 Если цель похудеть, принудительно добавляем кардио
-    if (widget.isWeightLoss) {
-      _selected.add('cardio');
-    }
+      if (s == 'quads' || s == 'hamstrings' || s == 'legs_main' || s == 'legs_lower') return 'legs';
+      if (s == 'Кардио') return 'cardio';
 
-    // Ограничиваем количество (если кардио добавилось, оно входит в лимит)
-    if (_selected.length > widget.maxCount) {
-      _selected = _selected.take(widget.maxCount).toSet();
-      if (widget.isWeightLoss) _selected.add('cardio'); // чтобы не удалить кардио при обрезке
-    }
+      return s;
+    }).toSet();
   }
 
-  void _toggle(String value) {
+  void _toggle(String tag) {
     setState(() {
-      if (_selected.contains(value)) {
-        // 👇 Запрещаем убирать кардио, если цель - похудение
-        if (value == 'cardio' && widget.isWeightLoss) {
+      if (_selected.contains(tag)) {
+        _selected.remove(tag);
+      } else {
+        if (_selected.length >= widget.maxCount) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Для цели «Похудение» кардио необходимо!'),
-              duration: Duration(seconds: 2),
+            SnackBar(
+              content: Text('Можно выбрать не более ${widget.maxCount} зон'),
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
             ),
           );
           return;
         }
-        _selected.remove(value);
-      } else if (_selected.length < widget.maxCount) {
-        _selected.add(value);
+        _selected.add(tag);
       }
     });
   }
@@ -72,56 +72,77 @@ class _FocusAreasDialogState extends State<FocusAreasDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final canConfirm = _selected.isNotEmpty;
 
     return AlertDialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: const Text('Фокусные зоны'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Можно выбрать до ${widget.maxCount} зон. '
-            'Выбрано: ${_selected.length}/${widget.maxCount}',
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _zones.map((z) {
-              final (value, label) = z;
-              final isSelected = _selected.contains(value);
-              final atLimit = !isSelected && _selected.length >= widget.maxCount;
-
-              // Блокируем нажатие, если достигнут лимит (и это не кардио)
-              final isDisabled = atLimit;
-
-              return FilterChip(
-                label: Text(label),
-                selected: isSelected,
-                onSelected: isDisabled ? null : (_) => _toggle(value),
-                // Визуально показываем, что кардио заблокировано для снятия (опционально)
-                avatar: (value == 'cardio' && widget.isWeightLoss)
-                    ? const Icon(Icons.lock_rounded, size: 14)
-                    : null,
-              );
-            }).toList(),
-          ),
-          if (!canConfirm) ...[
-            const SizedBox(height: 12),
+      content: SizedBox(
+        width: 400,
+        height: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Text(
-              'Выберите хотя бы одну зону',
-              style: TextStyle(
-                fontSize: 12,
-                color: theme.colorScheme.error,
+              'Выберите до ${widget.maxCount} зон, на которые сделать упор.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.6),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _allAreas.map((area) {
+                    final label = area['label']!;
+                    final tag = area['tag']!;
+                    final isSelected = _selected.contains(tag);
+
+                    // Запрет для кардио, если дней меньше 3
+                    bool isDisabled = false;
+                    if (tag == 'cardio' && widget.daysPerWeek <= 2) {
+                      isDisabled = true;
+                    }
+
+                    return FilterChip(
+                      label: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(label),
+                          if (isDisabled) ...[
+                            const SizedBox(width: 4),
+                            const Icon(Icons.lock, size: 14, color: Colors.grey),
+                          ]
+                        ],
+                      ),
+                      selected: isSelected,
+                      onSelected: isDisabled
+                          ? (val) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Для отдельного кардио-дня нужно минимум 3 дня в неделю'),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          : (_) => _toggle(tag),
+                      selectedColor: theme.colorScheme.primary.withOpacity(0.2),
+                      checkmarkColor: theme.colorScheme.primary,
+                      labelStyle: TextStyle(
+                        color: isDisabled
+                            ? Colors.grey
+                            : (isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface),
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    );
+                  }).toList(),
+                ),
               ),
             ),
           ],
-        ],
+        ),
       ),
       actions: [
         TextButton(
@@ -129,8 +150,8 @@ class _FocusAreasDialogState extends State<FocusAreasDialog> {
           child: const Text('Отмена'),
         ),
         ElevatedButton(
-          onPressed: canConfirm ? () => Navigator.pop(context, _selected) : null,
-          child: const Text('Создать план'),
+          onPressed: _selected.isEmpty ? null : () => Navigator.pop(context, _selected),
+          child: const Text('Сохранить'),
         ),
       ],
     );

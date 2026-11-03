@@ -4,6 +4,25 @@ import '../../../models/workout_day.dart';
 import '../widgets/set_row.dart';
 import '../../exercise/exercise_detail_screen.dart';
 
+// 👇 ФРАЗЫ ДЛЯ ИЗОЛЯЦИИ (когда есть рекорд)
+final List<String> _isolationPhrases = [
+  'Можешь больше? Делай, но не переусердствуй! С верой в тебя, твоя Фея 🧚‍♀️',
+  'Почувствуй жжение в мышце! С верой в тебя, твоя Фея 🧚‍♀️',
+  'Главное — техника, а не вес. Сделай качественно! С верой в тебя, твоя Фея 🧚‍♀️',
+  'Не гонись за весом, гонись за ощущениями. С верой в тебя, твоя Фея 🧚‍♀️',
+  'Сожги эту мышцу! С верой в тебя, твоя Фея 🧚‍♀️',
+  'Идеальная форма — залог результата. С верой в тебя, твоя Фея 🧚‍♀️',
+];
+
+// 👇 ФРАЗЫ ДЛЯ НОВЫХ УПРАЖНЕНИЙ (когда истории нет)
+final List<String> _newExercisePhrases = [
+  'Новое упражнение! Осваиваем технику без спешки. С верой в тебя, твоя Фея 🧚‍♀️',
+  'Новое движение — новые возможности. С верой в тебя, твоя Фея 🧚‍♀️',
+  'Впервые делаешь это? Главное — прочувствовать мышцу. С верой в тебя, твоя Фея 🧚‍♀️',
+  'Новое упражнение. Не гонись за весом, сначала идеальная форма. С верой в тебя, твоя Фея 🧚‍♀️',
+  'Осваиваем новое! Слушай свои ощущения. С верой в тебя, твоя Фея 🧚‍♀️',
+];
+
 class ExerciseCard extends StatelessWidget {
   final WorkoutExercise item;
   final Exercise ex;
@@ -12,7 +31,10 @@ class ExerciseCard extends StatelessWidget {
   final bool isViewMode;
   final bool started;
   final List<SetData> sets;
-  // 👇 МЕНЯЕМ СИГНАТУРУ НА ПЕРЕДАЧУ ИНДЕКСА
+
+  final double? lastWeight;
+  final int? lastReps;
+
   final void Function(int index, SetData data) onSetChanged;
   final Function() onSetComplete;
   final Function() onAddSet;
@@ -48,20 +70,34 @@ class ExerciseCard extends StatelessWidget {
     required this.isCardio,
     required this.isTimed,
     required this.parseReps,
+    this.lastWeight,
+    this.lastReps,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isCardio = this.isCardio(ex);
-    final isTimed = this.isTimed(ex.name);
+    final isTimedEx = this.isTimed(ex.name);
     final baseZone = getBaseZone(ex);
     final isThisBase = isBase(ex);
     final defaultReps = parseReps(item.reps);
 
-    final List<int> setIndexesToShow = circleIndex != null
-        ? (circleIndex! < sets.length ? [circleIndex!] : [])
-        : List.generate(sets.length, (i) => i);
+    // 👇 ЗАЩИТА: если подходов нет, создаем фиктивный, чтобы UI не ломался
+    final List<int> setIndexesToShow;
+    if (sets.isEmpty) {
+      setIndexesToShow = [0];
+    } else if (circleIndex != null) {
+      setIndexesToShow = (circleIndex! < sets.length) ? [circleIndex!] : [0];
+    } else {
+      setIndexesToShow = List.generate(sets.length, (i) => i);
+    }
+
+    // 👇 Определяем, есть ли история
+    final bool hasHistory = lastWeight != null || lastReps != null;
+
+    // 👇 Показываем плашку ТОЛЬКО для изоляции, ТОЛЬКО в 1-м круге и ТОЛЬКО если это НЕ кардио
+    final bool showFairyBanner = !isThisBase && !isCardio && (circleIndex == null || circleIndex == 0);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -107,8 +143,68 @@ class ExerciseCard extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(ex.name, style: theme.textTheme.headlineMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
+
+                              // 👇 ПЛАШКА РЕКОРДА И ФЕИ (ТОЛЬКО ДЛЯ ИЗОЛЯЦИИ И ТОЛЬКО В 1-М КРУГЕ)
+                              if (showFairyBanner) ...[
+                                const SizedBox(height: 8),
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: hasHistory
+                                        ? Colors.amber.withOpacity(0.08)
+                                        : theme.colorScheme.primary.withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: hasHistory
+                                          ? Colors.amber.withOpacity(0.3)
+                                          : theme.colorScheme.primary.withOpacity(0.2),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Заголовок (Рекорд или Новое)
+                                      Row(
+                                        children: [
+                                          Text(hasHistory ? '🏆' : '✨', style: const TextStyle(fontSize: 14)),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              hasHistory
+                                                  ? 'Прошлый раз: ${lastWeight != null ? "${lastWeight!.toStringAsFixed(lastWeight! % 1 == 0 ? 0 : 1)} кг" : ""}'
+                                                  '${lastWeight != null && lastReps != null ? " × " : ""}'
+                                                  '${lastReps != null ? "$lastReps ${isTimedEx ? "сек" : "повт."}" : ""}'
+                                                  : 'Новое упражнение',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w800,
+                                                color: hasHistory ? Colors.amber[800] : theme.colorScheme.primary,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                      // Фраза Феи
+                                      Text(
+                                        hasHistory
+                                            ? _isolationPhrases[(ex.name.hashCode.abs() + DateTime.now().day) % _isolationPhrases.length]
+                                            : _newExercisePhrases[(ex.name.hashCode.abs() + DateTime.now().day) % _newExercisePhrases.length],
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: theme.colorScheme.primary,
+                                          height: 1.3,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+
                               if (!isCardio) ...[
-                                const SizedBox(height: 4),
+                                const SizedBox(height: 6),
                                 Row(
                                   children: [
                                     if (isThisBase)
@@ -173,21 +269,21 @@ class ExerciseCard extends StatelessWidget {
                 SetRow(
                   key: ValueKey('${item.id}_$i'),
                   setNumber: i + 1,
-                  setIndex: i, // 👈 ПЕРЕДАЕМ ИНДЕКС ПОДХОДА
-                  completed: sets[i].completed,
-                  initialWeight: sets[i].weight,
-                  initialReps: sets[i].reps ?? defaultReps,
+                  setIndex: i,
+                  completed: sets.isNotEmpty && i < sets.length ? sets[i].completed : false,
+                  initialWeight: sets.isNotEmpty && i < sets.length ? sets[i].weight : null,
+                  initialReps: sets.isNotEmpty && i < sets.length ? sets[i].reps ?? defaultReps : defaultReps,
                   readOnly: isViewMode,
                   isCardio: isCardio,
-                  isTimed: isTimed,
+                  isTimed: isTimedEx,
                   targetReps: item.reps,
-                  onChanged: (index, data) { // 👈 ИЗМЕНЕНА СИГНАТУРА
+                  onChanged: (index, data) {
                     if (item.id == null || isViewMode) return;
                     var updatedData = data;
                     if (data.completed && data.reps == null && defaultReps != null) {
                       updatedData = SetData(weight: data.weight, reps: defaultReps, completed: data.completed);
                     }
-                    onSetChanged(index, updatedData); // 👈 ПЕРЕДАЕМ ИНДЕКС НАВЕРХ
+                    onSetChanged(index, updatedData);
                     if (circleIndex != null && item.id != null) onTryAutoCollapse(circleIndex!);
                   },
                   onComplete: () {

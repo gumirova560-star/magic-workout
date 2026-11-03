@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/user_profile.dart';
 import '../../services/database_helper.dart';
-import '../main_screen.dart'; // ⚠️ ИМПОРТ ДЛЯ ПЕРЕХОДА
+import '../main_screen.dart';
 
 class ProfileEditScreen extends StatefulWidget {
   final UserProfile? profile;
@@ -14,284 +14,469 @@ class ProfileEditScreen extends StatefulWidget {
 }
 
 class _ProfileEditScreenState extends State<ProfileEditScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+final _formKey = GlobalKey<FormState>();
+final _nameController = TextEditingController();
 
-  // Контроллеры для гибридных полей
-  late TextEditingController _ageController;
-  late TextEditingController _heightController;
-  late TextEditingController _weightController;
+late TextEditingController _ageController;
+late TextEditingController _heightController;
+late TextEditingController _weightController;
 
-  String _gender = 'female';
-  int _age = 30;
-  double _height = 170;
-  double _weight = 65;
-  String _level = 'beginner';
-  String _goal = 'tone';
-  String _equipment = 'dumbbells';
-  int _daysPerWeek = 3;
-  int _sessionMinutes = 45;
+String _gender = 'female';
+int _age = 30;
+double _height = 170;
+double _weight = 65;
+String _level = 'beginner';
+String _goal = 'tone';
+String _equipment = 'dumbbells';
+int _daysPerWeek = 3;
+int _sessionMinutes = 45;
+String? _bodyType;
 
-  final Set<String> _focusAreas = {};
-  final Set<String> _limitations = {};
+bool _focusAutoFilled = false; // 👈 Показывает сообщение о том, что зоны выбраны по типу фигуры
 
-  static const int _maxFocusAreas = 3;
+final Set<String> _focusAreas = {};
+final Set<String> _limitations = {};
 
-  @override
-  void initState() {
-    super.initState();
-    if (widget.profile != null) {
-      final p = widget.profile!;
-      _nameController.text = p.name;
-      _gender = p.gender;
-      _age = p.age;
-      _height = p.height;
-      _weight = p.weight;
-      _level = p.level;
-      _goal = p.goal;
-      _equipment = p.equipment;
-      _daysPerWeek = p.daysPerWeek;
-      _sessionMinutes = p.sessionMinutes;
-      _focusAreas.addAll(p.focusAreas.take(_maxFocusAreas));
-      _limitations.addAll(p.limitations);
-    }
+static const int _maxFocusAreas = 3;
 
-    _ageController = TextEditingController(text: _age.toString());
-    _heightController = TextEditingController(text: _height.toInt().toString());
-    _weightController = TextEditingController(text: _weight.toStringAsFixed(_weight % 1 == 0 ? 0 : 1));
-  }
+@override
+void initState() {
+super.initState();
+if (widget.profile != null) {
+final p = widget.profile!;
+_nameController.text = p.name;
+_gender = p.gender;
+_age = p.age;
+_height = p.height;
+_weight = p.weight;
+_level = p.level;
+_goal = p.goal;
+_equipment = p.equipment;
+_daysPerWeek = p.daysPerWeek;
+_sessionMinutes = p.sessionMinutes;
+_focusAreas.addAll(p.focusAreas.take(_maxFocusAreas));
+_limitations.addAll(p.limitations);
+_bodyType = p.bodyType;
+}
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _ageController.dispose();
-    _heightController.dispose();
-    _weightController.dispose();
-    super.dispose();
-  }
+_ageController = TextEditingController(text: _age.toString());
+_heightController = TextEditingController(text: _height.toInt().toString());
+_weightController = TextEditingController(text: _weight.toStringAsFixed(_weight % 1 == 0 ? 0 : 1));
+}
 
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+@override
+void dispose() {
+_nameController.dispose();
+_ageController.dispose();
+_heightController.dispose();
+_weightController.dispose();
+super.dispose();
+}
 
-    final profile = UserProfile(
-      id: widget.profile?.id,
-      name: _nameController.text.trim(),
-      gender: _gender,
-      age: _age,
-      height: _height,
-      weight: _weight,
-      level: _level,
-      goal: _goal,
-      focusAreas: _focusAreas.take(_maxFocusAreas).toList(),
-      limitations: _limitations.toList(),
-      equipment: _equipment,
-      daysPerWeek: _daysPerWeek,
-      sessionMinutes: _sessionMinutes,
-      createdAt: widget.profile?.createdAt,
+Future<void> _save() async {
+if (!_formKey.currentState!.validate()) return;
+
+// 👈 Проверка, что фокусные зоны выбраны
+if (_focusAreas.isEmpty) {
+ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Выберите хотя бы одну фокусную зону')));
+return;
+}
+
+final profile = UserProfile(
+id: widget.profile?.id,
+name: _nameController.text.trim(),
+gender: _gender,
+age: _age,
+height: _height,
+weight: _weight,
+level: _level,
+goal: _goal,
+focusAreas: _focusAreas.take(_maxFocusAreas).toList(),
+limitations: _limitations.toList(),
+equipment: _equipment,
+daysPerWeek: _daysPerWeek,
+sessionMinutes: _sessionMinutes,
+createdAt: widget.profile?.createdAt,
+bodyType: _bodyType,
+);
+
+try {
+if (widget.profile == null) {
+await DatabaseHelper.instance.addProfile(profile);
+} else {
+await DatabaseHelper.instance.updateProfile(profile);
+}
+
+if (!mounted) return;
+
+if (widget.profile == null) {
+Navigator.of(context).pushAndRemoveUntil(
+MaterialPageRoute(builder: (_) => const MainScreen()),
+(route) => false,
+);
+} else {
+Navigator.pop(context, true);
+}
+} catch (e) {
+if (mounted) {
+ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+}
+}
+}
+// ═══ КОНЕЦ ЧАСТИ 1 из 3 ═══
+@override
+Widget build(BuildContext context) {
+final isEdit = widget.profile != null;
+
+return Scaffold(
+appBar: AppBar(title: Text(isEdit ? 'Редактировать' : 'Создать профиль')),
+body: Form(
+key: _formKey,
+child: ListView(
+padding: const EdgeInsets.all(16),
+children: [
+TextFormField(
+controller: _nameController,
+decoration: const InputDecoration(labelText: 'Имя профиля', hintText: 'Я, Жена, Муж...', prefixIcon: Icon(Icons.person_rounded)),
+validator: (v) => v?.isEmpty ?? true ? 'Введите имя' : null,
+),
+const SizedBox(height: 24),
+
+_sectionTitle('Пол'),
+Row(
+children: [
+Expanded(child: _choiceButton(label: 'Женский', icon: Icons.female_rounded, isSelected: _gender == 'female', onTap: () => setState(() => _gender = 'female'))),
+const SizedBox(width: 12),
+Expanded(child: _choiceButton(label: 'Мужской', icon: Icons.male_rounded, isSelected: _gender == 'male', onTap: () => setState(() => _gender = 'male'))),
+],
+),
+const SizedBox(height: 24),
+
+_sectionTitle('Параметры'),
+
+_buildHybridSlider(
+label: 'Возраст',
+controller: _ageController,
+value: _age.toDouble(),
+min: 14,
+max: 90,
+divisions: 76,
+unit: 'лет',
+onChanged: (v) {
+setState(() => _age = v.toInt());
+_ageController.text = _age.toString();
+},
+onTextChanged: (text) {
+final parsed = int.tryParse(text);
+if (parsed != null && parsed >= 14 && parsed <= 90) {
+setState(() => _age = parsed);
+}
+},
+),
+_buildHybridSlider(
+label: 'Рост',
+controller: _heightController,
+value: _height,
+min: 130,
+max: 220,
+divisions: 90,
+unit: 'см',
+onChanged: (v) {
+setState(() => _height = v);
+_heightController.text = _height.toInt().toString();
+},
+onTextChanged: (text) {
+final parsed = double.tryParse(text);
+if (parsed != null && parsed >= 130 && parsed <= 220) {
+setState(() => _height = parsed);
+}
+},
+),
+_buildHybridSlider(
+label: 'Вес',
+controller: _weightController,
+value: _weight,
+min: 35,
+max: 200,
+divisions: 165,
+unit: 'кг',
+onChanged: (v) {
+setState(() => _weight = v);
+_weightController.text = _weight.toStringAsFixed(_weight % 1 == 0 ? 0 : 1);
+},
+onTextChanged: (text) {
+final parsed = double.tryParse(text);
+if (parsed != null && parsed >= 35 && parsed <= 200) {
+setState(() => _weight = parsed);
+}
+},
+),
+const SizedBox(height: 24),
+
+_sectionTitle('Тип фигуры'),
+Container(
+padding: const EdgeInsets.all(12),
+decoration: BoxDecoration(
+color: Colors.amber.shade50,
+borderRadius: BorderRadius.circular(12),
+border: Border.all(color: Colors.amber.shade200),
+),
+child: Row(
+crossAxisAlignment: CrossAxisAlignment.start,
+children: [
+Icon(Icons.info_outline_rounded, size: 20, color: Colors.amber.shade800),
+const SizedBox(width: 8),
+Expanded(
+child: Text(
+'Тип фигуры — это генетика. Тренировки не изменят её на 100%, но помогут подчеркнуть достоинства и создать гармоничные пропорции.',
+style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
+),
+),
+],
+),
+),
+const SizedBox(height: 12),
+..._buildBodyTypeOptions(),
+const SizedBox(height: 24),
+
+// 👇 НОВЫЙ БЛОК: Фокусные зоны (чипы + сообщение)
+_sectionTitle('Фокусные зоны'),
+Wrap(
+spacing: 8,
+runSpacing: 8,
+children: [
+_focusChip('glutes', 'Ягодицы'),
+_focusChip('legs', 'Ноги'),
+_focusChip('abs', 'Пресс'),
+_focusChip('chest', 'Грудь'),
+_focusChip('back', 'Спина'),
+_focusChip('arms', 'Руки'),
+_focusChip('shoulders', 'Плечи'),
+_focusChip('cardio', 'Кардио-день'),
+],
+),
+const SizedBox(height: 8),
+if (_focusAutoFilled)
+Container(
+padding: const EdgeInsets.all(12),
+decoration: BoxDecoration(
+color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+borderRadius: BorderRadius.circular(12),
+border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.3)),
+),
+child: Column(
+crossAxisAlignment: CrossAxisAlignment.start,
+children: [
+Row(
+children: [
+Icon(Icons.auto_awesome_rounded, size: 18, color: Theme.of(context).colorScheme.primary),
+const SizedBox(width: 8),
+Expanded(
+child: Text(
+'Фокусные зоны выбраны по типу фигуры. Ты можешь подтвердить или выбрать вручную.',
+style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary),
+),
+),
+],
+),
+const SizedBox(height: 8),
+Row(
+children: [
+Expanded(
+child: OutlinedButton(
+onPressed: () => setState(() => _focusAutoFilled = false),
+child: const Text('Подтвердить', style: TextStyle(fontSize: 13)),
+),
+),
+const SizedBox(width: 8),
+Expanded(
+child: TextButton(
+onPressed: () => setState(() { _focusAreas.clear(); _focusAutoFilled = false; }),
+child: const Text('Выбрать вручную', style: TextStyle(fontSize: 13)),
+),
+),
+],
+),
+],
+),
+),
+if (_focusAreas.length > _maxFocusAreas)
+Padding(
+padding: const EdgeInsets.only(top: 8),
+child: Text('Можно выбрать не больше $_maxFocusAreas зон', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.error)),
+),
+const SizedBox(height: 24),
+
+_sectionTitle('Уровень подготовки'),
+..._buildOptions(
+options: [
+('beginner', 'Новичок', Icons.looks_one_rounded),
+('intermediate', 'Средний', Icons.looks_two_rounded),
+('advanced', 'Продвинутый', Icons.looks_3_rounded),
+],
+selected: _level,
+onSelected: (v) => setState(() => _level = v),
+),
+const SizedBox(height: 24),
+
+_sectionTitle('Цель'),
+..._buildOptions(
+options: [
+('lose_weight', 'Похудеть', Icons.trending_down_rounded),
+('gain_mass', 'Набрать массу', Icons.trending_up_rounded),
+('tone', 'Тонус', Icons.favorite_rounded),
+('strength', 'Сила', Icons.bolt_rounded),
+],
+selected: _goal,
+onSelected: (v) => setState(() => _goal = v),
+),
+const SizedBox(height: 24),
+
+_sectionTitle('Ограничения / травмы'),
+Wrap(
+spacing: 8,
+runSpacing: 8,
+children: [
+_chip('back', 'Спина', _limitations),
+_chip('knees', 'Колени', _limitations),
+_chip('shoulders', 'Плечи', _limitations),
+_chip('neck', 'Шея', _limitations),
+],
+),
+const SizedBox(height: 24),
+
+_sectionTitle('Инвентарь'),
+..._buildOptions(
+options: [
+('gym', 'Зал', Icons.fitness_center_rounded),
+('dumbbells', 'Гантели', Icons.sports_gymnastics_rounded),
+('bodyweight', 'Своё тело', Icons.accessibility_new_rounded),
+('mixed', 'Смешанно', Icons.shuffle_rounded),
+],
+selected: _equipment,
+onSelected: (v) => setState(() => _equipment = v),
+),
+const SizedBox(height: 24),
+
+_sectionTitle('Дней в неделю'),
+_buildSlider(
+label: 'Тренировок',
+value: _daysPerWeek.toDouble(),
+min: 2,
+max: 6,
+divisions: 4,
+unit: 'дн',
+onChanged: (v) => setState(() => _daysPerWeek = v.toInt()),
+),
+const SizedBox(height: 24),
+
+_sectionTitle('Время тренировки'),
+_buildSlider(
+label: 'Длительность',
+value: _sessionMinutes.toDouble(),
+min: 30,
+max: 90,
+divisions: 4,
+unit: 'мин',
+onChanged: (v) => setState(() => _sessionMinutes = v.toInt()),
+),
+const SizedBox(height: 32),
+
+ElevatedButton.icon(
+onPressed: _save,
+icon: const Icon(Icons.check_rounded),
+label: Text(isEdit ? 'Сохранить' : 'Создать профиль'),
+),
+const SizedBox(height: 24),
+],
+),
+),
+);
+}
+// ═══ КОНЕЦ ЧАСТИ 2 из 3 ═══
+  Widget _focusChip(String code, String label) {
+    final isSelected = _focusAreas.contains(code);
+    return FilterChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (v) {
+        setState(() {
+          if (v) {
+            if (_focusAreas.length >= _maxFocusAreas) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Можно выбрать не больше $_maxFocusAreas зон')));
+              return;
+            }
+            _focusAreas.add(code);
+          } else {
+            _focusAreas.remove(code);
+          }
+          _focusAutoFilled = false; // При ручном выборе скрываем сообщение
+        });
+      },
     );
-
-    try {
-      if (widget.profile == null) {
-        await DatabaseHelper.instance.addProfile(profile);
-      } else {
-        await DatabaseHelper.instance.updateProfile(profile);
-      }
-
-      if (!mounted) return;
-
-      // ⚠️ ЕСЛИ ЭТО СОЗДАНИЕ (или если пришли из онбординга) — перекидываем на MainScreen
-      if (widget.profile == null) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const MainScreen()),
-          (route) => false,
-        );
-      } else {
-        // Если это редактирование из Настроек — просто возвращаемся назад
-        Navigator.pop(context, true);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
-      }
-    }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isEdit = widget.profile != null;
+  // 👇 Метод выбора типа фигуры с автоподстановкой зон
+  List<Widget> _buildBodyTypeOptions() {
+    final types = [
+      ('pear', 'Груша', 'Узкие плечи, широкие бедра. Акцент: ягодицы, ноги, плечи (для баланса).'),
+      ('apple', 'Яблоко', 'Широкие плечи и бедра, акцент в животе. Акцент: пресс, кардио.'),
+      ('hourglass', 'Песочные часы', 'Сбалансированные плечи и бедра, талия. Акцент: ягодицы, пресс.'),
+      ('rectangle', 'Прямоугольник', 'Плечи = бедра, талия слабо выражена. Акцент: ягодицы, плечи.'),
+      ('inverted_triangle', 'Перевернутый треугольник', 'Широкие плечи, узкие бедра. Акцент: ягодицы, ноги.'),
+    ];
 
-    return Scaffold(
-      appBar: AppBar(title: Text(isEdit ? 'Редактировать' : 'Создать профиль')),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            TextFormField(
-              controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Имя профиля', hintText: 'Я, Жена, Муж...', prefixIcon: Icon(Icons.person_rounded)),
-              validator: (v) => v?.isEmpty ?? true ? 'Введите имя' : null,
+    return types.map((t) {
+      final (code, label, desc) = t;
+      final isSelected = _bodyType == code;
+      final theme = Theme.of(context);
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: GestureDetector(
+          onTap: () => setState(() {
+            _bodyType = code;
+            // Автоподстановка зон по типу фигуры
+            final Map<String, List<String>> bodyTypeZones = {
+              'pear': ['glutes', 'legs', 'shoulders'],
+              'apple': ['abs', 'cardio', 'legs'],
+              'hourglass': ['glutes', 'abs', 'legs'],
+              'rectangle': ['glutes', 'shoulders', 'legs'],
+              'inverted_triangle': ['glutes', 'legs', 'abs'],
+            };
+            if (bodyTypeZones.containsKey(code)) {
+              _focusAreas.clear();
+              _focusAreas.addAll(bodyTypeZones[code]!);
+              _focusAutoFilled = true; // Показываем сообщение "Подтвердить или выбрать вручную"
+            }
+          }),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isSelected ? theme.colorScheme.primary.withOpacity(0.12) : theme.colorScheme.surface,
+              border: Border.all(color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.1), width: isSelected ? 2 : 1),
+              borderRadius: BorderRadius.circular(12),
             ),
-            const SizedBox(height: 24),
-
-            _sectionTitle('Пол'),
-            Row(
+            child: Row(
               children: [
-                Expanded(child: _choiceButton(label: 'Женский', icon: Icons.female_rounded, isSelected: _gender == 'female', onTap: () => setState(() => _gender = 'female'))),
+                Icon(isSelected ? Icons.check_circle : Icons.circle_outlined, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.4)),
                 const SizedBox(width: 12),
-                Expanded(child: _choiceButton(label: 'Мужской', icon: Icons.male_rounded, isSelected: _gender == 'male', onTap: () => setState(() => _gender = 'male'))),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface)),
+                      const SizedBox(height: 2),
+                      Text(desc, style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface.withOpacity(0.6))),
+                    ],
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 24),
-
-            _sectionTitle('Параметры'),
-
-            // ⚠️ Гибридные поля: Ползунок + Текстовое поле
-            _buildHybridSlider(
-              label: 'Возраст',
-              controller: _ageController,
-              value: _age.toDouble(),
-              min: 14,
-              max: 90,
-              divisions: 76,
-              unit: 'лет',
-              onChanged: (v) {
-                setState(() => _age = v.toInt());
-                _ageController.text = _age.toString();
-              },
-              onTextChanged: (text) {
-                final parsed = int.tryParse(text);
-                if (parsed != null && parsed >= 14 && parsed <= 90) {
-                  setState(() => _age = parsed);
-                }
-              },
-            ),
-            _buildHybridSlider(
-              label: 'Рост',
-              controller: _heightController,
-              value: _height,
-              min: 130,
-              max: 220,
-              divisions: 90,
-              unit: 'см',
-              onChanged: (v) {
-                setState(() => _height = v);
-                _heightController.text = _height.toInt().toString();
-              },
-              onTextChanged: (text) {
-                final parsed = double.tryParse(text);
-                if (parsed != null && parsed >= 130 && parsed <= 220) {
-                  setState(() => _height = parsed);
-                }
-              },
-            ),
-            _buildHybridSlider(
-              label: 'Вес',
-              controller: _weightController,
-              value: _weight,
-              min: 35,
-              max: 200,
-              divisions: 165,
-              unit: 'кг',
-              onChanged: (v) {
-                setState(() => _weight = v);
-                _weightController.text = _weight.toStringAsFixed(_weight % 1 == 0 ? 0 : 1);
-              },
-              onTextChanged: (text) {
-                final parsed = double.tryParse(text);
-                if (parsed != null && parsed >= 35 && parsed <= 200) {
-                  setState(() => _weight = parsed);
-                }
-              },
-            ),
-            const SizedBox(height: 24),
-
-            _sectionTitle('Уровень подготовки'),
-            ..._buildOptions(
-              options: [
-                ('beginner', 'Новичок', Icons.looks_one_rounded),
-                ('intermediate', 'Средний', Icons.looks_two_rounded),
-                ('advanced', 'Продвинутый', Icons.looks_3_rounded),
-              ],
-              selected: _level,
-              onSelected: (v) => setState(() => _level = v),
-            ),
-            const SizedBox(height: 24),
-
-            _sectionTitle('Цель'),
-            ..._buildOptions(
-              options: [
-                ('lose_weight', 'Похудеть', Icons.trending_down_rounded),
-                ('gain_mass', 'Набрать массу', Icons.trending_up_rounded),
-                ('tone', 'Тонус', Icons.favorite_rounded),
-                ('strength', 'Сила', Icons.bolt_rounded),
-              ],
-              selected: _goal,
-              onSelected: (v) => setState(() => _goal = v),
-            ),
-            const SizedBox(height: 24),
-
-            _sectionTitle('Ограничения / травмы'),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _chip('back', 'Спина', _limitations),
-                _chip('knees', 'Колени', _limitations),
-                _chip('shoulders', 'Плечи', _limitations),
-                _chip('neck', 'Шея', _limitations),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            _sectionTitle('Инвентарь'),
-            ..._buildOptions(
-              options: [
-                ('gym', 'Зал', Icons.fitness_center_rounded),
-                ('dumbbells', 'Гантели', Icons.sports_gymnastics_rounded),
-                ('bodyweight', 'Своё тело', Icons.accessibility_new_rounded),
-                ('mixed', 'Смешанно', Icons.shuffle_rounded),
-              ],
-              selected: _equipment,
-              onSelected: (v) => setState(() => _equipment = v),
-            ),
-            const SizedBox(height: 24),
-
-            _sectionTitle('Дней в неделю'),
-            _buildSlider(
-              label: 'Тренировок',
-              value: _daysPerWeek.toDouble(),
-              min: 2,
-              max: 6,
-              divisions: 4,
-              unit: 'дн',
-              onChanged: (v) => setState(() => _daysPerWeek = v.toInt()),
-            ),
-            const SizedBox(height: 24),
-
-            _sectionTitle('Время тренировки'),
-            _buildSlider(
-              label: 'Длительность',
-              value: _sessionMinutes.toDouble(),
-              min: 30,
-              max: 90,
-              divisions: 4,
-              unit: 'мин',
-              onChanged: (v) => setState(() => _sessionMinutes = v.toInt()),
-            ),
-            const SizedBox(height: 32),
-
-            ElevatedButton.icon(
-              onPressed: _save,
-              icon: const Icon(Icons.check_rounded),
-              label: Text(isEdit ? 'Сохранить' : 'Создать профиль'),
-            ),
-            const SizedBox(height: 24),
-          ],
+          ),
         ),
-      ),
-    );
+      );
+    }).toList();
   }
 
   Widget _sectionTitle(String text) {
@@ -430,4 +615,4 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     );
   }
 }
-// ═══ ФАЙЛ profile_edit_screen.dart ЗАВЕРШЁН ═══
+// ═══ КОНЕЦ ЧАСТИ 3 из 3 — ФАЙЛ profile_edit_screen.dart ЗАВЕРШЁН ═══

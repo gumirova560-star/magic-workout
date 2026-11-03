@@ -17,6 +17,7 @@ class UserProfile {
   String? beforePhotoPath; // Спереди
   String? beforeSidePath;  // ⚠️ Сбоку
   String? beforeBackPath;  // ⚠️ Сзади
+  String? bodyType;        // 👈 НОВОЕ: 'pear', 'apple', 'hourglass', 'rectangle', 'inverted_triangle'
 
   UserProfile({
     this.id,
@@ -37,6 +38,7 @@ class UserProfile {
     this.beforePhotoPath,
     this.beforeSidePath,
     this.beforeBackPath,
+    this.bodyType,
   })  : focusAreas = focusAreas ?? [],
         limitations = limitations ?? [],
         createdAt = createdAt ?? DateTime.now();
@@ -61,6 +63,7 @@ class UserProfile {
       'beforePhotoPath': beforePhotoPath,
       'beforeSidePath': beforeSidePath,
       'beforeBackPath': beforeBackPath,
+      'bodyType': bodyType,
     };
   }
 
@@ -75,14 +78,14 @@ class UserProfile {
       level: map['level'] ?? 'beginner',
       goal: map['goal'] ?? 'tone',
       focusAreas: (map['focusAreas'] as String?)
-              ?.split(',')
-              .where((s) => s.isNotEmpty)
-              .toList() ??
+          ?.split(',')
+          .where((s) => s.isNotEmpty)
+          .toList() ??
           [],
       limitations: (map['limitations'] as String?)
-              ?.split(',')
-              .where((s) => s.isNotEmpty)
-              .toList() ??
+          ?.split(',')
+          .where((s) => s.isNotEmpty)
+          .toList() ??
           [],
       equipment: map['equipment'] ?? 'bodyweight',
       daysPerWeek: map['daysPerWeek'] ?? 3,
@@ -94,6 +97,7 @@ class UserProfile {
       beforePhotoPath: map['beforePhotoPath'],
       beforeSidePath: map['beforeSidePath'],
       beforeBackPath: map['beforeBackPath'],
+      bodyType: map['bodyType'],
     );
   }
 
@@ -115,6 +119,7 @@ class UserProfile {
     String? beforePhotoPath,
     String? beforeSidePath,
     String? beforeBackPath,
+    String? bodyType,
   }) {
     return UserProfile(
       id: id ?? this.id,
@@ -135,6 +140,7 @@ class UserProfile {
       beforePhotoPath: beforePhotoPath ?? this.beforePhotoPath,
       beforeSidePath: beforeSidePath ?? this.beforeSidePath,
       beforeBackPath: beforeBackPath ?? this.beforeBackPath,
+      bodyType: bodyType ?? this.bodyType,
     );
   }
 
@@ -166,6 +172,18 @@ class UserProfile {
       case 'bodyweight': return 'Своё тело';
       case 'mixed': return 'Смешанно';
       default: return 'Своё тело';
+    }
+  }
+
+  // 👇 НОВОЕ: Название типа фигуры
+  String get bodyTypeLabel {
+    switch (bodyType) {
+      case 'pear': return 'Груша';
+      case 'apple': return 'Яблоко';
+      case 'hourglass': return 'Песочные часы';
+      case 'rectangle': return 'Прямоугольник';
+      case 'inverted_triangle': return 'Перевернутый треугольник';
+      default: return 'Не выбран';
     }
   }
 }

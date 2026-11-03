@@ -171,7 +171,64 @@ List<Exercise> getExercisesPart1() {
       tips: '• 12-15 повторений\n• Контролируйте движение',
       imagePath: 'assets/exercises/cable_kickback_low.jpg',
     ),
-
+    // ═══════════════════════════════════════════════════════════
+    //  НОВЫЕ ЯГОДИЧНЫЕ (Базы и Изоляция)
+    // ═══════════════════════════════════════════════════════════
+    Exercise(
+      name: 'Реверанс-выпад',
+      muscleGroups: ['glutes', 'quads'],
+      equipment: ['dumbbells'],
+      difficulty: 'intermediate',
+      description: 'Отлично прорабатывает среднюю и большую ягодичную мышцу.',
+      technique: '1. Встаньте прямо, гантели в руках\n2. Сделайте шаг одной ногой назад и в сторону (крест-накрест)\n3. Присядьте\n4. Вернитесь в исходное положение',
+      mistakes: '❌ Заваливание колена внутрь\n❌ Наклон корпуса вперёд',
+      tips: '• 10-12 повторений на каждую ногу\n• Спина прямая',
+      imagePath: 'assets/exercises/curtsy_lunge.jpg',
+    ),
+    Exercise(
+      name: 'Зашагивания на платформу с гантелями',
+      muscleGroups: ['glutes', 'quads'],
+      equipment: ['dumbbells'],
+      difficulty: 'intermediate',
+      description: 'Мощное упражнение для верха ягодиц.',
+      technique: '1. Встаньте перед платформой\n2. Поставьте одну ногу на платформу\n3. Перенесите вес на эту ногу и поднимитесь\n4. Медленно опуститесь',
+      mistakes: '❌ Толчок нижней ногой\n❌ Сгорбленная спина',
+      tips: '• 10-12 повторений на ногу\n• Наклоняйте корпус немного вперёд',
+      imagePath: 'assets/exercises/step_ups_dumbbells.jpg',
+    ),
+    Exercise(
+      name: 'Румынская тяга на одной ноге с гантелью',
+      muscleGroups: ['glutes', 'hamstrings'],
+      equipment: ['dumbbells'],
+      difficulty: 'intermediate',
+      description: 'Улучшает баланс и растягивает ягодицы.',
+      technique: '1. Стоя на одной ноге, гантель в противоположной руке\n2. Наклонитесь вперёд, отводя вторую ногу назад\n3. Опустите гантель до середины голени\n4. Вернитесь',
+      mistakes: '❌ Круглая спина\n❌ Потеря равновесия',
+      tips: '• 10-12 повторений на ногу\n• Смотрите в пол',
+      imagePath: 'assets/exercises/single_leg_rdl.jpg',
+    ),
+    Exercise(
+      name: 'Отведение ноги в сторону в кроссовере',
+      muscleGroups: ['glutes'],
+      equipment: ['cable'],
+      difficulty: 'beginner',
+      description: 'Лучшее упражнение для средней ягодичной мышцы.',
+      technique: '1. Манжета на ноге\n2. Отведите ногу в сторону\n3. Задержитесь\n4. Медленно вернитесь',
+      mistakes: '❌ Наклон корпуса\n❌ Инерция',
+      tips: '• 15 повторений\n• Держите корпус ровно',
+      imagePath: 'assets/exercises/cable_hip_abduction_side.jpg',
+    ),
+    Exercise(
+      name: 'Фрог-памп',
+      muscleGroups: ['glutes'],
+      equipment: ['bodyweight'],
+      difficulty: 'beginner',
+      description: 'Отличная изоляция большой ягодичной мышцы.',
+      technique: '1. Лягте на спину, стопы вместе, колени разведены\n2. Поднимите таз вверх\n3. Сожмите ягодицы\n4. Опуститесь',
+      mistakes: '❌ Прогиб в пояснице\n❌ Быстрый темп',
+      tips: '• 20 повторений\n• Сожмите ягодицы в верхней точке',
+      imagePath: 'assets/exercises/frog_pump.jpg',
+    ),
     // ═══════════════════════════════════════════════════════════
     //  НОГИ (13 изоляций)
     // ═══════════════════════════════════════════════════════════

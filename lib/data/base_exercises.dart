@@ -13,9 +13,14 @@ const Map<String, ExerciseMeta> kAbsoluteExerciseDictionary = {
   'Ягодичный мост': ExerciseMeta('glutes', ExerciseType.base),
   'Ягодичный мост со штангой': ExerciseMeta('glutes', ExerciseType.base),
   'Хип-траст': ExerciseMeta('glutes', ExerciseType.base),
+  'Реверанс-выпад': ExerciseMeta('glutes', ExerciseType.base),
+  'Зашагивания на платформу с гантелями': ExerciseMeta('glutes', ExerciseType.base),
+  'Румынская тяга на одной ноге с гантелью': ExerciseMeta('glutes', ExerciseType.base),
+
   'Отведение ноги назад в блоке': ExerciseMeta('glutes', ExerciseType.isolation),
   'Отведение ноги в сторону с резинкой': ExerciseMeta('glutes', ExerciseType.isolation),
   'Отведение ноги в кроссовере': ExerciseMeta('glutes', ExerciseType.isolation),
+  'Отведение ноги в сторону в кроссовере': ExerciseMeta('glutes', ExerciseType.isolation),
   'Разведение ног в тренажёре': ExerciseMeta('glutes', ExerciseType.isolation),
   'Ягодичный мост на одной ноге': ExerciseMeta('glutes', ExerciseType.isolation),
   'Махи ногой назад (на четвереньках)': ExerciseMeta('glutes', ExerciseType.isolation),
@@ -25,6 +30,7 @@ const Map<String, ExerciseMeta> kAbsoluteExerciseDictionary = {
   'Ходьба с резинкой (Monster Walk)': ExerciseMeta('glutes', ExerciseType.isolation),
   'Разгибание бедра в тренажёре': ExerciseMeta('glutes', ExerciseType.isolation),
   'Тяга ноги назад с нижнего блока': ExerciseMeta('glutes', ExerciseType.isolation),
+  'Фрог-памп': ExerciseMeta('glutes', ExerciseType.isolation),
 
   // ═══ НОГИ ═══
   'Приседания со штангой': ExerciseMeta('legs', ExerciseType.base),
@@ -184,4 +190,80 @@ String getZoneLabel(String zoneCode) {
     'full_body': 'Всё тело', 'rotator_cuff': 'Манжета плеча',
   };
   return map[zoneCode] ?? zoneCode;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  СЕМЕЙСТВА УПРАЖНЕНИЙ (ДЛЯ ЗАЩИТЫ ОТ ДУБЛИКАТОВ)
+// ═══════════════════════════════════════════════════════════════
+String getExerciseFamily(String name) {
+  final lower = name.toLowerCase();
+
+  // Ягодицы: Мосты
+  if (lower.contains('ягодичный мост') || lower.contains('хип-траст') || lower.contains('hip thrust') || lower.contains('фрог-памп')) return 'glute_bridge';
+  // Ягодицы: Отведения назад
+  if (lower.contains('отведение ноги назад') || lower.contains('отведение ноги в кроссовере') || lower.contains('тяга ноги назад') || lower.contains('махи ногой назад')) return 'hip_extension_back';
+  // Ягодицы: Отведения в сторону
+  if (lower.contains('отведение ноги в сторону') || lower.contains('разведение ног') || lower.contains('разгибание бедра') || lower.contains('махи ногой в сторону') || lower.contains('отведение ноги лежа')) return 'hip_abduction_side';
+
+  // Новые ягодичные
+  if (lower.contains('реверанс')) return 'curtsy_lunge';
+  if (lower.contains('зашагивания')) return 'step_up';
+  if (lower.contains('румынская тяга на одной ноге')) return 'single_leg_hinge';
+
+  // Ноги: Разгибание
+  if (lower.contains('разгибание ног') || lower.contains('разгибание одной ноги')) return 'leg_extension';
+  // Ноги: Сгибание
+  if (lower.contains('сгибание ног') || lower.contains('сгибание одной ноги')) return 'leg_curl';
+  // Голень: Подъёмы на носки
+  if (lower.contains('носки') || lower.contains('жим носками')) return 'calf_raise';
+  // Ноги: Приседания и Жим ногами
+  if (lower.contains('приседания') || lower.contains('жим ногами')) return 'squat';
+  // Ноги: Выпады
+  if (lower.contains('выпады') || lower.contains('болгарский')) return 'lunge';
+  // Ноги: Румынская тяга и наклоны
+  if (lower.contains('румынская тяга') || lower.contains('наклоны со штангой')) return 'hinge';
+
+  // Спина: Тяги горизонтальные
+  if (lower.contains('тяга штанги в наклоне') || lower.contains('тяга гантели') || lower.contains('тяга нижнего блока') || lower.contains('тяга резинки к поясу')) return 'back_row_horizontal';
+  // Спина: Тяги вертикальные
+  if (lower.contains('подтягивания') || lower.contains('тяга верхнего блока')) return 'back_row_vertical';
+  // Спина: Шраги
+  if (lower.contains('шраги') || lower.contains('разведения в наклоне на трапеции')) return 'shrug';
+  // Спина: Поясница
+  if (lower.contains('гиперэкстензия') || lower.contains('лодочка')) return 'lower_back';
+
+  // Грудь: Жимы
+  if (lower.contains('жим штанги') || lower.contains('жим гантелей') || lower.contains('жим в тренажере')) return 'bench_press';
+  // Грудь: Разведения/Сведения
+  if (lower.contains('разведения гантелей') || lower.contains('сведение рук')) return 'chest_fly';
+  // Грудь: Отжимания
+  if (lower.contains('отжимания')) return 'pushup';
+
+  // Плечи: Жимы
+  if (lower.contains('жим гантелей сидя') || lower.contains('жим штанги стоя') || lower.contains('жим арнольда') || lower.contains('жим гантелей в тренажёре')) return 'shoulder_press';
+  // Плечи: Средняя дельта
+  if (lower.contains('разведения гантелей в стороны') || lower.contains('махи гантелями в стороны сидя')) return 'shoulder_side';
+  // Плечи: Передняя дельта
+  if (lower.contains('махи гантелями перед собой')) return 'shoulder_front';
+  // Плечи: Задняя дельта
+  if (lower.contains('разведения в наклоне') || lower.contains('махи гантелью в наклоне') || lower.contains('обратные разведения') || lower.contains('разведения гантелей на заднюю дельту') || lower.contains('тяга резинки к лицу')) return 'shoulder_rear';
+  // Плечи: Тяга к подбородку
+  if (lower.contains('тяга штанги к подбородку') || lower.contains('тяга гантелей к подбородку')) return 'upright_row';
+
+  // Руки: Бицепс
+  if (lower.contains('подъём гантелей на бицепс') || lower.contains('подъём штанги на бицепс') || lower.contains('молотковые сгибания') || lower.contains('концентрированный подъём') || lower.contains('подъем на бицепс')) return 'bicep_curl';
+  // Руки: Трицепс
+  if (lower.contains('французский жим') || lower.contains('разгибание руки') || lower.contains('разгибание рук на блоке') || lower.contains('отжимания от скамьи (трицепс)') || lower.contains('отжимания узким хватом')) return 'tricep_extension';
+
+  // Пресс: Планки
+  if (lower.contains('планка')) return 'plank';
+  // Пресс: Скручивания (стандартные)
+  if (lower.contains('скручивания') && !lower.contains('боковые') && !lower.contains('обратные')) return 'crunch_standard';
+  // Пресс: Обратные скручивания
+  if (lower.contains('обратные скручивания')) return 'crunch_reverse';
+  // Пресс: Косые
+  if (lower.contains('боковые скручивания') || lower.contains('наклоны в сторону') || lower.contains('повороты корпуса') || lower.contains('русский твист')) return 'crunch_side';
+
+  // Если ничего не подошло — уникальное семейство (по имени)
+  return name.toLowerCase();
 }

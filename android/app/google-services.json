@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "664356410466",
+    "project_id": "magic-workout-feedback",
+    "storage_bucket": "magic-workout-feedback.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:664356410466:android:9d202b05375a3f990e2d3b",
+        "android_client_info": {
+          "package_name": "com.example.workout_tracker"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA_8hH0OqrPPgnNr64juwMGFWXHV_lFuik"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

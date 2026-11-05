@@ -204,7 +204,8 @@ class WeekAnalyzer {
       int totalSets = 0;
       int doneSets = 0;
       for (final we in exercises) {
-        if (we.itemType != 'exercise' || we.isCoolDown) continue;
+        // 👇 разминка и заминка не считаются
+        if (we.itemType != 'exercise' || we.isCoolDown || we.isWarmup) continue;
         for (final s in await db.getWorkoutSets(we.id!)) { totalSets++; if (s.completed) doneSets++; }
       }
       if (totalSets == 0) continue;
@@ -242,7 +243,8 @@ class WeekAnalyzer {
     for (final day in currentCycleDays) {
       final exercises = await db.getWorkoutExercises(day.id!);
       for (final we in exercises) {
-        if (we.itemType != 'exercise' || we.isCoolDown) continue;
+        // 👇 разминку и заминку в тренды не включаем
+        if (we.itemType != 'exercise' || we.isCoolDown || we.isWarmup) continue;
         final exId = we.replacedByItemId ?? we.itemId;
         final sets = (await db.getWorkoutSets(we.id!)).where((s) => s.completed).toList();
         if (sets.isEmpty) continue;
@@ -270,7 +272,7 @@ class WeekAnalyzer {
       if (sets1.isEmpty && sets3.isEmpty) continue;
 
       final hasWeight = (sets1.isNotEmpty ? sets1.any((s) => s.weight != null && s.weight! > 0) : false) ||
-                        (sets3.isNotEmpty ? sets3.any((s) => s.weight != null && s.weight! > 0) : false);
+          (sets3.isNotEmpty ? sets3.any((s) => s.weight != null && s.weight! > 0) : false);
 
       double? avg1, avg3;
 
@@ -330,7 +332,6 @@ class WeekAnalyzer {
     return values.reduce((a, b) => a + b) / values.length;
   }
 
-  // 👇 ИСПРАВЛЕННЫЕ МЕТОДЫ ОПРЕДЕЛЕНИЯ ТИПА
   static bool _isCardio(Exercise ex) {
     final lower = ex.name.toLowerCase();
 
@@ -350,7 +351,7 @@ class WeekAnalyzer {
   static bool _isTimed(String name) {
     final lower = name.toLowerCase();
     return lower.contains('планка') || lower.contains('plank') || _isCardioName(lower) ||
-           lower.contains('канат') || lower.contains('скалолаз');
+        lower.contains('канат') || lower.contains('скалолаз');
   }
 
   static bool _isCardioName(String lowerName) {
@@ -359,3 +360,4 @@ class WeekAnalyzer {
         lowerName.contains('гребл') || lowerName.contains('степпер') || lowerName.contains('кардио');
   }
 }
+// ═══ ФАЙЛ week_analyzer.dart ЗАВЕРШЁН ═══

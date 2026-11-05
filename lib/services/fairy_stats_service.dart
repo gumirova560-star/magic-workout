@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'database_helper.dart';
+import '../models/workout_day.dart';
 
 /// Считает статистику для феи: streak по неделям, последняя тренировка.
 class FairyStatsService {
@@ -8,7 +9,6 @@ class FairyStatsService {
 
   /// Записать, что сегодня была тренировка.
   /// Проверяет, завершена ли текущая неделя.
-  /// Возвращает обновлённый streak (в неделях).
   static Future<int> recordWorkout() async {
     final prefs = await SharedPreferences.getInstance();
     final today = _dateOnly(DateTime.now());
@@ -32,41 +32,59 @@ class FairyStatsService {
     final profile = profiles.first;
     final daysPerWeek = profile.daysPerWeek;
 
-    // Получаем все завершённые дни за последние 52 недели
+    // Получаем все дни (лимит 1000, чтобы захватить все циклы)
     final days = await DatabaseHelper.instance.getWorkoutDays(
       profileId: profile.id!,
-      limit: 500,
+      limit: 1000,
     );
 
-    final completedDays = days
-        .where((d) => d.status == 'completed')
-        .map((d) => _dateOnly(d.date))
-        .toList();
+    if (days.isEmpty) {
+      await prefs.setInt(_keyStreakWeeks, 0);
+      return 0;
+    }
 
-    // ═══ Считаем streak: идём от прошлой недели назад ═══
+    // Группируем дни по циклу и неделе (например, ключ "1_2" = Цикл 1, Неделя 2)
+    final Map<String, List<WorkoutDay>> weeks = {};
+    for (final d in days) {
+      if (d.cycleNumber == null || d.weekNumber == null) continue;
+      final key = '${d.cycleNumber}_${d.weekNumber}';
+      weeks.putIfAbsent(key, () => []).add(d);
+    }
+
+    // Сортируем ключи недель по порядку (сначала циклы, потом недели внутри них)
+    final sortedWeekKeys = weeks.keys.toList()..sort((a, b) {
+      final partsA = a.split('_').map(int.parse).toList();
+      final partsB = b.split('_').map(int.parse).toList();
+      if (partsA[0] != partsB[0]) return partsA[0].compareTo(partsB[0]);
+      return partsA[1].compareTo(partsB[1]);
+    });
+
     int streak = 0;
-    DateTime weekStart = _mondayOfWeek(DateTime.now());
 
-    // Идём по неделям назад
-    for (int i = 0; i < 52; i++) {
-      // Текущая неделя — ещё не закончилась, пропускаем (не считаем её)
-      if (i == 0) {
-        weekStart = weekStart.subtract(const Duration(days: 7));
-        continue;
-      }
+    // Идем по всем неделям плана по порядку
+    for (int i = 0; i < sortedWeekKeys.length; i++) {
+      final key = sortedWeekKeys[i];
+      final weekDays = weeks[key]!;
 
-      final weekEnd = weekStart.add(const Duration(days: 7));
-      final count = completedDays
-          .where((d) => !d.isBefore(weekStart) && d.isBefore(weekEnd))
-          .length;
+      final completedCount = weekDays.where((d) => d.status == 'completed').length;
+      final hasSkipped = weekDays.any((d) => d.status == 'skipped');
 
-      if (count >= daysPerWeek) {
+      // Неделя считается завершенной, если выполнено нужное кол-во дней и нет пропусков
+      final isWeekComplete = completedCount >= daysPerWeek && !hasSkipped;
+
+      if (isWeekComplete) {
         streak++;
       } else {
-        break;
-      }
+        // Если неделя не закрыта:
+        // Проверяем, является ли она текущей (последней) неделей в плане, которую мы еще проходим
+        final isLatestWeek = (i == sortedWeekKeys.length - 1);
 
-      weekStart = weekStart.subtract(const Duration(days: 7));
+        // Если это прошлая неделя и она не закрыта, или если в ней есть явный пропуск — серия прерывается
+        if (!isLatestWeek || hasSkipped) {
+          streak = 0;
+          break;
+        }
+      }
     }
 
     await prefs.setInt(_keyStreakWeeks, streak);

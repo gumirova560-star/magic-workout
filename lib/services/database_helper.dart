@@ -21,7 +21,7 @@ static Database? _database;
 
 DatabaseHelper._init();
 
-static const int _dbVersion = 10;
+static const int _dbVersion = 11;
 static const String _dbName = 'workout_tracker.db';
 
 Future<Database> get database async {
@@ -133,6 +133,7 @@ await db.execute('''
         id INTEGER PRIMARY KEY AUTOINCREMENT, workoutDayId INTEGER NOT NULL, itemType TEXT NOT NULL, itemId INTEGER NOT NULL,
         "order" INTEGER NOT NULL, replacedByItemId INTEGER, replacementReason TEXT, replacementPermanent INTEGER DEFAULT 0,
         sets INTEGER DEFAULT 3, reps TEXT, restSeconds INTEGER DEFAULT 60, durationSeconds INTEGER DEFAULT 30,
+        isWarmup INTEGER DEFAULT 0,
         isCoolDown INTEGER DEFAULT 0, notes TEXT, blockNumber INTEGER,
         FOREIGN KEY (workoutDayId) REFERENCES workout_days (id) ON DELETE CASCADE
       )
@@ -194,10 +195,15 @@ await db.execute('ALTER TABLE user_profiles ADD COLUMN beforeBackPath TEXT');
 if (oldVersion < 7) { try { await db.execute('ALTER TABLE workout_days ADD COLUMN weekNumber INTEGER'); } catch (_) {} }
 if (oldVersion < 8) { try { await db.execute('ALTER TABLE workout_days ADD COLUMN cycleNumber INTEGER'); } catch (_) {} }
 
-// 👇 НОВОЕ: Добавляем поле bodyType в профиль
 if (oldVersion < 10) {
 try {
 await db.execute('ALTER TABLE user_profiles ADD COLUMN bodyType TEXT');
+} catch (_) {}
+}
+
+if (oldVersion < 11) {
+try {
+await db.execute('ALTER TABLE workout_exercises ADD COLUMN isWarmup INTEGER DEFAULT 0');
 } catch (_) {}
 }
 }
@@ -233,64 +239,65 @@ Future<int> deleteProfile(int id) async {
 final db = await database;
 return await db.delete('user_profiles', where: 'id = ?', whereArgs: [id]);
 }
+
+// ═══════════════════════════════════════════════════════════
+//  УПРАЖНЕНИЯ
+// ═══════════════════════════════════════════════════════════
+
+Future<int> addExercise(Exercise exercise) async {
+final db = await database;
+return await db.insert('exercises', exercise.toMap());
+}
+
+Future<List<Exercise>> getExercises() async {
+final db = await database;
+final maps = await db.query('exercises', orderBy: 'name ASC');
+return maps.map((m) => Exercise.fromMap(m)).toList();
+}
+
+Future<Exercise?> getExerciseById(int id) async {
+final db = await database;
+final maps = await db.query('exercises', where: 'id = ?', whereArgs: [id], limit: 1);
+if (maps.isEmpty) return null;
+return Exercise.fromMap(maps.first);
+}
+
+Future<int> countExercises() async {
+final db = await database;
+final result = await db.rawQuery('SELECT COUNT(*) as count FROM exercises');
+return Sqflite.firstIntValue(result) ?? 0;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  РАСТЯЖКИ
+// ═══════════════════════════════════════════════════════════
+
+Future<int> addStretch(Stretch stretch) async {
+final db = await database;
+return await db.insert('stretches', stretch.toMap());
+}
+
+Future<List<Stretch>> getStretches() async {
+final db = await database;
+final maps = await db.query('stretches', orderBy: 'name ASC');
+return maps.map((m) => Stretch.fromMap(m)).toList();
+}
+
+Future<Stretch?> getStretchById(int id) async {
+final db = await database;
+final maps = await db.query('stretches', where: 'id = ?', whereArgs: [id], limit: 1);
+if (maps.isEmpty) return null;
+return Stretch.fromMap(maps.first);
+}
+
+Future<Stretch?> getStretchByName(String name) async {
+final db = await database;
+final maps = await db.query('stretches', where: 'name = ?', whereArgs: [name], limit: 1);
+if (maps.isEmpty) return null;
+return Stretch.fromMap(maps.first);
+}
 // ═══ КОНЕЦ ЧАСТИ 1 из 2 ═══
-  // ═══════════════════════════════════════════════════════════
-  //  УПРАЖНЕНИЯ
-  // ═══════════════════════════════════════════════════════════
-
-  Future<int> addExercise(Exercise exercise) async {
-    final db = await database;
-    return await db.insert('exercises', exercise.toMap());
-  }
-
-  Future<List<Exercise>> getExercises() async {
-    final db = await database;
-    final maps = await db.query('exercises', orderBy: 'name ASC');
-    return maps.map((m) => Exercise.fromMap(m)).toList();
-  }
-
-  Future<Exercise?> getExerciseById(int id) async {
-    final db = await database;
-    final maps = await db.query('exercises', where: 'id = ?', whereArgs: [id], limit: 1);
-    if (maps.isEmpty) return null;
-    return Exercise.fromMap(maps.first);
-  }
-
-  Future<int> countExercises() async {
-    final db = await database;
-    final result = await db.rawQuery('SELECT COUNT(*) as count FROM exercises');
-    return Sqflite.firstIntValue(result) ?? 0;
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  //  РАСТЯЖКИ
-  // ═══════════════════════════════════════════════════════════
-
-  Future<int> addStretch(Stretch stretch) async {
-    final db = await database;
-    return await db.insert('stretches', stretch.toMap());
-  }
-
-  Future<List<Stretch>> getStretches() async {
-    final db = await database;
-    final maps = await db.query('stretches', orderBy: 'name ASC');
-    return maps.map((m) => Stretch.fromMap(m)).toList();
-  }
-
-  Future<Stretch?> getStretchById(int id) async {
-    final db = await database;
-    final maps = await db.query('stretches', where: 'id = ?', whereArgs: [id], limit: 1);
-    if (maps.isEmpty) return null;
-    return Stretch.fromMap(maps.first);
-  }
-
-  Future<Stretch?> getStretchByName(String name) async {
-    final db = await database;
-    final maps = await db.query('stretches', where: 'name = ?', whereArgs: [name], limit: 1);
-    if (maps.isEmpty) return null;
-    return Stretch.fromMap(maps.first);
-  }
-
+// Скажи «часть 2», чтобы получить продолжение (Йога, Шаблоны, Дни, Упражнения в тренировке с новым deleteWorkoutExercise, Подходы, и т.д.).
   // ═══════════════════════════════════════════════════════════
   //  ЙОГА
   // ═══════════════════════════════════════════════════════════
@@ -459,6 +466,12 @@ return await db.delete('user_profiles', where: 'id = ?', whereArgs: [id]);
     return maps.map((m) => WorkoutExercise.fromMap(m)).toList();
   }
 
+  // 👇 НОВЫЙ МЕТОД (добавлен для настройки челленджа)
+  Future<int> deleteWorkoutExercise(int id) async {
+    final db = await database;
+    return await db.delete('workout_exercises', where: 'id = ?', whereArgs: [id]);
+  }
+
   Future<int> updateWorkoutExerciseBlock({required int id, int? blockNumber}) async {
     final db = await database;
     return await db.update('workout_exercises', {'blockNumber': blockNumber}, where: 'id = ?', whereArgs: [id]);
@@ -537,6 +550,7 @@ return await db.delete('user_profiles', where: 'id = ?', whereArgs: [id]);
       WHERE wd.profileId = ?
         AND (we.itemId = ? OR we.replacedByItemId = ?)
         AND ws.completed = 1
+        AND we.isWarmup = 0
       GROUP BY wd.date
       ORDER BY wd.date DESC
       LIMIT ?
@@ -613,6 +627,8 @@ return await db.delete('user_profiles', where: 'id = ?', whereArgs: [id]);
     final workoutExs = await getWorkoutExercises(workoutDayId);
 
     for (final we in workoutExs) {
+      if (we.isWarmup) continue; // Разминку в шаблон не переносим
+
       final sets = await getWorkoutSets(we.id!);
       String repsStr = we.reps;
       if (sets.isNotEmpty) {
@@ -636,7 +652,7 @@ return await db.delete('user_profiles', where: 'id = ?', whereArgs: [id]);
   }
 
   // ═══════════════════════════════════════════════════════════
-  //  ИСТОРИЯ ПО УПРАЖНЕНИЮ (ИСПРАВЛЕНО)
+  //  ИСТОРИЯ ПО УПРАЖНЕНИЮ
   // ═══════════════════════════════════════════════════════════
 
   Future<WorkoutSet?> getLastCompletedSetForExercise({required int profileId, required int exerciseId, int daysLimit = 60}) async {
@@ -652,6 +668,7 @@ return await db.delete('user_profiles', where: 'id = ?', whereArgs: [id]);
         AND wd.date >= ?
         AND (we.replacedByItemId = ? OR we.itemId = ?)
         AND we.itemType = 'exercise'
+        AND we.isWarmup = 0
         AND we.isCoolDown = 0
         AND ws.completed = 1
         AND ws.weight IS NOT NULL
@@ -674,17 +691,16 @@ return await db.delete('user_profiles', where: 'id = ?', whereArgs: [id]);
       WHERE wd.profileId = ?
         AND wd.date >= ?
         AND we.itemType = 'exercise'
+        AND we.isWarmup = 0
         AND we.isCoolDown = 0
     ''', [profileId, from]);
     return maps.map((m) => m['exId'] as int?).whereType<int>().toSet();
   }
 
-  /// 👇 ИСПРАВЛЕННЫЙ МЕТОД: ищет историю с весом (или без), без проверки статуса
   Future<List<WorkoutSet>> getLastWorkoutExerciseSets({required int profileId, required int exerciseId, int daysLimit = 365}) async {
     final db = await database;
     final from = DateTime.now().subtract(Duration(days: daysLimit)).toIso8601String();
 
-    // Сначала ищем тренировку, где БЫЛ ВЕС
     final weResult = await db.rawQuery('''
       SELECT we.id
       FROM workout_exercises we
@@ -694,6 +710,7 @@ return await db.delete('user_profiles', where: 'id = ?', whereArgs: [id]);
         AND wd.date >= ?
         AND (we.replacedByItemId = ? OR we.itemId = ?)
         AND we.itemType = 'exercise'
+        AND we.isWarmup = 0
         AND we.isCoolDown = 0
         AND ws.weight IS NOT NULL
       ORDER BY wd.date DESC, wd.id DESC, ws."order" ASC
@@ -701,7 +718,6 @@ return await db.delete('user_profiles', where: 'id = ?', whereArgs: [id]);
     ''', [profileId, from, exerciseId, exerciseId]);
 
     if (weResult.isEmpty) {
-      // Если с весом не нашли, ищем просто последнюю тренировку с этим упражнением
       final fallback = await db.rawQuery('''
         SELECT we.id
         FROM workout_exercises we
@@ -710,6 +726,7 @@ return await db.delete('user_profiles', where: 'id = ?', whereArgs: [id]);
           AND wd.date >= ?
           AND (we.replacedByItemId = ? OR we.itemId = ?)
           AND we.itemType = 'exercise'
+          AND we.isWarmup = 0
           AND we.isCoolDown = 0
         ORDER BY wd.date DESC, wd.id DESC
         LIMIT 1
@@ -737,7 +754,7 @@ return await db.delete('user_profiles', where: 'id = ?', whereArgs: [id]);
       FROM workout_sets ws
       JOIN workout_exercises we ON we.id = ws.workoutExerciseId
       JOIN workout_days wd ON wd.id = we.workoutDayId
-      WHERE wd.profileId = ? AND ws.completed = 1
+      WHERE wd.profileId = ? AND ws.completed = 1 AND we.isWarmup = 0
     ''', [profileId]);
     return Sqflite.firstIntValue(result) ?? 0;
   }

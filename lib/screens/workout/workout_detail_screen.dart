@@ -11,6 +11,9 @@ import '../../services/database_helper.dart';
 import '../../services/fairy_reaction_service.dart';
 import '../../services/achievement_service.dart';
 import 'replace_exercise_screen.dart';
+import 'warmup_screen.dart';
+import 'workout_complete_screen.dart';
+import 'challenge_screen.dart'; // 👈 Новый импорт
 import 'widgets/set_row.dart';
 import 'widgets/exercise_card.dart';
 import 'widgets/circle_header.dart';
@@ -50,7 +53,6 @@ final Map<int, List<SetData>> _setsData = {};
 final Map<int, List<int>> _setIds = {};
 final Map<int, double?> _targetWeights = {};
 
-// 👇 Хранилище рекордов (item.id -> {weight, reps})
 final Map<int, Map<String, dynamic>> _lastRecords = {};
 
 WorkoutDay? _day;
@@ -123,7 +125,8 @@ if (lowerName.contains('скалолаз')) return true;
 if (lowerName.contains('канат') && (lowerName.contains('махи') || lowerName.contains('волны') || lowerName.contains('бэтл'))) return true;
 return false;
 }
-// ═══ КОНЕЦ ЧАСТИ 1 из 6 ═══
+// ═══ КОНЕЦ ЧАСТИ 1 из 5 ═══
+// Скажи «часть 2», чтобы получить продолжение (таймер отдыха, _showWeekNotification, _loadExistingDay с проверкой на Челлендж).
 void _startRestTimer() {
 _restTimer?.cancel();
 setState(() { _restTotalTime = _globalRestSeconds; _restTimeLeft = _globalRestSeconds; _isRestTimerRunning = true; _isRestTimerPaused = false; });
@@ -191,7 +194,7 @@ List<String> overperformed = [];
 
 final exs = await DatabaseHelper.instance.getWorkoutExercises(prevDay.id!);
 for (final we in exs) {
-if (we.itemType != 'exercise' || we.isCoolDown) continue;
+if (we.itemType != 'exercise' || we.isCoolDown || we.isWarmup) continue;
 final exId = we.replacedByItemId ?? we.itemId;
 
 final ex = await DatabaseHelper.instance.getExerciseById(exId);
@@ -286,11 +289,11 @@ child: const Text('Вперёд! 🚀', style: TextStyle(fontWeight: FontWeight.
 });
 await prefs.setBool(key, true);
 }
-// ═══ КОНЕЦ ЧАСТИ 2 из 6 ═══
+
 Future<void> _preloadHistory() async {
 final Set<int> loadedHistory = {};
 for (final item in _items) {
-if (item.isCoolDown || item.itemType != 'exercise') continue;
+if (item.isCoolDown || item.isWarmup || item.itemType != 'exercise') continue;
 final exId = item.replacedByItemId ?? item.itemId;
 if (loadedHistory.contains(exId)) continue;
 final sets = await DatabaseHelper.instance.getLastWorkoutExerciseSets(profileId: widget.profileId, exerciseId: exId);
@@ -306,13 +309,15 @@ String _circleKey(int blockNum, int circleNum) => '${blockNum}_$circleNum';
 bool _isCircleCollapsed(int blockNum, int circleNum) => _collapsedCircles.contains(_circleKey(blockNum, circleNum));
 
 bool _isCircleComplete(List<WorkoutExercise> blockItems, int circle) {
+bool hasSetsForCircle = false;
 for (final item in blockItems) {
 final sets = _setsData[item.id!];
 if (sets == null) return false;
-if (circle >= sets.length) continue;
+if (circle >= sets.length) return false;
+hasSetsForCircle = true;
 if (!sets[circle].completed) return false;
 }
-return true;
+return hasSetsForCircle;
 }
 
 int _completedInCircle(List<WorkoutExercise> blockItems, int circle) {
@@ -333,11 +338,47 @@ setState(() { if (_collapsedCircles.contains(key)) _collapsedCircles.remove(key)
 void _showMessage(String text) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 
 Future<void> _loadExistingDay(WorkoutDay day) async {
+// 👇 ЕСЛИ ЭТО ЧЕЛЛЕНДЖ
+if (day.type == 'challenge') {
+_workoutDayId = day.id;
+_completed = day.status == 'completed';
+_started = true;
+
+final workoutExs = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
+final exMap = <int, Exercise>{};
+
+for (final we in workoutExs) {
+if (we.itemType == 'exercise') {
+final ex = await DatabaseHelper.instance.getExerciseById(we.replacedByItemId ?? we.itemId);
+if (ex != null) exMap[ex.id!] = ex;
+}
+}
+
+if (!mounted) return;
+// Перенаправляем на экран челленджа
+Navigator.pushReplacement(
+context,
+MaterialPageRoute(
+builder: (_) => ChallengeScreen(
+day: day,
+profileId: widget.profileId,
+items: workoutExs,
+exerciseMap: exMap,
+),
+),
+);
+return; // Выходим, чтобы не грузить обычную логику подходов
+}
+
+// ═══ ОБЫЧНАЯ ТРЕНИРОВКА ═══
 _workoutDayId = day.id; _completed = day.status == 'completed'; _started = day.status == 'completed' || day.status == 'in_progress';
 final workoutExs = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
-_hasBlocks = workoutExs.any((we) => we.blockNumber != null);
+_hasBlocks = workoutExs.any((we) => we.blockNumber != null && !we.isWarmup);
 _pendingBlocks.clear();
-for (int i = 0; i < workoutExs.length; i++) { final bn = workoutExs[i].blockNumber; if (bn != null) _pendingBlocks[i] = bn; }
+for (int i = 0; i < workoutExs.length; i++) {
+final bn = workoutExs[i].blockNumber;
+if (bn != null && !workoutExs[i].isWarmup) _pendingBlocks[i] = bn;
+}
 _items = workoutExs;
 final exMap = <int, Exercise>{}; final stMap = <int, Stretch>{};
 for (final we in workoutExs) {
@@ -358,7 +399,7 @@ ids.add(s.id!);
 }
 }
 
-if (needsPulling && day.weekNumber != null && day.weekNumber! > 1) {
+if (needsPulling && !item.isWarmup && !item.isCoolDown && day.weekNumber != null && day.weekNumber! > 1) {
 final ex = exMap[item.replacedByItemId ?? item.itemId];
 final isCardio = ex != null && _isCardio(ex);
 final isTimed = ex != null && _isTimed(ex.name);
@@ -371,12 +412,9 @@ bool wasFailedPrevWeek = false;
 
 final exName = ex?.name ?? '';
 
-// 👇 ИЩЕМ ПОСЛЕДНЮЮ ИСТОРИЮ В БАЗЕ (независимо от недели)
 if (exName.isNotEmpty) {
 final lastSets = await DatabaseHelper.instance.getLastWorkoutExerciseSets(
-profileId: widget.profileId,
-exerciseId: item.replacedByItemId ?? item.itemId,
-daysLimit: 365,
+profileId: widget.profileId, exerciseId: item.replacedByItemId ?? item.itemId, daysLimit: 365,
 );
 
 if (lastSets.isNotEmpty) {
@@ -385,7 +423,6 @@ final completed = lastSets.where((s) => s.completed).toList();
 if (completed.isNotEmpty) {
 baseWeight = completed.map((s) => s.weight ?? 0).reduce((a, b) => a > b ? a : b);
 if (baseWeight == 0) baseWeight = null;
-
 prevReps = completed.map((s) => s.reps ?? 0).reduce((a, b) => a > b ? a : b);
 if (prevReps == 0) prevReps = null;
 
@@ -397,7 +434,6 @@ wasFailedPrevWeek = true;
 }
 }
 
-// 👇 СОХРАНЯЕМ РЕКОРД ДЛЯ UI
 if (wasInPrevWeek && (baseWeight != null || prevReps != null)) {
 _lastRecords[item.id!] = {'weight': baseWeight, 'reps': prevReps};
 }
@@ -460,7 +496,6 @@ if (prevSeconds == 0) prevSeconds = null;
 }
 }
 
-// 👇 СОХРАНЯЕМ РЕКОРД ДЛЯ UI
 if (wasTimedInPrevWeek && prevSeconds != null) {
 _lastRecords[item.id!] = {'weight': null, 'reps': prevSeconds};
 }
@@ -518,12 +553,15 @@ final nums = matches.map((m) => int.tryParse(m.group(1) ?? '')).whereType<int>()
 if (nums.isEmpty) return null;
 return nums.reduce((a, b) => a > b ? a : b);
 }
-// ═══ КОНЕЦ ЧАСТИ 3 из 6 ═══
+// ═══ КОНЕЦ ЧАСТИ 2 из 5 ═══
+// Скажи «часть 3», чтобы получить продолжение (блоки, _startWorkout, _finishWorkout, _saveAsTemplate, меню упражнения).
 Map<int, int> _computeBlockDistribution() {
 final Map<int, int> distribution = {};
 bool hasStored = false;
 for (int i = 0; i < _items.length; i++) {
-final bn = _items[i].blockNumber;
+final item = _items[i];
+if (item.isWarmup) continue;
+final bn = item.blockNumber;
 if (bn != null) { distribution[i] = bn; hasStored = true; }
 }
 if (hasStored) return distribution;
@@ -533,7 +571,7 @@ final List<int> isolationIndices = [];
 
 for (int i = 0; i < _items.length; i++) {
 final item = _items[i];
-if (item.isCoolDown) continue;
+if (item.isCoolDown || item.isWarmup) continue;
 final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
 if (ex == null || _isCardio(ex)) continue;
 
@@ -587,7 +625,7 @@ await DatabaseHelper.instance.clearBlocksForWorkoutDay(_workoutDayId!); if (!mou
 setState(() { _hasBlocks = false; _collapsedCircles.clear(); }); _showMessage('Блоки убраны');
 } else {
 for (final item in _items) {
-if (item.id == null || item.isCoolDown) continue;
+if (item.id == null || item.isCoolDown || item.isWarmup) continue;
 final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
 if (ex != null && _isCardio(ex)) await DatabaseHelper.instance.updateWorkoutExerciseBlock(id: item.id!, blockNumber: null);
 }
@@ -629,7 +667,7 @@ if (noteResult == true) note = noteController.text.trim();
 
 final updates = <Future>[];
 for (final item in _items) {
-if (item.isCoolDown || item.id == null) continue;
+if (item.isCoolDown || item.isWarmup || item.id == null) continue;
 final sets = _setsData[item.id!];
 if (sets == null) continue;
 
@@ -647,7 +685,7 @@ if (updates.isNotEmpty) await Future.wait(updates);
 
 int completedSets = 0; int totalSets = 0; bool isOverperformed = false;
 for (final item in _items) {
-if (item.isCoolDown || item.id == null) continue;
+if (item.isCoolDown || item.isWarmup || item.id == null) continue;
 final sets = _setsData[item.id!]; if (sets == null) continue;
 final targetW = _targetWeights[item.id!];
 for (final s in sets) {
@@ -675,8 +713,63 @@ for (final a in unlocked) {
 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Row(children: [Text(a.icon, style: const TextStyle(fontSize: 24)), const SizedBox(width: 12), Expanded(child: Text('Новое достижение: ${a.title}!', style: const TextStyle(fontWeight: FontWeight.w600)))]), backgroundColor: const Color(0xFF6C5CE7), duration: const Duration(seconds: 3)));
 }
 }
+
+// ═══ ПРОВЕРКА: ЗАВЕРШЕНА ЛИ НЕДЕЛЯ / ЦИКЛ (БЕЗ ПРОПУСКОВ) ═══
+bool isWeekComplete = false;
+bool isCycleComplete = false;
+
+if (updated.weekNumber != null) {
+final weekDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(
+profileId: widget.profileId,
+weekNumber: updated.weekNumber!,
+cycleNumber: updated.cycleNumber,
+);
+
+final plannedDays = _profile?.daysPerWeek ?? 3;
+final completedCount = weekDays.where((d) => d.status == 'completed').length;
+final hasSkipped = weekDays.any((d) => d.status != 'completed');
+
+isWeekComplete = completedCount >= plannedDays && !hasSkipped;
+
+if (isWeekComplete && updated.cycleNumber != null) {
+bool allWeeksDone = true;
+for (int w = 1; w <= 4; w++) {
+final wDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(
+profileId: widget.profileId,
+weekNumber: w,
+cycleNumber: updated.cycleNumber,
+);
+
+final wCompleted = wDays.where((d) => d.status == 'completed').length;
+final wHasSkipped = wDays.any((d) => d.status != 'completed');
+
+if (wCompleted < plannedDays || wHasSkipped) {
+allWeeksDone = false;
+break;
+}
+}
+isCycleComplete = allWeeksDone;
+}
+}
+
 await Future.delayed(const Duration(milliseconds: 300));
-if (!mounted) return; Navigator.pop(context, true);
+if (!mounted) return;
+
+// ═══ ПЕРЕХОД НА ЭКРАН ИТОГОВ ═══
+await Navigator.pushReplacement(
+context,
+MaterialPageRoute(
+builder: (_) => WorkoutCompleteScreen(
+completedDay: updated,
+exercisesCount: _items.where((i) => !i.isCoolDown && !i.isWarmup).length,
+isWeekComplete: isWeekComplete,
+isCycleComplete: isCycleComplete,
+userName: _profile?.name ?? 'друг',
+),
+),
+);
+
+if (mounted) Navigator.pop(context, true);
 }
 
 Future<void> _saveAsTemplate() async {
@@ -691,7 +784,7 @@ title: const Row(children: [Icon(Icons.bookmark_add_rounded), SizedBox(width: 8)
 content: Column(
 mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start,
 children: [
-const Text('Создаст шаблон с этими упражнениями.', style: TextStyle(fontSize: 13)),
+const Text('Создаст шаблон с этими упражнениями. Разминка в шаблон не попадёт.', style: TextStyle(fontSize: 13)),
 const SizedBox(height: 16),
 TextField(controller: nameController, autofocus: true, decoration: const InputDecoration(labelText: 'Название шаблона', prefixIcon: Icon(Icons.fitness_center_rounded), hintText: 'Например: Моя силовая A')),
 ],
@@ -747,7 +840,8 @@ leading: Icon(icon, color: color), title: Text(title), onTap: onTap,
 ),
 );
 }
-// ═══ КОНЕЦ ЧАСТИ 4 из 6 ═══
+// ═══ КОНЕЦ ЧАСТИ 3 из 5 ═══
+// Скажи «часть 4», чтобы получить продолжение (замена/редактирование/удаление, подходы, таймер растяжки, build).
 Future<void> _replaceExercise(WorkoutExercise item, Exercise original) async {
 final reason = await showModalBottomSheet<String>(context: context, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))), builder: (ctx) => _buildReasonSheet(ctx));
 if (reason == null) return;
@@ -848,6 +942,7 @@ setState(() { _items.remove(item); _setsData.remove(item.id); _setIds.remove(ite
 _showMessage('Упражнение удалено');
 }
 
+/// Таймер растяжки — используется только для заминки (`isCoolDown`).
 Future<void> _startStretchTimer(WorkoutExercise item, Stretch st) async {
 if (_isViewMode || !_started || item.id == null) return;
 final result = await showDialog<bool>(context: context, barrierDismissible: false, builder: (ctx) => _StretchTimerDialog(name: st.name, totalSeconds: st.durationSeconds, bothSides: st.bothSides));
@@ -900,169 +995,317 @@ ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator
 ]),
 );
 }
-// ═══ КОНЕЦ ЧАСТИ 5.1 ═══
-Widget _buildContent(BuildContext context) {
-return CustomScrollView(
-keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-slivers: [
-if (_isViewMode) SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 0), child: Column(children: [_buildCompletedBanner(context), const SizedBox(height: 12), SizedBox(width: double.infinity, child: ElevatedButton.icon(onPressed: _saveAsTemplate, icon: const Icon(Icons.bookmark_add_rounded), label: const Text('Сохранить как шаблон'), style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)))))]))),
-SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(16), child: _buildInfoCard(context))),
-if (_isNewMode) SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Row(children: [Expanded(child: OutlinedButton.icon(onPressed: _blocksReady ? null : () => _createBlocks(), icon: const Icon(Icons.grid_view_rounded, size: 18), label: Text(_blocksReady ? 'Блоки созданы' : 'Создать блоки', style: const TextStyle(fontSize: 13)), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))))), const SizedBox(width: 8), Expanded(child: OutlinedButton.icon(onPressed: _blocksReady ? _resetBlocks : null, icon: const Icon(Icons.refresh_rounded, size: 18), label: const Text('Сбросить', style: TextStyle(fontSize: 13)), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))))]))),
-if (_isNewMode) SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.only(top: 12, left: 16, right: 16), child: SizedBox(width: double.infinity, child: ElevatedButton.icon(onPressed: _startWorkout, icon: const Icon(Icons.play_arrow_rounded), label: const Text('Начать тренировку'))))),
-if (_hasBlocks) ..._buildCircuitsSlivers(context) else ..._buildUnblockedList(context),
-const SliverToBoxAdapter(child: SizedBox(height: 32)),
-],
-);
-}
+// ═══ КОНЕЦ ЧАСТИ 4 из 5 ═══
+// Скажи «часть 5», чтобы получить финал (отрисовка списков, карточка разминки, _openWarmupScreen и диалог таймера заминки).
+  Widget _buildContent(BuildContext context) {
+    return CustomScrollView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      slivers: [
+        if (_isViewMode) SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 0), child: Column(children: [_buildCompletedBanner(context), const SizedBox(height: 12), SizedBox(width: double.infinity, child: ElevatedButton.icon(onPressed: _saveAsTemplate, icon: const Icon(Icons.bookmark_add_rounded), label: const Text('Сохранить как шаблон'), style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)))))]))),
+        SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(16), child: _buildInfoCard(context))),
+        if (_isNewMode) SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Row(children: [Expanded(child: OutlinedButton.icon(onPressed: _blocksReady ? null : () => _createBlocks(), icon: const Icon(Icons.grid_view_rounded, size: 18), label: Text(_blocksReady ? 'Блоки созданы' : 'Создать блоки', style: const TextStyle(fontSize: 13)), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))))), const SizedBox(width: 8), Expanded(child: OutlinedButton.icon(onPressed: _blocksReady ? _resetBlocks : null, icon: const Icon(Icons.refresh_rounded, size: 18), label: const Text('Сбросить', style: TextStyle(fontSize: 13)), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))))]))),
+        if (_isNewMode) SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.only(top: 12, left: 16, right: 16), child: SizedBox(width: double.infinity, child: ElevatedButton.icon(onPressed: _startWorkout, icon: const Icon(Icons.play_arrow_rounded), label: const Text('Начать тренировку'))))),
+        if (_hasBlocks) ..._buildCircuitsSlivers(context) else ..._buildUnblockedList(context),
+        const SliverToBoxAdapter(child: SizedBox(height: 32)),
+      ],
+    );
+  }
 
-List<Widget> _buildUnblockedList(BuildContext context) {
-final List<WorkoutExercise> displayItems = [];
-if (_profile?.goal == 'lose_weight') {
-final strength = _items.where((i) { if (i.isCoolDown) return false; final ex = _exerciseMap[i.replacedByItemId ?? i.itemId]; return ex != null && !_isCardio(ex); }).toList();
-final cardio = _items.where((i) { if (i.isCoolDown) return false; final ex = _exerciseMap[i.replacedByItemId ?? i.itemId]; return ex != null && _isCardio(ex); }).toList();
-final coolDowns = _items.where((i) => i.isCoolDown).toList();
-int sIdx = 0; int cIdx = 0; int counter = 0;
-while (sIdx < strength.length || cIdx < cardio.length) { if (counter > 0 && counter % 3 == 0 && cIdx < cardio.length) displayItems.add(cardio[cIdx++]); else if (sIdx < strength.length) displayItems.add(strength[sIdx++]); else if (cIdx < cardio.length) displayItems.add(cardio[cIdx++]); counter++; }
-displayItems.addAll(coolDowns);
-} else { displayItems.addAll(_items); }
-return [SliverPadding(padding: const EdgeInsets.all(16), sliver: SliverList(delegate: SliverChildBuilderDelegate((context, i) => _buildItemCard(context, displayItems[i], index: i + 1), childCount: displayItems.length)))];
-}
+  List<Widget> _buildUnblockedList(BuildContext context) {
+    final List<WorkoutExercise> displayItems = [];
 
-List<Widget> _buildCircuitsSlivers(BuildContext context) {
-final slivers = <Widget>[];
-final Map<int, List<WorkoutExercise>> blocks = {};
-final List<WorkoutExercise> coolDowns = [];
-final List<WorkoutExercise> cardios = [];
+    final warmups = _items.where((i) => i.isWarmup).toList();
+    final coolDowns = _items.where((i) => i.isCoolDown).toList();
+    final strength = _items.where((i) {
+      if (i.isCoolDown || i.isWarmup) return false;
+      final ex = _exerciseMap[i.replacedByItemId ?? i.itemId];
+      return ex != null && !_isCardio(ex);
+    }).toList();
+    final cardio = _items.where((i) {
+      if (i.isCoolDown || i.isWarmup) return false;
+      final ex = _exerciseMap[i.replacedByItemId ?? i.itemId];
+      return ex != null && _isCardio(ex);
+    }).toList();
 
-for (int i = 0; i < _items.length; i++) {
-final item = _items[i];
-if (item.isCoolDown) { coolDowns.add(item); continue; }
-final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
-final isCardio = ex != null && _isCardio(ex);
+    if (_profile?.goal == 'lose_weight') {
+      int sIdx = 0;
+      int cIdx = 0;
+      int strengthCounter = 0;
 
-if (isCardio) { cardios.add(item); }
-else {
-final blockNum = _pendingBlocks[i];
-if (blockNum != null) {
-blocks.putIfAbsent(blockNum, () => []);
-blocks[blockNum]!.add(item);
-}
-}
-}
+      while (sIdx < strength.length || cIdx < cardio.length) {
+        if (sIdx < strength.length) {
+          displayItems.add(strength[sIdx++]);
+          strengthCounter++;
+          if (strengthCounter == 3 && cIdx < cardio.length) {
+            displayItems.add(cardio[cIdx++]);
+            strengthCounter = 0;
+          }
+        } else if (cIdx < cardio.length) {
+          displayItems.add(cardio[cIdx++]);
+        }
+      }
+    } else {
+      displayItems.addAll(strength);
+      displayItems.addAll(cardio);
+    }
 
-// 1. Выводим БЛОКИ строго по порядку
-final sortedBlockNums = blocks.keys.toList()..sort();
-for (final blockNum in sortedBlockNums) {
-final blockItems = blocks[blockNum]!;
+    return [
+      if (warmups.isNotEmpty) SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0), child: _buildWarmupCard(context, warmups))),
+      SliverPadding(
+        padding: const EdgeInsets.all(16),
+        sliver: SliverList(
+          delegate: SliverChildBuilderDelegate(
+                (context, i) => _buildItemCard(context, displayItems[i], index: i + 1),
+            childCount: displayItems.length,
+          ),
+        ),
+      ),
+      if (coolDowns.isNotEmpty) ...[
+        SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF00B894).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Заминка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFF00B894))))]))),
+        SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 0), sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) => _buildStretchCard(context, coolDowns[idx]), childCount: coolDowns.length))),
+      ],
+    ];
+  }
 
-for (int circle = 0; circle < 3; circle++) {
-final circleNum = circle + 1;
-final isComplete = _isCircleComplete(blockItems, circle) && _started;
-final completed = _completedInCircle(blockItems, circle);
-final total = blockItems.length;
-final isCollapsed = _isCircleCollapsed(blockNum, circleNum);
+  Widget _buildWarmupCard(BuildContext context, List<WorkoutExercise> warmups) {
+    final theme = Theme.of(context);
+    final done = warmups.where((w) => _setsData[w.id!]?.first.completed == true).length;
+    final total = warmups.length;
+    final allDone = done == total && total > 0;
+    final accent = const Color(0xFFFFB800);
 
-slivers.add(SliverToBoxAdapter(child: CircleHeader(
-blockNum: blockNum, circleNum: circleNum, circleIndex: circle, blockItems: blockItems, completed: completed, total: total, isComplete: isComplete, isCollapsed: isCollapsed, onToggle: () => _toggleCircle(blockNum, circleNum), started: _started, isViewMode: _isViewMode, onMarkCircleCompleted: (b, c) => _markCircleCompleted(blockItems: blockItems, blockNum: b, circleIndex: c)
-)));
+    return Card(
+      margin: EdgeInsets.zero,
+      color: accent.withOpacity(0.08),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: accent.withOpacity(0.3)),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => _openWarmupScreen(warmups),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [accent, accent.withOpacity(0.7)]),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  allDone ? Icons.check_rounded : Icons.local_fire_department_rounded,
+                  color: Colors.white, size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Разминка', style: theme.textTheme.headlineMedium),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Махи и вращения · 3 мин',
+                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6)),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$done/$total',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: accent),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(Icons.chevron_right_rounded, color: theme.colorScheme.onSurface.withOpacity(0.4)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-if (!isCollapsed) {
-slivers.add(SliverPadding(
-padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-sliver: SliverList(
-delegate: SliverChildBuilderDelegate(
-(context, idx) => _buildExerciseCardWidget(context, blockItems[idx], _exerciseMap[blockItems[idx].replacedByItemId ?? blockItems[idx].itemId]!, circleIndex: circle),
-childCount: blockItems.length
-)
-)
-));
-}
-}
+  List<Widget> _buildCircuitsSlivers(BuildContext context) {
+    final slivers = <Widget>[];
+    final Map<int, List<WorkoutExercise>> blocks = {};
+    final List<WorkoutExercise> warmups = [];
+    final List<WorkoutExercise> coolDowns = [];
+    final List<WorkoutExercise> cardios = [];
 
-if (_started && !_isViewMode) {
-slivers.add(SliverToBoxAdapter(
-child: Padding(
-padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-child: OutlinedButton.icon(
-onPressed: () => _addCircle(blockItems: blockItems, blockNum: blockNum),
-icon: const Icon(Icons.add_circle_outline_rounded),
-label: Text('Добавить круг в Блок $blockNum'),
-style: OutlinedButton.styleFrom(
-padding: const EdgeInsets.symmetric(vertical: 16),
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-side: const BorderSide(color: Color(0xFF6C5CE7), width: 2),
-foregroundColor: const Color(0xFF6C5CE7)
-)
-)
-)
-));
-}
-}
+    for (int i = 0; i < _items.length; i++) {
+      final item = _items[i];
+      if (item.isWarmup) { warmups.add(item); continue; }
+      if (item.isCoolDown) { coolDowns.add(item); continue; }
+      final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
+      final isCardio = ex != null && _isCardio(ex);
 
-// 2. Выводим КАРДИО в конце
-if (cardios.isNotEmpty) {
-slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFE17055).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Кардио / Добивка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFFE17055))))]))));
-for (final item in cardios) {
-final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
-if (ex != null) {
-slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 12), child: _buildExerciseCardWidget(context, item, ex))));
-}
-}
-}
+      if (isCardio) {
+        cardios.add(item);
+      } else {
+        final blockNum = _pendingBlocks[i];
+        if (blockNum != null) {
+          blocks.putIfAbsent(blockNum, () => []);
+          blocks[blockNum]!.add(item);
+        }
+      }
+    }
 
-// 3. Выводим ЗАМИНКУ
-if (coolDowns.isNotEmpty) {
-slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF00B894).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Заминка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFF00B894))))]))));
-slivers.add(SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 0), sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) => _buildStretchCard(context, coolDowns[idx]), childCount: coolDowns.length))));
-}
+    if (warmups.isNotEmpty) {
+      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0), child: _buildWarmupCard(context, warmups))));
+    }
 
-return slivers;
-}
+    final bool isWeightLoss = _profile?.goal == 'lose_weight';
+    final bool shouldInterleave = isWeightLoss && cardios.isNotEmpty;
 
-Widget _buildExerciseCardWidget(BuildContext context, WorkoutExercise item, Exercise ex, {int? circleIndex, int? index}) {
-final sets = _setsData[item.id!] ?? [];
+    final sortedBlockNums = blocks.keys.toList()..sort();
+    int cardioIndex = 0;
 
-return ExerciseCard(
-item: item, ex: ex, circleIndex: circleIndex, index: index,
-isViewMode: _isViewMode, started: _started, sets: sets,
-// 👇 ПЕРЕДАЕМ РЕКОРДЫ В КАРТОЧКУ
-lastWeight: _lastRecords[item.id]?['weight'] as double?,
-lastReps: _lastRecords[item.id]?['reps'] as int?,
-onSetChanged: (index, data) async {
-if (item.id == null || _isViewMode) return;
-setState(() {
-final setsList = _setsData[item.id!];
-if (setsList != null && index >= 0 && index < setsList.length) {
-setsList[index] = data;
-}
-});
-},
-onSetComplete: () => _startRestTimer(),
-onAddSet: () => _addSetToExercise(item),
-onDeleteSet: (i) => _deleteSetFromExercise(item, i),
-onOpenMenu: () => _openExerciseMenu(item, ex),
-onTryAutoCollapse: (idx) => _tryAutoCollapse(item, idx),
-getBaseZone: _getBaseZone,
-isBase: isBaseExercise,
-groupLabel: _groupLabel, isCardio: _isCardio, isTimed: _isTimed, parseReps: _parseReps,
-);
-}
+    void addBlockToSlivers(int blockNum) {
+      final blockItems = blocks[blockNum]!;
+      for (int circle = 0; circle < 3; circle++) {
+        final circleNum = circle + 1;
+        final isComplete = _isCircleComplete(blockItems, circle) && _started;
+        final completed = _completedInCircle(blockItems, circle);
+        final total = blockItems.length;
+        final isCollapsed = _isCircleCollapsed(blockNum, circleNum);
 
-Widget _buildItemCard(BuildContext context, WorkoutExercise item, {int? index}) {
-if (item.itemType == 'exercise') {
-final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
-if (ex == null) return const SizedBox.shrink();
-return _buildExerciseCardWidget(context, item, ex, index: index);
-} else {
-return _buildStretchCard(context, item);
-}
-}
-// ═══ КОНЕЦ ЧАСТИ 5.2 ═══
+        slivers.add(SliverToBoxAdapter(child: CircleHeader(
+            blockNum: blockNum, circleNum: circleNum, circleIndex: circle, blockItems: blockItems, completed: completed, total: total, isComplete: isComplete, isCollapsed: isCollapsed, onToggle: () => _toggleCircle(blockNum, circleNum), started: _started, isViewMode: _isViewMode, onMarkCircleCompleted: (b, c) => _markCircleCompleted(blockItems: blockItems, blockNum: b, circleIndex: c)
+        )));
+
+        if (!isCollapsed) {
+          slivers.add(SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                          (context, idx) => _buildExerciseCardWidget(context, blockItems[idx], _exerciseMap[blockItems[idx].replacedByItemId ?? blockItems[idx].itemId]!, circleIndex: circle),
+                      childCount: blockItems.length
+                  )
+              )
+          ));
+        }
+      }
+
+      if (_started && !_isViewMode) {
+        slivers.add(SliverToBoxAdapter(
+            child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                child: OutlinedButton.icon(
+                    onPressed: () => _addCircle(blockItems: blockItems, blockNum: blockNum),
+                    icon: const Icon(Icons.add_circle_outline_rounded),
+                    label: Text('Добавить круг в Блок $blockNum'),
+                    style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        side: const BorderSide(color: Color(0xFF6C5CE7), width: 2),
+                        foregroundColor: const Color(0xFF6C5CE7)
+                    )
+                )
+            )
+        ));
+      }
+    }
+
+    void addCardioToSlivers(WorkoutExercise item) {
+      final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
+      if (ex != null) {
+        slivers.add(SliverToBoxAdapter(child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: _buildExerciseCardWidget(context, item, ex)
+        )));
+      }
+    }
+
+    if (shouldInterleave) {
+      for (int i = 0; i < sortedBlockNums.length; i++) {
+        addBlockToSlivers(sortedBlockNums[i]);
+
+        if (cardioIndex < cardios.length) {
+          slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFE17055).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Кардио / Добивка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFFE17055))))]))));
+          addCardioToSlivers(cardios[cardioIndex++]);
+        }
+      }
+
+      if (cardioIndex < cardios.length) {
+        slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFE17055).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Кардио / Добивка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFFE17055))))]))));
+        while (cardioIndex < cardios.length) {
+          addCardioToSlivers(cardios[cardioIndex++]);
+        }
+      }
+    } else {
+      for (final blockNum in sortedBlockNums) {
+        addBlockToSlivers(blockNum);
+      }
+      if (cardios.isNotEmpty) {
+        slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFE17055).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Кардио / Добивка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFFE17055))))]))));
+        for (final item in cardios) {
+          addCardioToSlivers(item);
+        }
+      }
+    }
+
+    if (coolDowns.isNotEmpty) {
+      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF00B894).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Заминка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFF00B894))))]))));
+      slivers.add(SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 0), sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) => _buildStretchCard(context, coolDowns[idx]), childCount: coolDowns.length))));
+    }
+
+    return slivers;
+  }
+
+  Widget _buildExerciseCardWidget(BuildContext context, WorkoutExercise item, Exercise ex, {int? circleIndex, int? index}) {
+    final sets = _setsData[item.id!] ?? [];
+
+    return ExerciseCard(
+      item: item, ex: ex, circleIndex: circleIndex, index: index,
+      isViewMode: _isViewMode, started: _started, sets: sets,
+      lastWeight: _lastRecords[item.id]?['weight'] as double?,
+      lastReps: _lastRecords[item.id]?['reps'] as int?,
+      onSetChanged: (index, data) async {
+        if (item.id == null || _isViewMode) return;
+        setState(() {
+          final setsList = _setsData[item.id!];
+          if (setsList != null && index >= 0 && index < setsList.length) {
+            setsList[index] = data;
+          }
+        });
+      },
+      onSetComplete: () => _startRestTimer(),
+      onAddSet: () => _addSetToExercise(item),
+      onDeleteSet: (i) => _deleteSetFromExercise(item, i),
+      onOpenMenu: () => _openExerciseMenu(item, ex),
+      onTryAutoCollapse: (idx) => _tryAutoCollapse(item, idx),
+      getBaseZone: _getBaseZone,
+      isBase: isBaseExercise,
+      groupLabel: _groupLabel, isCardio: _isCardio, isTimed: _isTimed, parseReps: _parseReps,
+    );
+  }
+
+  Widget _buildItemCard(BuildContext context, WorkoutExercise item, {int? index}) {
+    if (item.itemType == 'exercise') {
+      final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
+      if (ex == null) return const SizedBox.shrink();
+      return _buildExerciseCardWidget(context, item, ex, index: index);
+    } else {
+      return _buildStretchCard(context, item);
+    }
+  }
+
+  /// Карточка растяжки. Используется только для заминки.
   Widget _buildStretchCard(BuildContext context, WorkoutExercise item) {
     final theme = Theme.of(context);
     final st = _stretchMap[item.itemId]; if (st == null) return const SizedBox.shrink();
     final sets = _setsData[item.id!] ?? [SetData(completed: false)];
     final isDone = sets.isNotEmpty && sets.first.completed;
+    const accent = Color(0xFF00B894);
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
@@ -1071,15 +1314,15 @@ return _buildStretchCard(context, item);
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(children: [
-            Container(width: 44, height: 44, decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF00B894), Color(0xFF55EFC4)]), borderRadius: BorderRadius.circular(12)), child: Icon(isDone ? Icons.check_rounded : Icons.self_improvement, color: Colors.white, size: 22)),
+            Container(width: 44, height: 44, decoration: BoxDecoration(gradient: const LinearGradient(colors: [accent, Color(0xFF55EFC4)]), borderRadius: BorderRadius.circular(12)), child: Icon(isDone ? Icons.check_rounded : Icons.self_improvement, color: Colors.white, size: 22)),
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [Expanded(child: Text(st.name, style: theme.textTheme.headlineMedium, maxLines: 1, overflow: TextOverflow.ellipsis)), InkWell(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StretchDetailScreen(stretch: st))), borderRadius: BorderRadius.circular(20), child: Padding(padding: const EdgeInsets.all(6), child: Icon(Icons.info_outline_rounded, size: 20, color: theme.colorScheme.primary)))]),
               const SizedBox(height: 2),
               Text('${st.durationLabel}${st.bothSides ? " × 2 стороны" : ""}', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6))),
             ])),
-            if (isDone) Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFF00B894).withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.check_circle_rounded, color: Color(0xFF00B894), size: 20))
-            else Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: const Color(0xFF00B894).withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Text('Заминка', style: TextStyle(color: Color(0xFF00B894), fontSize: 11, fontWeight: FontWeight.w700))),
+            if (isDone) Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: accent.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.check_circle_rounded, color: accent, size: 20))
+            else Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: accent.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Text('Заминка', style: TextStyle(color: accent, fontSize: 11, fontWeight: FontWeight.w700))),
           ]),
         ),
       ),
@@ -1099,9 +1342,19 @@ return _buildStretchCard(context, item);
 
   Widget _buildInfoCard(BuildContext context) {
     final theme = Theme.of(context);
-    final mainCount = _items.where((i) => !i.isCoolDown).length;
+    final mainCount = _items.where((i) => !i.isCoolDown && !i.isWarmup).length;
+
+    final idToItem = <int, WorkoutExercise>{};
+    for (final it in _items) {
+      if (it.id != null) idToItem[it.id!] = it;
+    }
+
     int completedSets = 0; int totalSets = 0;
-    for (final sets in _setsData.values) { for (final s in sets) { totalSets++; if (s.completed) completedSets++; } }
+    for (final entry in _setsData.entries) {
+      final item = idToItem[entry.key];
+      if (item == null || item.isWarmup) continue;
+      for (final s in entry.value) { totalSets++; if (s.completed) completedSets++; }
+    }
     final minutesText = _isViewMode ? '${_day?.durationMinutes ?? 0}' : '${_profile?.sessionMinutes ?? 45}';
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1142,7 +1395,7 @@ return _buildStretchCard(context, item);
 
   Future<void> _addCircle({required List<WorkoutExercise> blockItems, required int blockNum}) async {
     if (!_started || _isViewMode) return;
-    for (final item in blockItems) { if (item.id == null || item.isCoolDown) continue; final ex = _exerciseMap[item.replacedByItemId ?? item.itemId]; if (ex != null && _isCardio(ex)) continue; await _addSetToExercise(item); }
+    for (final item in blockItems) { if (item.id == null || item.isCoolDown || item.isWarmup) continue; final ex = _exerciseMap[item.replacedByItemId ?? item.itemId]; if (ex != null && _isCardio(ex)) continue; await _addSetToExercise(item); }
   }
 
   void _tryAutoCollapse(WorkoutExercise item, int circleIndex) {
@@ -1150,8 +1403,64 @@ return _buildStretchCard(context, item);
     final idx = _items.indexOf(item); if (idx < 0) return;
     final blockNum = _pendingBlocks[idx] ?? 1;
     final blockItems = <WorkoutExercise>[];
-    for (int i = 0; i < _items.length; i++) { if (_items[i].isCoolDown) continue; if ((_pendingBlocks[i] ?? 1) != blockNum) continue; blockItems.add(_items[i]); }
+    for (int i = 0; i < _items.length; i++) { if (_items[i].isCoolDown || _items[i].isWarmup) continue; if ((_pendingBlocks[i] ?? 1) != blockNum) continue; blockItems.add(_items[i]); }
     if (_isCircleComplete(blockItems, circleIndex) && _started) { final key = _circleKey(blockNum, circleIndex + 1); if (!_collapsedCircles.contains(key)) setState(() => _collapsedCircles.add(key)); }
+  }
+
+  Future<void> _openWarmupScreen(List<WorkoutExercise> warmups) async {
+    if (warmups.isEmpty) return;
+
+    final result = await Navigator.push<Map<int, List<SetData>>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WarmupScreen(
+          warmups: warmups,
+          stretchMap: _stretchMap,
+          setsData: _setsData,
+          setIds: _setIds,
+          started: _started,
+        ),
+      ),
+    );
+
+    if (result == null || result.isEmpty || !mounted) return;
+
+    final updates = <Future>[];
+    for (final entry in result.entries) {
+      final itemId = entry.key;
+      final newSets = entry.value;
+      if (newSets.isEmpty) continue;
+
+      final ids = _setIds[itemId];
+      final first = newSets.first;
+
+      if (ids != null && ids.isNotEmpty && ids.first > 0) {
+        updates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
+          id: ids.first,
+          workoutExerciseId: itemId,
+          order: 1,
+          weight: first.weight,
+          reps: first.reps,
+          completed: first.completed,
+        )));
+      } else {
+        updates.add(DatabaseHelper.instance.addWorkoutSet(WorkoutSet(
+          workoutExerciseId: itemId,
+          order: 1,
+          weight: first.weight,
+          reps: first.reps,
+          completed: first.completed,
+        )));
+      }
+    }
+
+    setState(() {
+      for (final entry in result.entries) {
+        _setsData[entry.key] = entry.value;
+      }
+    });
+
+    if (updates.isNotEmpty) await Future.wait(updates);
   }
 }
 
@@ -1213,4 +1522,4 @@ class _StretchTimerDialogState extends State<_StretchTimerDialog> {
     );
   }
 }
-// ═══ КОНЕЦ ЧАСТИ 6 — ФАЙЛ workout_detail_screen.dart ЗАВЕРШЁН ═══
+// ═══ КОНЕЦ ЧАСТИ 5 из 5 — ФАЙЛ workout_detail_screen.dart ЗАВЕРШЁН ═══

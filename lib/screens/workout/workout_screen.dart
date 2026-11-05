@@ -12,6 +12,8 @@ import '../yoga/yoga_screen.dart';
 import '../trainer/trainer_screen.dart';
 import 'workout_detail_screen.dart';
 import 'my_templates_screen.dart';
+import 'challenge_setup_screen.dart'; // 👈 Добавлен импорт
+import 'challenge_screen.dart';      // 👈 Добавлен импорт
 
 class WorkoutScreen extends StatefulWidget {
   const WorkoutScreen({super.key});
@@ -190,11 +192,10 @@ await Future.delayed(const Duration(seconds: 4));
 await _saveProfileHashAsDismissed(profile);
 FairyReactionService().releaseScreenPhrases();
 }
-
+// ═══ КОНЕЦ ЧАСТИ 1 из 3 ═══
 Future<void> _generatePlan({bool isUpdate = false}) async {
 if (_activeProfile == null) { _showMessage('Сначала создайте профиль'); return; }
 
-// ПРОВЕРКА БАЗ (ВЫЗОВ ФЕИ)
 final maxCycle = await DatabaseHelper.instance.getMaxCycleNumber(_activeProfile!.id!);
 if (maxCycle >= 2 && maxCycle % 2 == 0) {
 final prefs = await SharedPreferences.getInstance();
@@ -236,7 +237,6 @@ await prefs.setBool('allow_base_change_${_activeProfile!.id}_$maxCycle', confirm
 }
 }
 
-// 👇 УБРАН ВЫБОР ФОКУСНЫХ ЗОН (берем напрямую из профиля)
 setState(() { _generating = true; _showCompletionBanner = false; });
 
 try {
@@ -273,94 +273,158 @@ setState(() => _generating = false);
 _showMessage('Ошибка: $e');
 }
 }
-// ═══ КОНЕЦ ЧАСТИ 1 из 2 ═══
-  Future<void> _openDay(WorkoutDay day) async {
-    final isUnlocked = _isWeekUnlocked(day.weekNumber ?? 1);
-    if (!isUnlocked) {
-      _showMessage('Сначала завершите предыдущую неделю!');
-      return;
-    }
 
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => WorkoutDetailScreen(workoutDay: day, profileId: _activeProfile!.id!),
-      ),
-    );
-    if (result == true) {
-      await _loadData();
-      await _checkAndUnlockNextWeek();
-    }
-  }
+Future<void> _openDay(WorkoutDay day) async {
+final isUnlocked = _isWeekUnlocked(day.weekNumber ?? 1);
+if (!isUnlocked) {
+_showMessage('Сначала завершите предыдущую неделю!');
+return;
+}
 
-  bool _isWeekUnlocked(int weekNumber) {
-    if (weekNumber == 1) return true;
-    final prevWeekDays = _allHistory.where((d) => d.weekNumber == weekNumber - 1).toList();
-    if (prevWeekDays.isEmpty) return false;
-    return prevWeekDays.every((d) => d.status == 'completed');
-  }
+// 👇 ЕСЛИ ЭТО ДЕНЬ ЧЕЛЛЕНДЖА
+if (day.type == 'challenge') {
+final wantsChallenge = await showDialog<bool>(
+context: context,
+builder: (ctx) => AlertDialog(
+shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+title: Row(
+children: [
+const Icon(Icons.local_fire_department_rounded, color: Color(0xFFFFB800), size: 32),
+const SizedBox(width: 12),
+const Expanded(child: Text('День Челленджа! 🔥')),
+],
+),
+content: const Text('Сегодня вместо обычной тренировки мы устроим челлендж! Выбери 3 упражнения и сделай каждое по 100 раз. Погнали?'),
+actions: [
+TextButton(
+onPressed: () => Navigator.pop(ctx, false),
+child: const Text('Обычная тренировка')
+),
+ElevatedButton(
+onPressed: () => Navigator.pop(ctx, true),
+style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFB800), foregroundColor: Colors.white),
+child: const Text('Погнали!'),
+),
+],
+),
+);
 
-  Future<void> _checkAndUnlockNextWeek() async {
-    if (_activeProfile == null) return;
-    final currentWeekDays = _allHistory.where((d) => d.weekNumber == _selectedWeek).toList();
-    if (currentWeekDays.isEmpty) return;
-    final allDone = currentWeekDays.every((d) => d.status == 'completed');
-    if (allDone && _selectedWeek < 4) {
-      await DatabaseHelper.instance.unlockNextWeek(_activeProfile!.id!, _selectedWeek + 1);
-      await _loadData();
-    }
-  }
+if (wantsChallenge == true) {
+final allEx = await DatabaseHelper.instance.getExercises();
+if (!mounted) return;
+await Navigator.push(
+context,
+MaterialPageRoute(
+builder: (_) => ChallengeSetupScreen(
+day: day,
+profile: _activeProfile, // 👈 Передаем профиль для фокусных зон
+allExercises: allEx,
+),
+),
+);
+_loadData();
+} else {
+// Отказ — превращаем в обычную тренировку
+final updated = day.copyWith(type: 'strength');
+await DatabaseHelper.instance.updateWorkoutDay(updated);
 
-  Future<void> _openYoga() async {
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => const YogaScreen()));
-  }
+if (!mounted) return;
+final result = await Navigator.push(
+context,
+MaterialPageRoute(
+builder: (_) => WorkoutDetailScreen(workoutDay: updated, profileId: _activeProfile!.id!),
+),
+);
+if (result == true) {
+await _loadData();
+await _checkAndUnlockNextWeek();
+}
+}
+return; // Выходим, чтобы не открывать обычный экран
+}
 
-  Future<void> _openMyTemplates() async {
-    if (_activeProfile == null) return;
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => MyTemplatesScreen(profileId: _activeProfile!.id!)));
-    if (mounted) _loadData();
-  }
+// Обычная тренировка
+final result = await Navigator.push(
+context,
+MaterialPageRoute(
+builder: (_) => WorkoutDetailScreen(workoutDay: day, profileId: _activeProfile!.id!),
+),
+);
+if (result == true) {
+await _loadData();
+await _checkAndUnlockNextWeek();
+}
+}
 
-  Future<void> _openLastCompleted() async {
-    if (_activeProfile == null) return;
-    final history = await DatabaseHelper.instance.getWorkoutDays(profileId: _activeProfile!.id!, limit: 1);
-    final completed = history.where((w) => w.status == 'completed').toList();
-    if (completed.isEmpty) { _showMessage('Пока нет завершённых тренировок'); return; }
-    if (!mounted) return;
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => WorkoutDetailScreen(workoutDay: completed.first, profileId: _activeProfile!.id!)));
-    if (mounted) _loadData();
-  }
+bool _isWeekUnlocked(int weekNumber) {
+if (weekNumber == 1) return true;
+final prevWeekDays = _allHistory.where((d) => d.weekNumber == weekNumber - 1).toList();
+if (prevWeekDays.isEmpty) return false;
+return prevWeekDays.every((d) => d.status == 'completed');
+}
 
-  Future<void> _continueInProgress() async {
-    if (_activeProfile == null) return;
-    final history = await DatabaseHelper.instance.getWorkoutDays(profileId: _activeProfile!.id!, limit: 20);
-    final inProgress = history.where((w) => w.status == 'in_progress').toList();
-    if (inProgress.isEmpty) { _showMessage('Нет незавершённых тренировок'); return; }
-    inProgress.sort((a, b) => b.date.compareTo(a.date));
-    if (!mounted) return;
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => WorkoutDetailScreen(workoutDay: inProgress.first, profileId: _activeProfile!.id!)));
-    if (mounted) _loadData();
-  }
+Future<void> _checkAndUnlockNextWeek() async {
+if (_activeProfile == null) return;
+final currentWeekDays = _allHistory.where((d) => d.weekNumber == _selectedWeek).toList();
+if (currentWeekDays.isEmpty) return;
+final allDone = currentWeekDays.every((d) => d.status == 'completed');
+if (allDone && _selectedWeek < 4) {
+await DatabaseHelper.instance.unlockNextWeek(_activeProfile!.id!, _selectedWeek + 1);
+await _loadData();
+}
+}
 
-  Future<void> _confirmRegenerate() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Обновить план?'),
-        content: const Text('Текущий план будет удалён и создан заново. Продолжить?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Обновить')),
-        ],
-      ),
-    );
-    if (confirmed == true) _generatePlan(isUpdate: true);
-  }
+Future<void> _openYoga() async {
+await Navigator.push(context, MaterialPageRoute(builder: (_) => const YogaScreen()));
+}
 
-  void _showMessage(String text) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
-  }
+Future<void> _openMyTemplates() async {
+if (_activeProfile == null) return;
+await Navigator.push(context, MaterialPageRoute(builder: (_) => MyTemplatesScreen(profileId: _activeProfile!.id!)));
+if (mounted) _loadData();
+}
 
+Future<void> _openLastCompleted() async {
+if (_activeProfile == null) return;
+final history = await DatabaseHelper.instance.getWorkoutDays(profileId: _activeProfile!.id!, limit: 1);
+final completed = history.where((w) => w.status == 'completed').toList();
+if (completed.isEmpty) { _showMessage('Пока нет завершённых тренировок'); return; }
+if (!mounted) return;
+await Navigator.push(context, MaterialPageRoute(builder: (_) => WorkoutDetailScreen(workoutDay: completed.first, profileId: _activeProfile!.id!)));
+if (mounted) _loadData();
+}
+
+Future<void> _continueInProgress() async {
+if (_activeProfile == null) return;
+final history = await DatabaseHelper.instance.getWorkoutDays(profileId: _activeProfile!.id!, limit: 20);
+final inProgress = history.where((w) => w.status == 'in_progress').toList();
+if (inProgress.isEmpty) { _showMessage('Нет незавершённых тренировок'); return; }
+inProgress.sort((a, b) => b.date.compareTo(a.date));
+if (!mounted) return;
+await Navigator.push(context, MaterialPageRoute(builder: (_) => WorkoutDetailScreen(workoutDay: inProgress.first, profileId: _activeProfile!.id!)));
+if (mounted) _loadData();
+}
+
+Future<void> _confirmRegenerate() async {
+final confirmed = await showDialog<bool>(
+context: context,
+builder: (ctx) => AlertDialog(
+title: const Text('Обновить план?'),
+content: const Text('Текущий план будет удалён и создан заново. Продолжить?'),
+actions: [
+TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Обновить')),
+],
+),
+);
+if (confirmed == true) _generatePlan(isUpdate: true);
+}
+
+void _showMessage(String text) {
+ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+}
+// ═══ КОНЕЦ ЧАСТИ 2 из 3 ═══
+// Скажи «часть 3», чтобы получить финал — метод build, список дней, карточки и виджеты.
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -372,11 +436,16 @@ _showMessage('Ошибка: $e');
         actions: [
           IconButton(
             tooltip: 'Шпаргалка от Феи',
-            icon: const Icon(Icons.auto_awesome_rounded, color: Color(0xFFFDCB6E)),
+            icon: Image.asset(
+              FairyMood.wink.asset,
+              width: 32,
+              height: 32,
+              fit: BoxFit.contain,
+            ),
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const TrainerScreen()),
+                MaterialPageRoute(builder: (_) => TrainerScreen(profile: _activeProfile)),
               );
             },
           ),
@@ -402,6 +471,57 @@ _showMessage('Ошибка: $e');
             _buildSectionTitle(context, 'Быстрый старт'),
             const SizedBox(height: 12),
             _buildQuickActions(context),
+
+            // 👇 ВРЕМЕННАЯ КНОПКА ДЛЯ ТЕСТА ЧЕЛЛЕНДЖА
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  if (_activeProfile == null) return;
+
+                  // Создаем день челленджа
+                  final dayId = await DatabaseHelper.instance.createWorkoutDay(WorkoutDay(
+                    profileId: _activeProfile!.id!, // 👈 Исправлено (убрано profile:)
+                    name: 'Челлендж: 300 повторений',
+                    type: 'challenge',
+                    date: DateTime.now(),
+                    weekNumber: _selectedWeek,
+                    cycleNumber: 1,
+                    status: 'planned',
+                  ));
+
+                  // Добавляем временные упражнения (они перезапишутся при выборе)
+                  final allEx = await DatabaseHelper.instance.getExercises();
+                  final exsToUse = allEx.take(3).toList();
+
+                  for (int i = 0; i < exsToUse.length; i++) {
+                    await DatabaseHelper.instance.addWorkoutExercise(WorkoutExercise(
+                      workoutDayId: dayId,
+                      itemType: 'exercise',
+                      itemId: exsToUse[i].id!,
+                      order: i + 1,
+                      sets: 1,
+                      reps: '100',
+                    ));
+                  }
+
+                  if (mounted) {
+                    _showMessage('Челлендж создан! Он в списке плана.');
+                    _loadData();
+                  }
+                },
+                icon: const Icon(Icons.local_fire_department_rounded),
+                label: const Text('🧪 Создать тестовый Челлендж'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFFB800),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+            // ═══════════════════════════════════════════════════════
+
             const SizedBox(height: 24),
             if (_lastWeek != null && !_lastWeek!.isEmpty) ...[
               _buildLastWeekCard(context),
@@ -486,9 +606,20 @@ _showMessage('Ошибка: $e');
     final IconData icon;
     final Color accentColor;
 
-    if (isCompleted) { gradientColors = [const Color(0xFF00B894), const Color(0xFF55EFC4)]; icon = Icons.check_rounded; accentColor = const Color(0xFF00B894); }
-    else if (isInProgress) { gradientColors = [const Color(0xFFE17055), const Color(0xFFFDCB6E)]; icon = Icons.hourglass_bottom_rounded; accentColor = const Color(0xFFE17055); }
-    else { gradientColors = [const Color(0xFF6C5CE7), const Color(0xFFA29BFE)]; icon = isUnlocked ? Icons.fitness_center : Icons.lock_rounded; accentColor = const Color(0xFF6C5CE7); }
+    if (isCompleted) {
+      gradientColors = [const Color(0xFF00B894), const Color(0xFF55EFC4)];
+      icon = Icons.check_rounded;
+      accentColor = const Color(0xFF00B894);
+    } else if (isInProgress) {
+      gradientColors = [const Color(0xFFE17055), const Color(0xFFFDCB6E)];
+      icon = Icons.hourglass_bottom_rounded;
+      accentColor = const Color(0xFFE17055);
+    } else {
+      gradientColors = [const Color(0xFF6C5CE7), const Color(0xFFA29BFE)];
+      // Если это челлендж, показываем огонек
+      icon = isUnlocked ? (day.type == 'challenge' ? Icons.local_fire_department_rounded : Icons.fitness_center) : Icons.lock_rounded;
+      accentColor = const Color(0xFF6C5CE7);
+    }
 
     return Opacity(
       opacity: isUnlocked ? 1.0 : 0.6,
@@ -524,7 +655,7 @@ _showMessage('Ошибка: $e');
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text('${day.type == 'strength' ? 'Силовая' : 'Йога'} · ${day.durationMinutes ?? 45} мин', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6))),
+                      Text('${day.type == 'challenge' ? 'Челлендж' : day.type == 'strength' ? 'Силовая' : 'Йога'} · ${day.durationMinutes ?? 45} мин', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6))),
                     ],
                   ),
                 ),
@@ -860,4 +991,4 @@ _showMessage('Ошибка: $e');
     );
   }
 }
-// ═══ КОНЕЦ ЧАСТИ 2 из 2 — ФАЙЛ workout_screen.dart ЗАВЕРШЁН ═══
+// ═══ КОНЕЦ ЧАСТИ 3 из 3 — ФАЙЛ workout_screen.dart ЗАВЕРШЁН ═══

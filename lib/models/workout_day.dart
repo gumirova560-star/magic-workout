@@ -111,6 +111,7 @@ class WorkoutExercise {
   String reps;
   int restSeconds;
   int durationSeconds;
+  bool isWarmup;      // 👈 новое: разминка (не участвует в «день выполнен»)
   bool isCoolDown;
   String? notes;
   int? blockNumber;
@@ -128,6 +129,7 @@ class WorkoutExercise {
     this.reps = '10-12',
     this.restSeconds = 60,
     this.durationSeconds = 30,
+    this.isWarmup = false,      // 👈
     this.isCoolDown = false,
     this.notes,
     this.blockNumber,
@@ -147,6 +149,7 @@ class WorkoutExercise {
       'reps': reps,
       'restSeconds': restSeconds,
       'durationSeconds': durationSeconds,
+      'isWarmup': isWarmup ? 1 : 0,        // 👈
       'isCoolDown': isCoolDown ? 1 : 0,
       'notes': notes,
       'blockNumber': blockNumber,
@@ -167,6 +170,7 @@ class WorkoutExercise {
       reps: map['reps'] ?? '10-12',
       restSeconds: map['restSeconds'] ?? 60,
       durationSeconds: map['durationSeconds'] ?? 30,
+      isWarmup: map['isWarmup'] == 1,      // 👈
       isCoolDown: map['isCoolDown'] == 1,
       notes: map['notes'],
       blockNumber: map['blockNumber'],
@@ -177,7 +181,7 @@ class WorkoutExercise {
     int? id, int? workoutDayId, String? itemType, int? itemId, int? order,
     int? replacedByItemId, String? replacementReason, bool? replacementPermanent,
     int? sets, String? reps, int? restSeconds, int? durationSeconds,
-    bool? isCoolDown, String? notes, int? blockNumber,
+    bool? isWarmup, bool? isCoolDown, String? notes, int? blockNumber,
   }) {
     return WorkoutExercise(
       id: id ?? this.id,
@@ -192,6 +196,7 @@ class WorkoutExercise {
       reps: reps ?? this.reps,
       restSeconds: restSeconds ?? this.restSeconds,
       durationSeconds: durationSeconds ?? this.durationSeconds,
+      isWarmup: isWarmup ?? this.isWarmup,        // 👈
       isCoolDown: isCoolDown ?? this.isCoolDown,
       notes: notes ?? this.notes,
       blockNumber: blockNumber ?? this.blockNumber,
@@ -260,3 +265,4 @@ class WorkoutSet {
     );
   }
 }
+// ═══ ФАЙЛ workout_day.dart ЗАВЕРШЁН ═══

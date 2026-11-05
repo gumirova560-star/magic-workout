@@ -491,6 +491,8 @@ List<Stretch> getStretchesPartA() {
     ),
   ];
 }
+// ═══ КОНЕЦ ЧАСТИ 1 из 3 ═══
+// Скажи «часть 2», чтобы получить продолжение (getStretchesPartB + getStretchesPartC).
 /// Часть Б: 25 йога-поз.
 List<Stretch> getStretchesPartB() {
   return [
@@ -984,7 +986,7 @@ List<Stretch> getStretchesPartC() {
       durationSeconds: 120,
       bothSides: false,
       description:
-          'Успокаивающее дыхание. Помогает заснуть и снять тревогу.',
+      'Успокаивающее дыхание. Помогает заснуть и снять тревогу.',
       technique: '1. Сядьте удобно, спина прямая\n'
           '2. Вдох через нос — 4 секунды\n'
           '3. Задержка дыхания — 7 секунд\n'
@@ -1003,7 +1005,7 @@ List<Stretch> getStretchesPartC() {
       durationSeconds: 120,
       bothSides: false,
       description:
-          'Дыхание с равными фазами. Улучшает концентрацию и баланс.',
+      'Дыхание с равными фазами. Улучшает концентрацию и баланс.',
       technique: '1. Сядьте удобно\n'
           '2. Вдох — 4 секунды\n'
           '3. Задержка — 4 секунды\n'
@@ -1023,7 +1025,7 @@ List<Stretch> getStretchesPartC() {
       durationSeconds: 180,
       bothSides: false,
       description:
-          'Классическое дыхание йоги. Выполняется во время практики асан.',
+      'Классическое дыхание йоги. Выполняется во время практики асан.',
       technique: '1. Сядьте с прямой спиной\n'
           '2. Слегка сузьте голосовую щель\n'
           '3. Дышите через нос с лёгким шипением\n'
@@ -1042,7 +1044,7 @@ List<Stretch> getStretchesPartC() {
       durationSeconds: 60,
       bothSides: false,
       description:
-          'Бодрящее дыхание. Активирует и заряжает энергией.',
+      'Бодрящее дыхание. Активирует и заряжает энергией.',
       technique: '1. Сядьте с прямой спиной\n'
           '2. Резкие выдохи через нос\n'
           '3. Живот активно работает\n'
@@ -1061,7 +1063,7 @@ List<Stretch> getStretchesPartC() {
       durationSeconds: 180,
       bothSides: false,
       description:
-          'Основа пранаямы. Включает живот, грудную клетку и ключицы.',
+      'Основа пранаямы. Включает живот, грудную клетку и ключицы.',
       technique: '1. Сядьте или лягте удобно\n'
           '2. Вдох: сначала живот, потом грудь, потом ключицы\n'
           '3. Выдох: в обратном порядке\n'
@@ -1074,6 +1076,238 @@ List<Stretch> getStretchesPartC() {
     ),
   ];
 }
+// ═══ КОНЕЦ ЧАСТИ 2 из 3 ═══
+// Скажи «часть 3», чтобы получить продолжение — новую getStretchesPartD() (12 разминочных) + обновлённую getStretchesData().
+/// Часть Г: 12 разминочных упражнений (махи и вращения).
+/// Разминка ставится в начало тренировки. В подсчёте «день выполнен»
+/// не участвует (флаг isWarmup в WorkoutExercise).
+List<Stretch> getStretchesPartD() {
+  return [
+    // ═══════════════════════════════════════════════════════════
+    //  БАЗОВЫЕ 7 — всегда, в начале каждой тренировки
+    // ═══════════════════════════════════════════════════════════
+
+    Stretch(
+      name: 'Вращения головой',
+      category: 'warmup',
+      muscleGroup: 'neck',
+      durationSeconds: 20,
+      bothSides: false,
+      description: 'Плавные вращения головой для разогрева шеи.',
+      technique: '1. Встаньте прямо, плечи опущены\n'
+          '2. Медленно наклоните голову вперёд\n'
+          '3. Плавно перекатите вправо, назад, влево\n'
+          '4. Не запрокидывайте голову резко\n'
+          '5. 3–4 круга в каждую сторону',
+      benefits: '• Разогревает шею\n'
+          '• Улучшает подвижность\n'
+          '• Снимает напряжение',
+      imagePath: 'assets/stretches/warmup_head_rolls.jpg',
+    ),
+
+    Stretch(
+      name: 'Вращения плечами',
+      category: 'warmup',
+      muscleGroup: 'shoulders',
+      durationSeconds: 20,
+      bothSides: false,
+      description: 'Круговые движения плечами для разогрева плечевого пояса.',
+      technique: '1. Встаньте прямо, руки вдоль тела\n'
+          '2. Поднимите плечи вверх\n'
+          '3. Отведите назад и вниз\n'
+          '4. Плавно вращайте\n'
+          '5. 10 кругов вперёд, 10 назад',
+      benefits: '• Разогревает плечи\n'
+          '• Улучшает кровообращение\n'
+          '• Готовит к жимам',
+      imagePath: 'assets/stretches/warmup_shoulder_rolls.jpg',
+    ),
+
+    Stretch(
+      name: 'Махи руками',
+      category: 'warmup',
+      muscleGroup: 'shoulders',
+      durationSeconds: 30,
+      bothSides: false,
+      description: 'Динамичные махи руками для разогрева плеч и груди.',
+      technique: '1. Встаньте прямо, руки в стороны\n'
+          '2. Выполняйте махи вперёд-назад\n'
+          '3. Амплитуда постепенно растёт\n'
+          '4. Дышите ровно\n'
+          '5. 20–30 секунд',
+      benefits: '• Разогревает плечи и грудь\n'
+          '• Улучшает подвижность\n'
+          '• Готовит к жимам и разведениям',
+      imagePath: 'assets/stretches/warmup_arm_swings.jpg',
+    ),
+
+    Stretch(
+      name: 'Наклоны корпуса в стороны',
+      category: 'warmup',
+      muscleGroup: 'back',
+      durationSeconds: 20,
+      bothSides: true,
+      description: 'Плавные наклоны в стороны для разогрева корпуса.',
+      technique: '1. Встаньте прямо, ноги на ширине плеч\n'
+          '2. Поднимите правую руку вверх\n'
+          '3. Наклонитесь влево\n'
+          '4. Задержитесь на 2 секунды\n'
+          '5. Смените сторону, по 10 раз',
+      benefits: '• Разогревает косые мышцы\n'
+          '• Улучшает гибкость корпуса\n'
+          '• Готовит к скручиваниям',
+      imagePath: 'assets/stretches/warmup_side_bends.jpg',
+    ),
+
+    Stretch(
+      name: 'Круги тазом',
+      category: 'warmup',
+      muscleGroup: 'hips',
+      durationSeconds: 20,
+      bothSides: false,
+      description: 'Вращения тазом для разогрева тазобедренных суставов.',
+      technique: '1. Встаньте прямо, руки на пояс\n'
+          '2. Выполняйте круговые движения тазом\n'
+          '3. Амплитуда средняя\n'
+          '4. 10 кругов в каждую сторону\n'
+          '5. Дышите ровно',
+      benefits: '• Разогревает таз\n'
+          '• Улучшает подвижность\n'
+          '• Готовит к приседаниям и выпадам',
+      imagePath: 'assets/stretches/warmup_hip_circles.jpg',
+    ),
+
+    Stretch(
+      name: 'Махи ногами',
+      category: 'warmup',
+      muscleGroup: 'legs',
+      durationSeconds: 30,
+      bothSides: true,
+      description: 'Динамичные махи ногами для разогрева ног и ягодиц.',
+      technique: '1. Встаньте, держитесь за опору\n'
+          '2. Выполняйте махи правой ногой вперёд-назад\n'
+          '3. Затем в сторону\n'
+          '4. 10–15 махов каждой ногой\n'
+          '5. Дышите ровно',
+      benefits: '• Разогревает ноги\n'
+          '• Улучшает подвижность суставов\n'
+          '• Готовит к приседаниям',
+      imagePath: 'assets/stretches/warmup_leg_swings.jpg',
+    ),
+
+    Stretch(
+      name: 'Вращения коленями',
+      category: 'warmup',
+      muscleGroup: 'knees',
+      durationSeconds: 20,
+      bothSides: false,
+      description: 'Круговые движения коленями для разогрева коленных суставов.',
+      technique: '1. Встаньте, ноги вместе\n'
+          '2. Чуть согните колени\n'
+          '3. Выполняйте круговые движения\n'
+          '4. 10 кругов в каждую сторону\n'
+          '5. Без резких движений',
+      benefits: '• Разогревает колени\n'
+          '• Улучшает смазку суставов\n'
+          '• Готовит к приседаниям',
+      imagePath: 'assets/stretches/warmup_knee_circles.jpg',
+    ),
+
+    // ═══════════════════════════════════════════════════════════
+    //  ЦЕЛЕВЫЕ 5 — по одной под группу дня
+    // ═══════════════════════════════════════════════════════════
+
+    Stretch(
+      name: 'Мостик ягодичный (разминка)',
+      category: 'warmup',
+      muscleGroup: 'glutes',
+      durationSeconds: 30,
+      bothSides: false,
+      description: 'Разминочный ягодичный мостик без веса.',
+      technique: '1. Лягте на спину, колени согнуты\n'
+          '2. Стопы на полу\n'
+          '3. Поднимите таз вверх\n'
+          '4. Задержитесь на 1 секунду\n'
+          '5. 15–20 повторов в среднем темпе',
+      benefits: '• Разогревает ягодицы\n'
+          '• Активирует мышцы\n'
+          '• Готовит к силовым',
+      imagePath: 'assets/stretches/warmup_glute_bridge.jpg',
+    ),
+
+    Stretch(
+      name: 'Кошка-корова (разминка)',
+      category: 'warmup',
+      muscleGroup: 'back',
+      durationSeconds: 30,
+      bothSides: false,
+      description: 'Динамическая разминка спины и кора.',
+      technique: '1. Встаньте на четвереньки\n'
+          '2. На вдохе прогните спину\n'
+          '3. На выдохе округлите спину\n'
+          '4. Работайте в среднем темпе\n'
+          '5. 8–10 циклов',
+      benefits: '• Разогревает спину\n'
+          '• Активирует кор\n'
+          '• Готовит к нагрузке',
+      imagePath: 'assets/stretches/warmup_cat_cow.jpg',
+    ),
+
+    Stretch(
+      name: 'Приседания без веса (разминка)',
+      category: 'warmup',
+      muscleGroup: 'legs',
+      durationSeconds: 30,
+      bothSides: false,
+      description: 'Разминочные приседания в среднем темпе.',
+      technique: '1. Встаньте, ноги на ширине плеч\n'
+          '2. Руки перед собой\n'
+          '3. Приседайте до параллели бёдер\n'
+          '4. Колени не выходят за носки\n'
+          '5. 15–20 повторов',
+      benefits: '• Разогревает ноги\n'
+          '• Улучшает подвижность\n'
+          '• Готовит к приседаниям с весом',
+      imagePath: 'assets/stretches/warmup_bodyweight_squats.jpg',
+    ),
+
+    Stretch(
+      name: 'Круги руками (разминка)',
+      category: 'warmup',
+      muscleGroup: 'shoulders',
+      durationSeconds: 30,
+      bothSides: false,
+      description: 'Круги руками для разогрева плечевого пояса.',
+      technique: '1. Встаньте прямо, руки в стороны\n'
+          '2. Выполняйте круги руками\n'
+          '3. Амплитуда растёт\n'
+          '4. 10 кругов вперёд, 10 назад\n'
+          '5. Дышите ровно',
+      benefits: '• Разогревает плечи\n'
+          '• Улучшает подвижность\n'
+          '• Готовит к жимам',
+      imagePath: 'assets/stretches/warmup_arm_circles.jpg',
+    ),
+
+    Stretch(
+      name: 'Джампинг Джек',
+      category: 'warmup',
+      muscleGroup: 'cardio',
+      durationSeconds: 30,
+      bothSides: false,
+      description: 'Прыжки с разведением рук и ног. Разминочное кардио.',
+      technique: '1. Встаньте прямо, ноги вместе\n'
+          '2. Прыжком разведите ноги и поднимите руки\n'
+          '3. Прыжком вернитесь в исходное\n'
+          '4. Работайте в среднем темпе\n'
+          '5. 30 секунд',
+      benefits: '• Разогревает всё тело\n'
+          '• Повышает пульс\n'
+          '• Готовит к кардио',
+      imagePath: 'assets/stretches/warmup_jumping_jack.jpg',
+    ),
+  ];
+}
 
 /// Финальная функция — объединяет все части растяжки.
 List<Stretch> getStretchesData() {
@@ -1081,5 +1315,7 @@ List<Stretch> getStretchesData() {
     ...getStretchesPartA(),
     ...getStretchesPartB(),
     ...getStretchesPartC(),
+    ...getStretchesPartD(),
   ];
 }
+// ═══ КОНЕЦ ЧАСТИ 3 из 3 — ФАЙЛ stretches_data.dart ЗАВЕРШЁН ═══

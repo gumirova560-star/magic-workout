@@ -3,10 +3,14 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_strategy/url_strategy.dart';
 
+// 👇 НОВЫЕ ИМПОРТЫ ДЛЯ FIREBASE
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+
 import 'services/data_initializer.dart';
 import 'services/theme_service.dart';
 import 'services/database_helper.dart';
-import 'services/fairy_reaction_service.dart'; // 👈 Добавили для отслеживания смены профиля
+import 'services/fairy_reaction_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/main_screen.dart';
 import 'screens/onboarding_screen.dart';
@@ -15,6 +19,11 @@ import 'screens/profiles/profile_edit_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   setPathUrlStrategy();
+
+  // 👇 ИНИЦИАЛИЗАЦИЯ FIREBASE
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   // Инициализируем БД до запуска приложения
   await DataInitializer.initialize();
@@ -125,9 +134,6 @@ class _MyAppState extends State<MyApp> {
         key: const ValueKey('profile_edit'),
         body: ProfileEditScreen(
           key: UniqueKey(),
-          // Если ProfileEditScreen умеет принимать колбэк — добавьте его.
-          // Если нет, он просто сохранит профиль, а FairyReactionService
-          // вызовет _checkState и переключит экран.
         ),
       );
     }

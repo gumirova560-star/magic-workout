@@ -251,7 +251,7 @@ class FairyPhrases {
     },
     {
       'title': 'Погнали! 🎉',
-      'text': 'Я всегда рядом — внизу экрана. Тапни по мне, если нужна подсказка!',
+      'text': 'Я всегда рядом — в шапке экрана тренировки. Нажми на меня, если есть вопросы!',
     },
   ];
 
@@ -260,10 +260,10 @@ class FairyPhrases {
   // ═══════════════════════════════════════════════════════════
 
   static String apply(
-    String template,
-    String? name, {
-    String? gender,
-  }) {
+      String template,
+      String? name, {
+        String? gender,
+      }) {
     final n = (name == null || name.trim().isEmpty) ? 'друг' : name.trim();
     final isMale = _isMale(gender);
 
@@ -283,19 +283,19 @@ class FairyPhrases {
   }
 
   static List<String> forScreen(
-    String screen, {
-    String? name,
-    String? gender,
-  }) {
+      String screen, {
+        String? name,
+        String? gender,
+      }) {
     final list = byScreen[screen] ?? byScreen['default']!;
     return list.map((t) => apply(t, name, gender: gender)).toList();
   }
 
   static List<({String text, FairyMood mood})> forScreenWithMood(
-    String screen, {
-    String? name,
-    String? gender,
-  }) {
+      String screen, {
+        String? name,
+        String? gender,
+      }) {
     final mood = screenMood(screen);
     return forScreen(screen, name: name, gender: gender)
         .map((t) => (text: t, mood: mood))
@@ -303,19 +303,19 @@ class FairyPhrases {
   }
 
   static List<String> forSituation(
-    String situation, {
-    String? name,
-    String? gender,
-  }) {
+      String situation, {
+        String? name,
+        String? gender,
+      }) {
     final list = bySituation[situation] ?? [];
     return list.map((t) => apply(t, name, gender: gender)).toList();
   }
 
   static List<({String text, FairyMood mood})> forSituationWithMood(
-    String situation, {
-    String? name,
-    String? gender,
-  }) {
+      String situation, {
+        String? name,
+        String? gender,
+      }) {
     final mood = situationMood(situation);
     return forSituation(situation, name: name, gender: gender)
         .map((t) => (text: t, mood: mood))
@@ -357,20 +357,20 @@ class FairyPhrases {
   }
 
   static String _pick(
-    List<String> list,
-    String? name,
-    String? gender,
-  ) {
+      List<String> list,
+      String? name,
+      String? gender,
+      ) {
     if (list.isEmpty) return '';
     final t = list[DateTime.now().millisecondsSinceEpoch % list.length];
     return apply(t, name, gender: gender);
   }
 
   static String eventPhrase(
-    String eventKey, {
-    String? name,
-    String? gender,
-  }) {
+      String eventKey, {
+        String? name,
+        String? gender,
+      }) {
     final t = byEvent[eventKey];
     if (t == null) return '';
     return apply(t, name, gender: gender);

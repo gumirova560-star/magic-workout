@@ -105,7 +105,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(
                 _pages.length,
-                (i) => AnimatedContainer(
+                    (i) => AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   margin: const EdgeInsets.all(4),
                   width: _currentPage == i ? 24 : 8,

@@ -10,6 +10,7 @@ class ShareCard extends StatelessWidget {
   final int exercisesCount;
   final int workoutsCount;
   final int streakWeeks;
+  final String? challengeStat; // 👈 Добавлено поле для текста челленджа
 
   const ShareCard({
     super.key,
@@ -20,6 +21,7 @@ class ShareCard extends StatelessWidget {
     required this.exercisesCount,
     required this.workoutsCount,
     required this.streakWeeks,
+    this.challengeStat, // 👈
   });
 
   String get _minutesLabel {
@@ -81,7 +83,7 @@ class ShareCard extends StatelessWidget {
       case ShareCardMode.workout: return const Color(0xFF6C5CE7); // Фиолетовый
       case ShareCardMode.week: return const Color(0xFF4834D4);    // Индиго
       case ShareCardMode.cycle: return const Color(0xFF8E44AD);   // Пурпурный
-      case ShareCardMode.challenge: return const Color(0xFFE17055); // 👈 Огненно-оранжевый
+      case ShareCardMode.challenge: return const Color(0xFFFFA000); // 👈 Яркий желто-оранжевый
     }
   }
 
@@ -90,7 +92,7 @@ class ShareCard extends StatelessWidget {
       case ShareCardMode.workout: return 'assets/fairy/fairy_happy.png';
       case ShareCardMode.week: return 'assets/fairy/fairy_party.png';
       case ShareCardMode.cycle: return 'assets/fairy/fairy_party.png';
-      case ShareCardMode.challenge: return 'assets/fairy/fairy_party.png'; // Используем твою Пати
+      case ShareCardMode.challenge: return 'assets/fairy/fairy_party.png';
     }
   }
 
@@ -105,7 +107,9 @@ class ShareCard extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [
             _accent,
-            Color.lerp(_accent, Colors.white, 0.2)!,
+            mode == ShareCardMode.challenge
+                ? Color.lerp(_accent, Colors.black, 0.25)!
+                : Color.lerp(_accent, Colors.white, 0.2)!,
           ],
         ),
       ),
@@ -131,7 +135,6 @@ class ShareCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 👇 Логотип
                 Row(
                   children: [
                     Container(
@@ -177,16 +180,16 @@ class ShareCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
 
-                // 👇 Плитки с цифрами
                 Row(
                   children: [
                     Expanded(
                         child: _buildStatTile(
-                          // Если челлендж — ставим кубок
                             mode == ShareCardMode.challenge ? Icons.emoji_events_rounded : Icons.timer_rounded,
                             mode == ShareCardMode.workout
                                 ? _minutesLabel
-                                : (mode == ShareCardMode.challenge ? '300 раз' : _workoutsLabel)
+                                : (mode == ShareCardMode.challenge
+                                ? (challengeStat ?? 'Челлендж') // 👈 Используем переданный текст
+                                : _workoutsLabel)
                         )
                     ),
                     const SizedBox(width: 10),
@@ -197,7 +200,6 @@ class ShareCard extends StatelessWidget {
                 ),
                 const Spacer(),
 
-                // 👇 Фея
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [

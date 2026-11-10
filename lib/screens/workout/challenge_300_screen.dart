@@ -1,16 +1,18 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/workout_day.dart';
 import '../../models/exercise.dart';
+import '../../models/user_profile.dart';
 import '../../services/database_helper.dart';
-import 'workout_complete_screen.dart'; // 👈 Импортируем экран итогов
+import 'workout_complete_screen.dart';
 
-class ChallengeScreen extends StatefulWidget {
+class Challenge300Screen extends StatefulWidget {
   final WorkoutDay day;
   final int profileId;
   final List<WorkoutExercise> items;
   final Map<int, Exercise> exerciseMap;
 
-  const ChallengeScreen({
+  const Challenge300Screen({
     super.key,
     required this.day,
     required this.profileId,
@@ -19,121 +21,99 @@ class ChallengeScreen extends StatefulWidget {
   });
 
   @override
-  State<ChallengeScreen> createState() => _ChallengeScreenState();
+  State<Challenge300Screen> createState() => _Challenge300ScreenState();
 }
 
-class _ChallengeScreenState extends State<ChallengeScreen> {
-// Храним прогресс: ключ — id упражнения, значение — сколько осталось
-final Map<int, int> _remainingReps = {};
+class _Challenge300ScreenState extends State<Challenge300Screen> {
+  final Map<int, int> _remainingReps = {};
+  final Map<int, int> _targets = {};
 
-// Храним цели: ключ — id упражнения, значение — сколько всего надо сделать
-final Map<int, int> _targets = {};
+  bool _started = false;
+  bool _finished = false;
+  int _secondsElapsed = 0;
+  Timer? _timer;
 
-bool _started = false;
-bool _finished = false;
-int _secondsElapsed = 0;
+  @override
+  void initState() {
+    super.initState();
+    for (final item in widget.items.take(3)) {
+      if (item.id != null) {
+        final match = RegExp(r'(\d+)').firstMatch(item.reps);
+        final target = int.tryParse(match?.group(1) ?? '') ?? 100;
 
-@override
-void initState() {
-super.initState();
-// Инициализируем счетчики из базы (например, 100 повторений или 100 секунд)
-for (final item in widget.items) {
-if (item.id != null) {
-// Парсим число из строки (например, из "100" или "100 сек")
-final match = RegExp(r'(\d+)').firstMatch(item.reps);
-final target = int.tryParse(match?.group(1) ?? '') ?? 100;
+        _targets[item.id!] = target;
+        _remainingReps[item.id!] = target;
+      }
+    }
+  }
 
-_targets[item.id!] = target;
-_remainingReps[item.id!] = target;
-}
-}
-}
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
 
-void _startChallenge() {
-setState(() => _started = true);
-Future.doWhile(() async {
-await Future.delayed(const Duration(seconds: 1));
-if (!mounted || _finished) return false;
-setState(() => _secondsElapsed++);
-return true;
-});
-}
+  void _startChallenge() {
+    setState(() => _started = true);
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted || _finished) return;
+      setState(() => _secondsElapsed++);
+    });
+  }
 
-void _updateProgress(int itemId, int amount) {
-if (!_started || _finished) return;
+  void _updateProgress(int itemId, int amount) {
+    if (!_started || _finished) return;
 
-setState(() {
-final current = _remainingReps[itemId] ?? _targets[itemId]!;
-final newValue = current - amount;
+    setState(() {
+      final current = _remainingReps[itemId] ?? _targets[itemId]!;
+      final newValue = current - amount;
+      _remainingReps[itemId] = newValue <= 0 ? 0 : newValue;
+    });
 
-if (newValue <= 0) {
-_remainingReps[itemId] = 0;
-} else {
-_remainingReps[itemId] = newValue;
-}
-});
+    _checkCompletion();
+  }
 
-_checkCompletion();
-}
+  void _checkCompletion() {
+    final allDone = _remainingReps.values.every((reps) => reps == 0);
+    if (allDone && !_finished) {
+      setState(() => _finished = true);
+      _completeChallenge();
+    }
+  }
 
-void _checkCompletion() {
-final allDone = _remainingReps.values.every((reps) => reps == 0);
-if (allDone && !_finished) {
-setState(() => _finished = true);
-_completeChallenge();
-}
-}
+  Future<void> _completeChallenge() async {
+    _timer?.cancel();
 
-Future<void> _completeChallenge() async {
-final updated = widget.day.copyWith(
-status: 'completed',
-completedAt: DateTime.now(),
-durationMinutes: _secondsElapsed > 0 ? (_secondsElapsed / 60).ceil() : 1,
-);
-await DatabaseHelper.instance.updateWorkoutDay(updated);
+    final profile = await DatabaseHelper.instance.getProfileById(widget.profileId);
 
-if (!mounted) return;
+    // 👇 МЫ БОЛЬШЕ НЕ УДАЛЯЕМ И НЕ ГЕНЕРИРУЕМ ИЗОЛЯЦИИ.
+    // Они уже были сгенерированы в ChallengeSetupScreen и ждут своего часа.
 
-// 👇 Открываем экран итогов, как обычная тренировка!
-Navigator.pushReplacement(
-context,
-MaterialPageRoute(
-builder: (_) => WorkoutCompleteScreen(
-completedDay: updated,
-exercisesCount: widget.items.length,
-isWeekComplete: false, // Можно добавить логику проверки недели
-isCycleComplete: false,
-userName: 'Спортсмен', // Или передать имя из профиля
-),
-),
-);
-}
+    final updated = widget.day.copyWith(
+      status: 'completed',
+      completedAt: DateTime.now(),
+      durationMinutes: _secondsElapsed > 0 ? (_secondsElapsed / 60).ceil() : 1,
+    );
+    await DatabaseHelper.instance.updateWorkoutDay(updated);
 
-// ═══ ОТКАЗ ОТ ЧЕЛЛЕНДЖА ═══
-Future<void> _declineChallenge() async {
-final confirm = await showDialog<bool>(
-context: context,
-builder: (ctx) => AlertDialog(
-title: const Text('Отказаться от челленджа?'),
-content: const Text('Этот день превратится в обычную силовую тренировку.'),
-actions: [
-TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Нет, я справлюсь!')),
-TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Да, к обычной тренировке')),
-],
-),
-);
+    if (!mounted) return;
 
-if (confirm == true) {
-// Меняем тип дня на обычный
-final updated = widget.day.copyWith(type: 'strength');
-await DatabaseHelper.instance.updateWorkoutDay(updated);
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WorkoutCompleteScreen(
+          completedDay: updated,
+          exercisesCount: 3,
+          isWeekComplete: false,
+          isCycleComplete: false,
+          isChallenge: true,
+          userName: profile?.name ?? 'Спортсмен',
+          challengeStat: '300 раз',
+        ),
+      ),
+    );
+  }
 
-if (!mounted) return;
-Navigator.pop(context); // Возвращаемся на экран плана
-}
-}
-// ═══ КОНЕЦ ЧАСТИ 1 из 2 ═══
-// Скажи «часть 2», чтобы получить экран с кольцами и кнопками (с учетом секунд).
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -164,7 +144,7 @@ Navigator.pop(context); // Возвращаемся на экран плана
             Text('Челлендж 300', style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             Text(
-              'Тебе нужно выполнить 3 упражнения. Никаких подходов и весов — просто сделай это!',
+              'Тебе нужно выполнить ${widget.items.length} упражнения по 100 раз. Никаких подходов и весов — просто сделай это!',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.7)),
             ),
@@ -183,11 +163,6 @@ Navigator.pop(context); // Возвращаемся на экран плана
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: _declineChallenge,
-              child: const Text('Отказаться и сделать обычную тренировку'),
-            )
           ],
         ),
       ),
@@ -201,7 +176,6 @@ Navigator.pop(context); // Возвращаемся на экран плана
 
     return Column(
       children: [
-        // 👇 Таймер сверху
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -216,13 +190,11 @@ Navigator.pop(context); // Возвращаемся на экран плана
             ),
           ),
         ),
-
         Expanded(
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // 👇 Список упражнений
-              ...widget.items.map((item) {
+              ...widget.items.take(3).map((item) {
                 final ex = widget.exerciseMap[item.replacedByItemId ?? item.itemId];
                 if (ex == null || item.id == null) return const SizedBox.shrink();
 
@@ -230,11 +202,8 @@ Navigator.pop(context); // Возвращаемся на экран плана
                 final remaining = _remainingReps[item.id!] ?? target;
                 final done = target - remaining;
                 final progress = done / target;
-
-                // 👇 Умное определение: планка — в секундах, остальное — в разах
-                final isTimed = item.reps.contains('сек') || ex.name.toLowerCase().contains('планка');
+                final isTimed = item.reps.contains('сек');
                 final unit = isTimed ? 'сек' : 'раз';
-                final displayRemaining = isTimed ? '$remaining' : '$remaining';
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 16),
@@ -249,8 +218,6 @@ Navigator.pop(context); // Возвращаемся на экран плана
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 20),
-
-                        // Кольцо прогресса и счетчик
                         SizedBox(
                           width: 140,
                           height: 140,
@@ -272,7 +239,7 @@ Navigator.pop(context); // Возвращаемся на экран плана
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
-                                    remaining == 0 ? '✓' : displayRemaining,
+                                    remaining == 0 ? '✓' : '$remaining',
                                     style: TextStyle(
                                       fontSize: 42,
                                       fontWeight: FontWeight.w900,
@@ -293,8 +260,6 @@ Navigator.pop(context); // Возвращаемся на экран плана
                           ),
                         ),
                         const SizedBox(height: 20),
-
-                        // Кнопки
                         if (remaining > 0)
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -315,22 +280,7 @@ Navigator.pop(context); // Возвращаемся на экран плана
                   ),
                 );
               }).toList(),
-
               const SizedBox(height: 30),
-
-              // Кнопка «Сдаться»
-              if (!_finished)
-                OutlinedButton(
-                  onPressed: _declineChallenge,
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    side: const BorderSide(color: Colors.grey),
-                    foregroundColor: Colors.grey,
-                  ),
-                  child: const Text('Завершить челлендж досрочно'),
-                ),
-              const SizedBox(height: 32),
             ],
           ),
         ),
@@ -352,4 +302,3 @@ Navigator.pop(context); // Возвращаемся на экран плана
     );
   }
 }
-// ═══ ФАЙЛ challenge_screen.dart ЗАВЕРШЁН ═══

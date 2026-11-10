@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/fairy_mood.dart';
+import '../../data/base_exercises.dart';
 import '../../models/user_profile.dart';
 import '../../models/workout_day.dart';
+import '../../models/exercise.dart';
 import '../../services/database_helper.dart';
 import '../../services/workout_generator.dart' hide DatabaseHelper;
 import '../../services/week_analyzer.dart';
@@ -12,8 +14,7 @@ import '../yoga/yoga_screen.dart';
 import '../trainer/trainer_screen.dart';
 import 'workout_detail_screen.dart';
 import 'my_templates_screen.dart';
-import 'challenge_setup_screen.dart'; // 👈 Добавлен импорт
-import 'challenge_screen.dart';      // 👈 Добавлен импорт
+import 'challenge_dice_screen.dart';
 
 class WorkoutScreen extends StatefulWidget {
   const WorkoutScreen({super.key});
@@ -192,7 +193,7 @@ await Future.delayed(const Duration(seconds: 4));
 await _saveProfileHashAsDismissed(profile);
 FairyReactionService().releaseScreenPhrases();
 }
-// ═══ КОНЕЦ ЧАСТИ 1 из 3 ═══
+
 Future<void> _generatePlan({bool isUpdate = false}) async {
 if (_activeProfile == null) { _showMessage('Сначала создайте профиль'); return; }
 
@@ -219,15 +220,8 @@ const Expanded(child: Text('Пора обновить базы! 🧚‍♀️', 
 ]),
 content: const Text('Ты занимаешься уже 2 месяца. Мышцы привыкают к одним и тем же упражнениям. Давай обновим базы, чтобы прогресс не остановился!'),
 actions: [
-TextButton(
-onPressed: () => Navigator.pop(ctx, false),
-child: const Text('Оставить старые'),
-),
-ElevatedButton(
-onPressed: () => Navigator.pop(ctx, true),
-style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE17055)),
-child: const Text('Обновить базы'),
-),
+TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Оставить старые')),
+ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE17055)), child: const Text('Обновить базы')),
 ],
 ),
 );
@@ -245,10 +239,7 @@ final freshProfile = await DatabaseHelper.instance.getProfileById(_activeProfile
 if (freshProfile == null) { setState(() => _generating = false); _showMessage('Профиль не найден'); return; }
 setState(() => _activeProfile = freshProfile);
 
-final newDays = await WorkoutGenerator.generateMonthPlan(
-freshProfile,
-smart: true,
-);
+final newDays = await WorkoutGenerator.generateMonthPlan(freshProfile, smart: true);
 final lastWeek = await WeekAnalyzer.analyzeLastWeek(freshProfile.id!);
 final streak = await FairyStatsService.getStreak();
 
@@ -265,14 +256,15 @@ _showCompletionBanner = false;
 await _saveProfileHashAsAccepted(freshProfile);
 FairyReactionService().trigger(isUpdate ? 'plan_updated' : 'plan_generated', mood: FairyMood.party);
 
-if (isUpdate) {
-_showMessage('План обновлён! Базы заменены на новые.');
-}
+if (isUpdate) _showMessage('План обновлён! Базы заменены на новые.');
 } catch (e) {
 setState(() => _generating = false);
 _showMessage('Ошибка: $e');
 }
 }
+
+// ═══ КОНЕЦ ЧАСТИ 1 ═══
+// ═══ ЧАСТЬ 2: ОТКРЫТИЕ ДНЯ И ГЕНЕРАЦИЯ ПРИ ОТКАЗЕ ═══
 
 Future<void> _openDay(WorkoutDay day) async {
 final isUnlocked = _isWeekUnlocked(day.weekNumber ?? 1);
@@ -294,12 +286,9 @@ const SizedBox(width: 12),
 const Expanded(child: Text('День Челленджа! 🔥')),
 ],
 ),
-content: const Text('Сегодня вместо обычной тренировки мы устроим челлендж! Выбери 3 упражнения и сделай каждое по 100 раз. Погнали?'),
+content: const Text('Сегодня вместо обычной тренировки мы устроим челлендж! Испытай себя и узнай, что тебя ждет. Погнали?'),
 actions: [
-TextButton(
-onPressed: () => Navigator.pop(ctx, false),
-child: const Text('Обычная тренировка')
-),
+TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Обычная тренировка')),
 ElevatedButton(
 onPressed: () => Navigator.pop(ctx, true),
 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFB800), foregroundColor: Colors.white),
@@ -310,29 +299,58 @@ child: const Text('Погнали!'),
 );
 
 if (wantsChallenge == true) {
-final allEx = await DatabaseHelper.instance.getExercises();
+// Загружаем упражнения и их модели
+final workoutExs = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
+final exMap = <int, Exercise>{};
+for (final we in workoutExs) {
+if (we.itemType == 'exercise') {
+final ex = await DatabaseHelper.instance.getExerciseById(we.replacedByItemId ?? we.itemId);
+if (ex != null) exMap[ex.id!] = ex;
+}
+}
+
 if (!mounted) return;
 await Navigator.push(
 context,
 MaterialPageRoute(
-builder: (_) => ChallengeSetupScreen(
+builder: (_) => ChallengeWheelScreen(
 day: day,
-profile: _activeProfile, // 👈 Передаем профиль для фокусных зон
-allExercises: allEx,
+profileId: _activeProfile!.id!,
+items: workoutExs,
+exerciseMap: exMap,
 ),
 ),
 );
 _loadData();
 } else {
-// Отказ — превращаем в обычную тренировку
+// 👇 ПОЛЬЗОВАТЕЛЬ ОТКАЗАЛСЯ ОТ ЧЕЛЛЕНДЖА
+if (mounted) {
+ScaffoldMessenger.of(context).showSnackBar(
+const SnackBar(
+content: Text('Окей! Сегодня будет особенный день: проработаем забытые зоны для гармоничного развития 💪'),
+duration: Duration(seconds: 3),
+backgroundColor: Color(0xFF6C5CE7),
+),
+);
+}
+
+// Меняем тип на strength
 final updated = day.copyWith(type: 'strength');
 await DatabaseHelper.instance.updateWorkoutDay(updated);
+
+// Генерируем тренировку (3 базы + 6 изоляций на забытые зоны)
+if (_activeProfile != null) {
+await _generateForgottenZonesWorkout(updated, _activeProfile!);
+}
 
 if (!mounted) return;
 final result = await Navigator.push(
 context,
 MaterialPageRoute(
-builder: (_) => WorkoutDetailScreen(workoutDay: updated, profileId: _activeProfile!.id!),
+builder: (_) => WorkoutDetailScreen(
+workoutDay: updated,
+profileId: _activeProfile!.id!,
+),
 ),
 );
 if (result == true) {
@@ -340,7 +358,7 @@ await _loadData();
 await _checkAndUnlockNextWeek();
 }
 }
-return; // Выходим, чтобы не открывать обычный экран
+return;
 }
 
 // Обычная тренировка
@@ -353,6 +371,98 @@ builder: (_) => WorkoutDetailScreen(workoutDay: day, profileId: _activeProfile!.
 if (result == true) {
 await _loadData();
 await _checkAndUnlockNextWeek();
+}
+}
+
+// 👇 ИСПРАВЛЕННЫЙ МЕТОД: без блоков и с учетом ограничений
+Future<void> _generateForgottenZonesWorkout(WorkoutDay day, UserProfile profile) async {
+// 1. Удаляем старые упражнения из дня
+final existing = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
+for (final e in existing) {
+if (e.id != null) await DatabaseHelper.instance.deleteWorkoutExercise(e.id!);
+}
+
+final allExercises = await DatabaseHelper.instance.getExercises();
+final blockedZones = profile.limitations.map((e) => e.toLowerCase()).toList();
+
+// 2. Ищем 3 базы С УЧЕТОМ ОГРАНИЧЕНИЙ
+final bases = allExercises.where((e) {
+if (!isBaseExercise(e)) return false;
+// Проверка на зону
+final zone = getExerciseZone(e);
+if (blockedZones.contains(zone)) return false;
+// Проверка противопоказаний
+for (final contra in e.contraindications) {
+final c = contra.toLowerCase().trim();
+for (final block in blockedZones) {
+if (c.contains(block) || block.contains(c)) return false;
+}
+}
+return true;
+}).toList()..shuffle();
+
+final selectedBases = bases.take(3).toList();
+
+int order = 1;
+for (final ex in selectedBases) {
+final we = WorkoutExercise(
+workoutDayId: day.id!,
+itemType: 'exercise',
+itemId: ex.id!,
+order: order++,
+sets: 3,
+reps: '10-12',
+// 👇 НЕ задаем blockNumber (остается null)
+);
+final newId = await DatabaseHelper.instance.addWorkoutExercise(we);
+for (int s = 1; s <= 3; s++) {
+await DatabaseHelper.instance.addWorkoutSet(
+WorkoutSet(workoutExerciseId: newId, order: s, completed: false)
+);
+}
+}
+
+// 3. Генерируем 6 изоляций на забытые зоны
+final allZones = ['chest', 'back', 'arms', 'shoulders', 'glutes', 'legs', 'abs'];
+final focusZones = profile.focusAreas.map((e) => e.toLowerCase()).toList();
+
+final forgottenZones = allZones.where((z) =>
+!blockedZones.contains(z) && !focusZones.contains(z)
+).toList();
+
+int added = 0;
+final Set<int> usedIds = selectedBases.map((e) => e.id!).toSet();
+
+for (final zone in forgottenZones) {
+if (added >= 6) break;
+final zoneExs = allExercises.where((e) {
+if (e.id == null) return false;
+if (usedIds.contains(e.id)) return false;
+if (isBaseExercise(e) || e.muscleGroups.contains('cardio')) return false;
+return e.muscleGroups.contains(zone);
+}).toList()..shuffle();
+
+for (final ex in zoneExs.take(2)) {
+if (added >= 6) break;
+usedIds.add(ex.id!);
+
+final we = WorkoutExercise(
+workoutDayId: day.id!,
+itemType: 'exercise',
+itemId: ex.id!,
+order: order++,
+sets: 3,
+reps: '15',
+// 👇 НЕ задаем blockNumber (остается null)
+);
+final newId = await DatabaseHelper.instance.addWorkoutExercise(we);
+for (int s = 1; s <= 3; s++) {
+await DatabaseHelper.instance.addWorkoutSet(
+WorkoutSet(workoutExerciseId: newId, order: s, completed: false)
+);
+}
+added++;
+}
 }
 }
 
@@ -423,8 +533,10 @@ if (confirmed == true) _generatePlan(isUpdate: true);
 void _showMessage(String text) {
 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 }
-// ═══ КОНЕЦ ЧАСТИ 2 из 3 ═══
-// Скажи «часть 3», чтобы получить финал — метод build, список дней, карточки и виджеты.
+
+// ═══ КОНЕЦ ЧАСТИ 2 ═══
+  // ═══ ЧАСТЬ 3: ИНТЕРФЕЙС ═══
+
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -471,56 +583,6 @@ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
             _buildSectionTitle(context, 'Быстрый старт'),
             const SizedBox(height: 12),
             _buildQuickActions(context),
-
-            // 👇 ВРЕМЕННАЯ КНОПКА ДЛЯ ТЕСТА ЧЕЛЛЕНДЖА
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () async {
-                  if (_activeProfile == null) return;
-
-                  // Создаем день челленджа
-                  final dayId = await DatabaseHelper.instance.createWorkoutDay(WorkoutDay(
-                    profileId: _activeProfile!.id!, // 👈 Исправлено (убрано profile:)
-                    name: 'Челлендж: 300 повторений',
-                    type: 'challenge',
-                    date: DateTime.now(),
-                    weekNumber: _selectedWeek,
-                    cycleNumber: 1,
-                    status: 'planned',
-                  ));
-
-                  // Добавляем временные упражнения (они перезапишутся при выборе)
-                  final allEx = await DatabaseHelper.instance.getExercises();
-                  final exsToUse = allEx.take(3).toList();
-
-                  for (int i = 0; i < exsToUse.length; i++) {
-                    await DatabaseHelper.instance.addWorkoutExercise(WorkoutExercise(
-                      workoutDayId: dayId,
-                      itemType: 'exercise',
-                      itemId: exsToUse[i].id!,
-                      order: i + 1,
-                      sets: 1,
-                      reps: '100',
-                    ));
-                  }
-
-                  if (mounted) {
-                    _showMessage('Челлендж создан! Он в списке плана.');
-                    _loadData();
-                  }
-                },
-                icon: const Icon(Icons.local_fire_department_rounded),
-                label: const Text('🧪 Создать тестовый Челлендж'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFFB800),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-            ),
-            // ═══════════════════════════════════════════════════════
 
             const SizedBox(height: 24),
             if (_lastWeek != null && !_lastWeek!.isEmpty) ...[
@@ -616,7 +678,6 @@ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
       accentColor = const Color(0xFFE17055);
     } else {
       gradientColors = [const Color(0xFF6C5CE7), const Color(0xFFA29BFE)];
-      // Если это челлендж, показываем огонек
       icon = isUnlocked ? (day.type == 'challenge' ? Icons.local_fire_department_rounded : Icons.fitness_center) : Icons.lock_rounded;
       accentColor = const Color(0xFF6C5CE7);
     }
@@ -991,4 +1052,4 @@ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
     );
   }
 }
-// ═══ КОНЕЦ ЧАСТИ 3 из 3 — ФАЙЛ workout_screen.dart ЗАВЕРШЁН ═══
+// ═══ КОНЕЦ ФАЙЛА workout_screen.dart ═══

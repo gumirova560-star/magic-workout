@@ -6,14 +6,16 @@ import '../../services/database_helper.dart';
 import '../../services/fairy_stats_service.dart';
 import '../../widgets/share_card.dart';
 import '../../services/share_service.dart';
+import 'workout_detail_screen.dart';
 
 class WorkoutCompleteScreen extends StatefulWidget {
   final WorkoutDay completedDay;
   final int exercisesCount;
   final bool isWeekComplete;
   final bool isCycleComplete;
-  final bool isChallenge; // 👈 Новое поле
+  final bool isChallenge;
   final String userName;
+  final String? challengeStat; // 👈 НОВОЕ ПОЛЕ
 
   const WorkoutCompleteScreen({
     super.key,
@@ -21,8 +23,9 @@ class WorkoutCompleteScreen extends StatefulWidget {
     required this.exercisesCount,
     required this.isWeekComplete,
     required this.isCycleComplete,
-    this.isChallenge = false, // 👈 По умолчанию false
+    this.isChallenge = false,
     required this.userName,
+    this.challengeStat, // 👈
   });
 
   @override
@@ -34,13 +37,14 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
   int _totalWorkoutsInPeriod = 1;
   int _totalExercisesInPeriod = 0;
   late ShareCardMode _mode;
+  String _userName = 'Спортсмен';
 
   @override
   void initState() {
     super.initState();
+    _userName = widget.userName;
     _loadData();
 
-    // 👇 Определяем режим (сначала проверяем челлендж)
     if (widget.isChallenge) {
       _mode = ShareCardMode.challenge;
     } else if (widget.isCycleComplete) {
@@ -53,6 +57,13 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
   }
 
   Future<void> _loadData() async {
+    if (_userName == 'Спортсмен' || _userName.isEmpty) {
+      final profile = await DatabaseHelper.instance.getProfileById(widget.completedDay.profileId);
+      if (profile != null && profile.name.isNotEmpty) {
+        _userName = profile.name;
+      }
+    }
+
     final streak = await FairyStatsService.recalculateWeeklyStreak();
 
     int workouts = 1;
@@ -94,7 +105,7 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
   String get _title {
     if (_mode == ShareCardMode.cycle) return 'Цикл ${widget.completedDay.cycleNumber ?? 1}';
     if (_mode == ShareCardMode.week) return 'Неделя ${widget.completedDay.weekNumber ?? 1}';
-    if (_mode == ShareCardMode.challenge) return 'Челлендж 300';
+    if (_mode == ShareCardMode.challenge) return widget.challengeStat ?? 'Челлендж';
 
     final name = widget.completedDay.name;
     final match = RegExp(r'День (\d+)').firstMatch(name);
@@ -180,7 +191,7 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
                       ShareService.shareWorkoutCard(
                         context: context,
                         mode: _mode,
-                        userName: widget.userName,
+                        userName: _userName,
                         title: _title,
                         minutes: widget.completedDay.durationMinutes ?? 0,
                         exercisesCount: _totalExercisesInPeriod,
@@ -188,6 +199,7 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
                         streakWeeks: _mode == ShareCardMode.cycle
                             ? 4
                             : (_mode == ShareCardMode.week ? (widget.completedDay.weekNumber ?? 1) : _streak),
+                        challengeStat: widget.challengeStat, // 👈 ПЕРЕДАЕМ
                       );
                     },
                     icon: const Icon(Icons.ios_share_rounded),
@@ -201,6 +213,40 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
                     ),
                   ),
                 ).animate().slideY(begin: 0.5).fadeIn(delay: 500.ms),
+
+                if (widget.isChallenge) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        if (widget.completedDay.id == null) return;
+
+                        final day = await DatabaseHelper.instance.getWorkoutDayById(widget.completedDay.id!);
+                        if (day == null || !mounted) return;
+
+                        await Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => WorkoutDetailScreen(
+                              workoutDay: day,
+                              profileId: day.profileId,
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.fitness_center_rounded),
+                      label: const Text('Продолжить тренировку'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00B894),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ).animate().fadeIn(delay: 600.ms),
+                ],
 
                 const SizedBox(height: 12),
 
@@ -241,4 +287,3 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
     );
   }
 }
-// ═══ ФАЙЛ workout_complete_screen.dart ЗАВЕРШЁН ═══

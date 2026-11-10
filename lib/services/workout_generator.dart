@@ -119,7 +119,15 @@ final focusGroups = _getFocusGroups(profile);
 final cardioMode = _computeCardioMode(focusGroups, profile.goal);
 final dayPlans = _createDayTemplates(focusGroups, profile.daysPerWeek, profile.limitations);
 
-final allExercises = await DatabaseHelper.instance.getExercises();
+// 👇 ЗАЩИТА ОТ ДУБЛИКАТОВ В БАЗЕ УПРАЖНЕНИЙ
+final rawExercises = await DatabaseHelper.instance.getExercises();
+final Map<String, Exercise> uniqueExercisesMap = {};
+for (final ex in rawExercises) {
+final cleanName = ex.name.toLowerCase().replaceAll('ё', 'е').replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
+uniqueExercisesMap.putIfAbsent(cleanName, () => ex);
+}
+final allExercises = uniqueExercisesMap.values.toList();
+
 final allStretches = await DatabaseHelper.instance.getStretches();
 
 final monthBases = <List<Exercise>>[];
@@ -169,7 +177,6 @@ final createdDays = <WorkoutDay>[];
 final List<Set<int>> recentIsolationIds = [];
 final Set<int> usedCardioThisWeek = {};
 
-// ═══ КОНЕЦ ЧАСТИ 1 ═══
 for (int week = 1; week <= 4; week++) {
 if (usedCardioThisWeek.length > 6) {
 usedCardioThisWeek.clear();
@@ -188,11 +195,11 @@ level: profile.level,
 limitations: profile.limitations,
 maxCount: _getExerciseCount(profile.sessionMinutes, profile.level) + 4,
 recentDayIds: recentIsolationIds,
-repeatWindowSize: profile.daysPerWeek * 2,
+repeatWindowSize: profile.daysPerWeek * 4, // 👈 ПАМЯТЬ УВЕЛИЧЕНА ДО 4 НЕДЕЛЬ
 );
 
 final dayExercises = [...baseExercises, ...isolationExercises];
-
+// ═══ КОНЕЦ ЧАСТИ 1 ═══
 final dayCardios = <Exercise>[];
 if (cardioMode == 'every_day' || dayGroups.isEmpty) {
 final blocked = _buildBlockedZones(profile.limitations);
@@ -297,7 +304,6 @@ uniqueExercises.addAll(cardioList);
 
 final dayDate = DateTime.now().add(Duration(days: (week - 1) * 7 + dayIndex));
 
-// Логика челленджа: всегда 2-й день 3-й недели (индекс 1)
 bool isChallengeDay = (week == 3 && dayIndex == 1);
 final dayType = isChallengeDay ? 'challenge' : 'strength';
 final dayName = isChallengeDay
@@ -312,13 +318,11 @@ durationMinutes: isChallengeDay ? 45 : profile.sessionMinutes, date: dayDate,
 
 final dayId = await DatabaseHelper.instance.createWorkoutDay(day);
 
-// 👇 ЕСЛИ ЧЕЛЛЕНДЖ: СОЗДАЕМ ПУСТОЙ ДЕНЬ
 if (isChallengeDay) {
 createdDays.add(day.copyWith(id: dayId));
 continue;
 }
 
-// ОБЫЧНЫЙ ДЕНЬ
 final baseSets = _getSets(profile.level);
 final finalSets = (baseSets + setsAdjustment).clamp(2, 5);
 final progression = _getProgressionParams(week, profile.goal, profile.level, finalSets, _getRest(profile.goal), _getReps(profile.goal));
@@ -415,180 +419,226 @@ createdDays.add(day.copyWith(id: dayId));
 
 final dayIsolationIds = isolationExercises.map((e) => e.id).whereType<int>().toSet();
 recentIsolationIds.insert(0, dayIsolationIds);
-if (recentIsolationIds.length > profile.daysPerWeek * 2) {
-recentIsolationIds.removeRange(profile.daysPerWeek * 2, recentIsolationIds.length);
+final memoryLimit = profile.daysPerWeek * 4;
+if (recentIsolationIds.length > memoryLimit) {
+recentIsolationIds.removeRange(memoryLimit, recentIsolationIds.length);
 }
 }
 }
 return createdDays;
 }
 
+static List<Exercise> _pickBasesForDay({
+required List<Exercise> allExercises,
+required List<Exercise> baseToKeep,
+required List<String> muscleGroups,
+required String equipment,
+required String level,
+required List<String> limitations,
+required Set<int> usedBaseIds,
+required Set<int> oldBaseIds,
+required Set<String> usedFamiliesInMonth,
+}) {
+final blocked = _buildBlockedZones(limitations);
+final result = <Exercise>[];
+final Set<String> zonesCovered = {};
+final Set<String> usedFamilies = {};
+int lowerBodyBases = baseToKeep.where((e) => ['glutes', 'legs'].contains(getExerciseZone(e))).length;
+
+for (final ex in baseToKeep) {
+if (!isBaseExercise(ex)) continue;
+result.add(ex);
+zonesCovered.add(getExerciseZone(ex));
+usedFamilies.add(getExerciseFamily(ex.name));
+}
+
+for (final zone in muscleGroups) {
+if (zone == 'cardio' || zonesCovered.contains(zone)) continue;
+if ((zone == 'glutes' || zone == 'legs') && lowerBodyBases >= 2) continue;
+
+final freshCandidates = allExercises.where((e) {
+if (!isBaseExercise(e)) return false;
+if (usedBaseIds.contains(e.id)) return false;
+if (_isBlocked(e, blocked)) return false;
+if (!_matchesEquipment(e, equipment)) return false;
+if (!_isDifficultyAllowed(e, level)) return false;
+if (getExerciseZone(e) != zone) return false;
+if (usedFamilies.contains(getExerciseFamily(e.name))) return false;
+if (usedFamiliesInMonth.contains(getExerciseFamily(e.name))) return false;
+if ((equipment == 'gym' || equipment == 'mixed') && _isExcludedForGym(e.name)) return false;
+return true;
+}).toList();
+
+if (freshCandidates.isNotEmpty) {
+freshCandidates.shuffle(_random);
+final pick = freshCandidates.first;
+result.add(pick);
+zonesCovered.add(zone);
+usedFamilies.add(getExerciseFamily(pick.name));
+if (['glutes', 'legs'].contains(zone)) lowerBodyBases++;
+} else {
+final fallbackCandidates = allExercises.where((e) {
+if (!isBaseExercise(e)) return false;
+if (_isBlocked(e, blocked)) return false;
+if (!_matchesEquipment(e, equipment)) return false;
+if (!_isDifficultyAllowed(e, level)) return false;
+if (getExerciseZone(e) != zone) return false;
+if ((equipment == 'gym' || equipment == 'mixed') && _isExcludedForGym(e.name)) return false;
+return true;
+}).toList();
+
+if (fallbackCandidates.isNotEmpty) {
+fallbackCandidates.shuffle(_random);
+final pick = fallbackCandidates.first;
+result.add(pick);
+zonesCovered.add(zone);
+usedFamilies.add(getExerciseFamily(pick.name));
+if (['glutes', 'legs'].contains(zone)) lowerBodyBases++;
+}
+}
+}
+return result;
+}
+
+// 👇 ИСПРАВЛЕННАЯ ЛОГИКА ВЫБОРА ИЗОЛЯЦИЙ (СВЕТОФОР)
+static List<Exercise> _pickIsolationForDay({
+required List<Exercise> allExercises,
+required List<String> muscleGroups,
+required List<Exercise> bases,
+required String equipment,
+required String level,
+required List<String> limitations,
+required int maxCount,
+required List<Set<int>> recentDayIds,
+required int repeatWindowSize,
+}) {
+final blocked = _buildBlockedZones(limitations);
+final result = <Exercise>[];
+
+int? repeatLevel(int? id) {
+if (id == null) return null;
+for (int i = 0; i < recentDayIds.length && i < repeatWindowSize; i++) {
+if (recentDayIds[i].contains(id)) return i;
+}
+return null;
+}
+
+final usedIds = <int>{...bases.map((b) => b.id).whereType<int>()};
+final usedFamilies = <String>{...bases.map((b) => getExerciseFamily(b.name))};
+
+Exercise? pickFromZone(String zone) {
+final candidates = allExercises.where((e) {
+if (e.id == null) return false;
+if (usedIds.contains(e.id)) return false;
+if (isBaseExercise(e)) return false;
+if (_isCardio(e)) return false;
+if (_isBlocked(e, blocked)) return false;
+if (!_matchesEquipment(e, equipment)) return false;
+if (!_isDifficultyAllowed(e, level)) return false;
+if (getExerciseZone(e) != zone) return false;
+if ((equipment == 'gym' || equipment == 'mixed') && _isExcludedForGym(e.name)) return false;
+final fam = getExerciseFamily(e.name);
+if (usedFamilies.contains(fam)) return false;
+return true;
+}).toList();
+
+// 1. 🟢 Ищем "свежие" упражнения (которых вообще не было в истории)
+final fresh = candidates.where((e) => repeatLevel(e.id) == null).toList()..shuffle(_random);
+if (fresh.isNotEmpty) {
+final pick = fresh.first;
+usedIds.add(pick.id!);
+usedFamilies.add(getExerciseFamily(pick.name));
+return pick;
+}
+
+// 2. 🟡 Ищем те, что были ДАВНО (3 и более тренировок назад)
+final safeOld = candidates.where((e) {
+final level = repeatLevel(e.id);
+return level != null && level >= 2;
+}).toList();
+if (safeOld.isNotEmpty) {
+safeOld.sort((a, b) {
+final levelA = repeatLevel(a.id) ?? 0;
+final levelB = repeatLevel(b.id) ?? 0;
+return levelB.compareTo(levelA);
+});
+final pick = safeOld.first;
+usedIds.add(pick.id!);
+usedFamilies.add(getExerciseFamily(pick.name));
+return pick;
+}
+
+// 3. 🟠 Разрешаем взять "через тренировку" (было ровно 2 тренировки назад)
+final mediumOld = candidates.where((e) {
+final level = repeatLevel(e.id);
+return level == 1;
+}).toList();
+if (mediumOld.isNotEmpty) {
+mediumOld.shuffle(_random);
+final pick = mediumOld.first;
+usedIds.add(pick.id!);
+usedFamilies.add(getExerciseFamily(pick.name));
+return pick;
+}
+
+// 4. 🔴 Крайний случай: берем то, что было на прошлой тренировке
+final lastTimeOld = candidates.where((e) {
+final level = repeatLevel(e.id);
+return level == 0;
+}).toList();
+if (lastTimeOld.isNotEmpty) {
+lastTimeOld.shuffle(_random);
+final pick = lastTimeOld.first;
+usedIds.add(pick.id!);
+usedFamilies.add(getExerciseFamily(pick.name));
+return pick;
+}
+
+return null;
+}
+
+for (final base in bases) {
+if (result.length >= maxCount) break;
+final baseZone = getExerciseZone(base);
+
+List<String> zones;
+switch (baseZone) {
+case 'glutes': zones = ['abs', 'legs']; break;
+case 'legs':   zones = ['abs', 'glutes']; break;
+case 'abs':    zones = ['legs', 'glutes']; break;
+case 'chest':  zones = ['back', 'arms']; break;
+case 'back':   zones = ['chest', 'arms']; break;
+case 'shoulders': zones = ['arms', 'back']; break;
+case 'arms':   zones = ['shoulders', 'chest']; break;
+default:       zones = [baseZone, baseZone];
+}
+
+Exercise? first = pickFromZone(zones[0]);
+Exercise? second = pickFromZone(zones[1]);
+
+if (first != null) result.add(first);
+if (second != null) result.add(second);
+}
+
+while (result.length < maxCount) {
+final extras = allExercises.where((e) {
+if (e.id == null || usedIds.contains(e.id)) return false;
+if (isBaseExercise(e) || _isCardio(e)) return false;
+if (_isBlocked(e, blocked)) return false;
+if (!_matchesEquipment(e, equipment)) return false;
+if (!_isDifficultyAllowed(e, level)) return false;
+if ((equipment == 'gym' || equipment == 'mixed') && _isExcludedForGym(e.name)) return false;
+return true;
+}).toList()..shuffle(_random);
+
+if (extras.isEmpty) break;
+result.add(extras.first);
+usedIds.add(extras.first.id!);
+}
+
+return result;
+}
 // ═══ КОНЕЦ ЧАСТИ 2 ═══
-  static List<Exercise> _pickBasesForDay({
-    required List<Exercise> allExercises,
-    required List<Exercise> baseToKeep,
-    required List<String> muscleGroups,
-    required String equipment,
-    required String level,
-    required List<String> limitations,
-    required Set<int> usedBaseIds,
-    required Set<int> oldBaseIds,
-    required Set<String> usedFamiliesInMonth,
-  }) {
-    final blocked = _buildBlockedZones(limitations);
-    final result = <Exercise>[];
-    final Set<String> zonesCovered = {};
-    final Set<String> usedFamilies = {};
-    int lowerBodyBases = baseToKeep.where((e) => ['glutes', 'legs'].contains(getExerciseZone(e))).length;
-
-    for (final ex in baseToKeep) {
-      if (!isBaseExercise(ex)) continue;
-      result.add(ex);
-      zonesCovered.add(getExerciseZone(ex));
-      usedFamilies.add(getExerciseFamily(ex.name));
-    }
-
-    for (final zone in muscleGroups) {
-      if (zone == 'cardio' || zonesCovered.contains(zone)) continue;
-      if ((zone == 'glutes' || zone == 'legs') && lowerBodyBases >= 2) continue;
-
-      final freshCandidates = allExercises.where((e) {
-        if (!isBaseExercise(e)) return false;
-        if (usedBaseIds.contains(e.id)) return false;
-        if (_isBlocked(e, blocked)) return false;
-        if (!_matchesEquipment(e, equipment)) return false;
-        if (!_isDifficultyAllowed(e, level)) return false;
-        if (getExerciseZone(e) != zone) return false;
-        if (usedFamilies.contains(getExerciseFamily(e.name))) return false;
-        if (usedFamiliesInMonth.contains(getExerciseFamily(e.name))) return false;
-        if ((equipment == 'gym' || equipment == 'mixed') && _isExcludedForGym(e.name)) return false;
-        return true;
-      }).toList();
-
-      if (freshCandidates.isNotEmpty) {
-        freshCandidates.shuffle(_random);
-        final pick = freshCandidates.first;
-        result.add(pick);
-        zonesCovered.add(zone);
-        usedFamilies.add(getExerciseFamily(pick.name));
-        if (['glutes', 'legs'].contains(zone)) lowerBodyBases++;
-      } else {
-        final fallbackCandidates = allExercises.where((e) {
-          if (!isBaseExercise(e)) return false;
-          if (_isBlocked(e, blocked)) return false;
-          if (!_matchesEquipment(e, equipment)) return false;
-          if (!_isDifficultyAllowed(e, level)) return false;
-          if (getExerciseZone(e) != zone) return false;
-          if ((equipment == 'gym' || equipment == 'mixed') && _isExcludedForGym(e.name)) return false;
-          return true;
-        }).toList();
-
-        if (fallbackCandidates.isNotEmpty) {
-          fallbackCandidates.shuffle(_random);
-          final pick = fallbackCandidates.first;
-          result.add(pick);
-          zonesCovered.add(zone);
-          usedFamilies.add(getExerciseFamily(pick.name));
-          if (['glutes', 'legs'].contains(zone)) lowerBodyBases++;
-        }
-      }
-    }
-    return result;
-  }
-
-  static List<Exercise> _pickIsolationForDay({
-    required List<Exercise> allExercises,
-    required List<String> muscleGroups,
-    required List<Exercise> bases,
-    required String equipment,
-    required String level,
-    required List<String> limitations,
-    required int maxCount,
-    required List<Set<int>> recentDayIds,
-    required int repeatWindowSize,
-  }) {
-    final blocked = _buildBlockedZones(limitations);
-    final result = <Exercise>[];
-
-    int? repeatLevel(int? id) {
-      if (id == null) return null;
-      for (int i = 0; i < recentDayIds.length && i < repeatWindowSize; i++) {
-        if (recentDayIds[i].contains(id)) return i;
-      }
-      return null;
-    }
-
-    final usedIds = <int>{...bases.map((b) => b.id).whereType<int>()};
-    final usedFamilies = <String>{...bases.map((b) => getExerciseFamily(b.name))};
-
-    Exercise? pickFromZone(String zone) {
-      final candidates = allExercises.where((e) {
-        if (e.id == null) return false;
-        if (usedIds.contains(e.id)) return false;
-        if (isBaseExercise(e)) return false;
-        if (_isCardio(e)) return false;
-        if (_isBlocked(e, blocked)) return false;
-        if (!_matchesEquipment(e, equipment)) return false;
-        if (!_isDifficultyAllowed(e, level)) return false;
-        if (getExerciseZone(e) != zone) return false;
-        if ((equipment == 'gym' || equipment == 'mixed') && _isExcludedForGym(e.name)) return false;
-        final fam = getExerciseFamily(e.name);
-        if (usedFamilies.contains(fam)) return false;
-        return true;
-      }).toList();
-
-      final fresh = candidates.where((e) => repeatLevel(e.id) == null).toList()..shuffle(_random);
-      final old = candidates.where((e) => repeatLevel(e.id) != null).toList()..shuffle(_random);
-      final ordered = [...fresh, ...old];
-      if (ordered.isEmpty) return null;
-      final pick = ordered.first;
-      usedIds.add(pick.id!);
-      usedFamilies.add(getExerciseFamily(pick.name));
-      return pick;
-    }
-
-    for (final base in bases) {
-      if (result.length >= maxCount) break;
-      final baseZone = getExerciseZone(base);
-
-      List<String> zones;
-      switch (baseZone) {
-        case 'glutes': zones = ['abs', 'legs']; break;
-        case 'legs':   zones = ['abs', 'glutes']; break;
-        case 'abs':    zones = ['legs', 'glutes']; break;
-        case 'chest':  zones = ['back', 'arms']; break;
-        case 'back':   zones = ['chest', 'arms']; break;
-        case 'shoulders': zones = ['arms', 'back']; break;
-        case 'arms':   zones = ['shoulders', 'chest']; break;
-        default:       zones = [baseZone, baseZone];
-      }
-
-      Exercise? first = pickFromZone(zones[0]);
-      Exercise? second = pickFromZone(zones[1]);
-
-      if (first != null) result.add(first);
-      if (second != null) result.add(second);
-    }
-
-    while (result.length < maxCount) {
-      final extras = allExercises.where((e) {
-        if (e.id == null || usedIds.contains(e.id)) return false;
-        if (isBaseExercise(e) || _isCardio(e)) return false;
-        if (_isBlocked(e, blocked)) return false;
-        if (!_matchesEquipment(e, equipment)) return false;
-        if (!_isDifficultyAllowed(e, level)) return false;
-        if ((equipment == 'gym' || equipment == 'mixed') && _isExcludedForGym(e.name)) return false;
-        return true;
-      }).toList()..shuffle(_random);
-
-      if (extras.isEmpty) break;
-      result.add(extras.first);
-      usedIds.add(extras.first.id!);
-    }
-
-    return result;
-  }
-
   static List<String> _getFocusGroups(UserProfile profile) {
     if (profile.focusAreas.isNotEmpty) return profile.focusAreas.map(_norm).toList();
 
@@ -673,9 +723,15 @@ return createdDays;
     return ex.muscleGroups.contains('cardio');
   }
 
+  // 👇 ИСПРАВЛЕННЫЙ ФИЛЬТР ОБОРУДОВАНИЯ (БЛОКИРУЕТ ЖЕЛЕЗО ДЛЯ BODYWEIGHT)
   static bool _matchesEquipment(Exercise e, String equipment) {
     if (equipment == 'gym' || equipment == 'mixed' || equipment == 'both' || equipment == 'any') return true;
-    if (equipment == 'bodyweight') return e.equipment.contains('bodyweight');
+    if (equipment == 'bodyweight') {
+      final lowerName = e.name.toLowerCase();
+      final hasIron = lowerName.contains('гантел') || lowerName.contains('штанг') || lowerName.contains('гирей') || lowerName.contains('блин') || lowerName.contains('тренажер') || lowerName.contains('блок');
+      if (hasIron) return false;
+      return e.equipment.contains('bodyweight');
+    }
     if (equipment == 'dumbbells') return e.equipment.contains('bodyweight') || e.equipment.contains('dumbbells') || e.equipment.contains('resistance_band');
     return true;
   }
@@ -693,13 +749,15 @@ return createdDays;
       'на 1 ноге', 'на 1 руке', 'с одной ногой', 'с одной рукой', 'с гантелями', 'с гантелью', 'с гантелей', 'с одной гантелью',
       'со штангой', 'с штангой', 'с гирей', 'с эспандером', 'с резинкой', 'с бодибаром', 'с блином', 'с мячом', 'с фитболом', 'в наклоне',
       'с упором', 'на скамье', 'на полу', 'на коленях', 'сидя', 'стоя', 'лёжа', 'лежа', 'вис', 'вися', 'правой', 'левой', 'собственным весом', 'свой вес',
-      'в кроссовере', 'в блоке', 'в тренажере', 'в тренажёре', 'на тренажере', 'на тренажёре', 'в кроссовер', 'с блоком', 'с тросом', 'на тросе', 'с рукоятью'
+      'в кроссовере', 'в блоке', 'в тренажере', 'в тренажёре', 'на тренажере', 'на тренажёре', 'в кроссовер', 'с блоком', 'с тросом', 'на тросе', 'с рукоятью',
+      'на турнике', 'на брусьях', 'с опорой', 'без опоры', 'с весом', 'без веса', 'с грифом'
     ];
     for (final r in removals) s = s.replaceAll(r, '');
     s = s.replaceAll('упражнение', '').replaceAll('подходы', '');
     s = s.replaceAll('мостик', 'мост').replaceAll('хип траст', 'мост').replaceAll('hip thrust', 'мост').replaceAll('подъем таза', 'мост');
     s = s.replaceAll('ягодичный', '').replaceAll('болгарский', 'выпад').replaceAll('боковая планка', 'планка');
-    s = s.replaceAll(RegExp(r'[,\-—–()\[\]:;]'), ' ').replaceAll(RegExp(r'\s+'), ' ');
+    s = s.replaceAll('ё', 'е');
+    s = s.replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
     return s.trim();
   }
 
@@ -776,15 +834,30 @@ return createdDays;
   static String _getReps(String goal) => goal == 'strength' ? '6-8' : (goal == 'gain_mass' ? '8-10' : (goal == 'tone' ? '15-18' : '15-20'));
   static int _getRest(String goal) => goal == 'strength' ? 120 : (goal == 'gain_mass' ? 90 : (goal == 'lose_weight' ? 45 : 60));
 
+  // 👇 ИСПРАВЛЕННЫЙ ГЕНЕРАТОР ПРОГРЕССИИ (15 -> 18 -> 18 -> 15)
   static _ProgressionParams _getProgressionParams(int week, String goal, String level, int baseSets, int baseRest, String baseReps) {
     int sets = baseSets; String reps = baseReps; int rest = baseRest; int timedSeconds = 60; int cardioMinutes = 15;
     if (goal == 'lose_weight') { rest = 45; }
-    if (goal == 'tone') { reps = week == 1 ? '15-18' : (week == 2 ? '18' : (week == 3 ? '20' : '15')); }
-    else {
-      if (week == 1) { if (goal == 'strength' || goal == 'gain_mass') reps = '10-12'; }
-      else if (week == 2) { if (goal == 'strength' || goal == 'gain_mass') reps = '10-12'; else reps = '18'; }
-      else if (week == 3) { if (goal == 'strength' || goal == 'gain_mass') reps = '12-14'; else reps = '20'; }
-      else if (week == 4) { if (goal == 'strength' || goal == 'gain_mass') reps = '10-12'; else reps = '15'; }
+
+    if (goal == 'tone') {
+      if (week == 1) reps = '15';
+      else if (week == 2) reps = '18';
+      else if (week == 3) reps = '18'; // Убрали 20, поставили 18
+      else reps = '15';
+    } else {
+      if (week == 1) {
+        if (goal == 'strength' || goal == 'gain_mass') reps = '10-12';
+        else reps = '15';
+      } else if (week == 2) {
+        if (goal == 'strength' || goal == 'gain_mass') reps = '10-12';
+        else reps = '18';
+      } else if (week == 3) {
+        if (goal == 'strength' || goal == 'gain_mass') reps = '12-14';
+        else reps = '18'; // Убрали 20, поставили 18
+      } else if (week == 4) {
+        if (goal == 'strength' || goal == 'gain_mass') reps = '10-12';
+        else reps = '15';
+      }
     }
 
     if (week == 1) timedSeconds = 60;
@@ -836,10 +909,10 @@ class _ProgressionParams {
 
   _ProgressionParams({
     required this.sets,
-    required this.rest,
     required this.reps,
+    required this.rest,
     required this.timedSeconds,
     required this.cardioMinutes,
   });
 }
-// ═══ КОНЕЦ ФАЙЛА ═══
+// ═══ КОНЕЦ ФАЙЛА workout_generator.dart ═══

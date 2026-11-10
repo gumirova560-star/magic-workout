@@ -1,8 +1,6 @@
-import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../widgets/share_card.dart';
 
@@ -16,7 +14,7 @@ class ShareService {
     required int exercisesCount,
     required int workoutsCount,
     required int streakWeeks,
-    String? challengeStat, // 👈 Добавлено
+    String? challengeStat,
   }) async {
     final GlobalKey boundaryKey = GlobalKey();
 
@@ -27,20 +25,26 @@ class ShareService {
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         clipBehavior: Clip.antiAlias,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            RepaintBoundary(
-              key: boundaryKey,
-              child: ShareCard(
-                mode: mode,
-                userName: userName,
-                title: title,
-                minutes: minutes,
-                exercisesCount: exercisesCount,
-                workoutsCount: workoutsCount,
-                streakWeeks: streakWeeks,
-                challengeStat: challengeStat, // 👈 Передаем
+            // 👇 ДОБАВЛЯЕМ SCROLL ДЛЯ КАРТОЧКИ, ЧТОБЫ ОНА НЕ ОБРЕЗАЛАСЬ
+            Flexible(
+              child: SingleChildScrollView(
+                child: RepaintBoundary(
+                  key: boundaryKey,
+                  child: ShareCard(
+                    mode: mode,
+                    userName: userName,
+                    title: title,
+                    minutes: minutes,
+                    exercisesCount: exercisesCount,
+                    workoutsCount: workoutsCount,
+                    streakWeeks: streakWeeks,
+                    challengeStat: challengeStat,
+                  ),
+                ),
               ),
             ),
             Container(
@@ -83,16 +87,23 @@ class ShareService {
       final boundary = key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
       if (boundary == null) return null;
 
+      // Делаем снимок в высоком качестве
       final image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) return null;
 
-      final tempDir = await getTemporaryDirectory();
-      final file = File('${tempDir.path}/share_card_${DateTime.now().millisecondsSinceEpoch}.png');
-      await file.writeAsBytes(byteData.buffer.asUint8List());
+      // 👇 ИСПРАВЛЕНИЕ ДЛЯ ВЕБА И ТЕЛЕФОНА
+      final bytes = byteData.buffer.asUint8List();
+      final xFile = XFile.fromData(
+          bytes,
+          mimeType: 'image/png',
+          name: 'magic_workout_${DateTime.now().millisecondsSinceEpoch}.png'
+      );
 
-      await Share.shareXFiles([XFile(file.path)], text: 'Мой прогресс в Magic Workout! 💪');
-      return file.path;
+      // Вызываем системное окно "Поделиться" (работает и в браузере, и на телефоне)
+      await Share.shareXFiles([xFile], text: 'Мой прогресс в Magic Workout! 💪');
+
+      return 'success';
     } catch (e) {
       debugPrint('Ошибка при создании карточки: $e');
       return null;

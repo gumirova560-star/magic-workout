@@ -194,18 +194,8 @@ await db.execute('ALTER TABLE user_profiles ADD COLUMN beforeBackPath TEXT');
 }
 if (oldVersion < 7) { try { await db.execute('ALTER TABLE workout_days ADD COLUMN weekNumber INTEGER'); } catch (_) {} }
 if (oldVersion < 8) { try { await db.execute('ALTER TABLE workout_days ADD COLUMN cycleNumber INTEGER'); } catch (_) {} }
-
-if (oldVersion < 10) {
-try {
-await db.execute('ALTER TABLE user_profiles ADD COLUMN bodyType TEXT');
-} catch (_) {}
-}
-
-if (oldVersion < 11) {
-try {
-await db.execute('ALTER TABLE workout_exercises ADD COLUMN isWarmup INTEGER DEFAULT 0');
-} catch (_) {}
-}
+if (oldVersion < 10) { try { await db.execute('ALTER TABLE user_profiles ADD COLUMN bodyType TEXT'); } catch (_) {} }
+if (oldVersion < 11) { try { await db.execute('ALTER TABLE workout_exercises ADD COLUMN isWarmup INTEGER DEFAULT 0'); } catch (_) {} }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -296,8 +286,7 @@ final maps = await db.query('stretches', where: 'name = ?', whereArgs: [name], l
 if (maps.isEmpty) return null;
 return Stretch.fromMap(maps.first);
 }
-// ═══ КОНЕЦ ЧАСТИ 1 из 2 ═══
-// Скажи «часть 2», чтобы получить продолжение (Йога, Шаблоны, Дни, Упражнения в тренировке с новым deleteWorkoutExercise, Подходы, и т.д.).
+// ═══ КОНЕЦ ЧАСТИ 1 ═══
   // ═══════════════════════════════════════════════════════════
   //  ЙОГА
   // ═══════════════════════════════════════════════════════════
@@ -443,7 +432,8 @@ return Stretch.fromMap(maps.first);
 
   Future<void> deleteMonthPlan(int profileId) async {
     final db = await database;
-    await db.delete('workout_days', where: 'profileId = ? AND weekNumber IS NOT NULL AND status = ?', whereArgs: [profileId, 'planned']);
+    // 👇 УДАЛЯЕМ ВООБЩЕ ВСЕ ДНИ ТРЕНИРОВОК ДЛЯ ЭТОГО ПРОФИЛЯ
+    await db.delete('workout_days', where: 'profileId = ?', whereArgs: [profileId]);
   }
 
   Future<void> deleteAllWorkoutDaysForProfile(int profileId) async {
@@ -466,7 +456,11 @@ return Stretch.fromMap(maps.first);
     return maps.map((m) => WorkoutExercise.fromMap(m)).toList();
   }
 
-  // 👇 НОВЫЙ МЕТОД (добавлен для настройки челленджа)
+  Future<int> updateWorkoutExercise(WorkoutExercise exercise) async {
+    final db = await database;
+    return await db.update('workout_exercises', exercise.toMap(), where: 'id = ?', whereArgs: [exercise.id]);
+  }
+
   Future<int> deleteWorkoutExercise(int id) async {
     final db = await database;
     return await db.delete('workout_exercises', where: 'id = ?', whereArgs: [id]);
@@ -490,6 +484,18 @@ return Stretch.fromMap(maps.first);
     required bool permanent,
   }) async {
     final db = await database;
+
+    final check = await db.rawQuery('''
+      SELECT id FROM workout_exercises 
+      WHERE itemId = ? AND workoutDayId IN (
+        SELECT id FROM workout_days WHERE profileId = ? AND weekNumber IS NOT NULL
+      )
+    ''', [newItemId, profileId]);
+
+    if (check.isNotEmpty) {
+      return;
+    }
+
     await db.rawUpdate('''
       UPDATE workout_exercises
       SET itemId = ?, replacedByItemId = ?, replacementReason = ?, replacementPermanent = ?
@@ -627,7 +633,7 @@ return Stretch.fromMap(maps.first);
     final workoutExs = await getWorkoutExercises(workoutDayId);
 
     for (final we in workoutExs) {
-      if (we.isWarmup) continue; // Разминку в шаблон не переносим
+      if (we.isWarmup) continue;
 
       final sets = await getWorkoutSets(we.id!);
       String repsStr = we.reps;
@@ -697,6 +703,7 @@ return Stretch.fromMap(maps.first);
     return maps.map((m) => m['exId'] as int?).whereType<int>().toSet();
   }
 
+  // 👇 ИСПРАВЛЕННЫЙ МЕТОД (ИЩЕТ ПРОШЛЫЕ РЕЗУЛЬТАТЫ ДАЖЕ БЕЗ ВЕСА)
   Future<List<WorkoutSet>> getLastWorkoutExerciseSets({required int profileId, required int exerciseId, int daysLimit = 365}) async {
     final db = await database;
     final from = DateTime.now().subtract(Duration(days: daysLimit)).toIso8601String();
@@ -712,7 +719,7 @@ return Stretch.fromMap(maps.first);
         AND we.itemType = 'exercise'
         AND we.isWarmup = 0
         AND we.isCoolDown = 0
-        AND ws.weight IS NOT NULL
+        AND ws.completed = 1 -- 👇 ИСПРАВЛЕНИЕ: Ищем выполненные подходы, даже если нет веса
       ORDER BY wd.date DESC, wd.id DESC, ws."order" ASC
       LIMIT 1
     ''', [profileId, from, exerciseId, exerciseId]);
@@ -779,9 +786,34 @@ return Stretch.fromMap(maps.first);
     return await db.delete('transformations', where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<void> removeExerciseDuplicates() async {
+    final db = await database;
+    final allExs = await db.query('exercises');
+
+    final Map<String, int> seenNames = {};
+    final List<int> toDelete = [];
+
+    for (final row in allExs) {
+      final id = row['id'] as int;
+      final name = (row['name'] as String).toLowerCase().replaceAll('ё', 'е').replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
+
+      if (seenNames.containsKey(name)) {
+        toDelete.add(id);
+      } else {
+        seenNames[name] = id;
+      }
+    }
+
+    if (toDelete.isNotEmpty) {
+      for (final id in toDelete) {
+        await db.delete('exercises', where: 'id = ?', whereArgs: [id]);
+      }
+    }
+  }
+
   Future<void> close() async {
     final db = await instance.database;
     await db.close();
   }
 }
-// ═══ КОНЕЦ ЧАСТИ 2 из 2 — ФАЙЛ database_helper.dart ЗАВЕРШЁН ═══
+// ═══ КОНЕЦ ФАЙЛА database_helper.dart ═══

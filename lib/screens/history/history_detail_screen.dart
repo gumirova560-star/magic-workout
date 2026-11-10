@@ -3,7 +3,7 @@ import '../../models/exercise.dart';
 import '../../models/stretch.dart';
 import '../../models/workout_day.dart';
 import '../../services/database_helper.dart';
-import '../../data/base_exercises.dart'; // 👈 Импорт словаря
+import '../../data/base_exercises.dart';
 
 class HistoryDetailScreen extends StatefulWidget {
   final WorkoutDay workout;
@@ -21,25 +21,91 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
   bool _loading = true;
 
   @override
-  void initState() { super.initState(); _loadData(); }
+  void initState() {
+    super.initState();
+    _loadData();
+  }
 
   Future<void> _loadData() async {
     setState(() => _loading = true);
-    final exercises = await DatabaseHelper.instance.getWorkoutExercises(widget.workout.id!);
-    final exMap = <int, Exercise>{}; final stMap = <int, Stretch>{}; final setsMap = <int, List<WorkoutSet>>{};
 
-    for (final we in exercises) {
+    // 1. Загружаем все упражнения этого дня из базы
+    final rawExercises = await DatabaseHelper.instance.getWorkoutExercises(widget.workout.id!);
+
+    final exMap = <int, Exercise>{};
+    final stMap = <int, Stretch>{};
+    final setsMap = <int, List<WorkoutSet>>{};
+
+    // 👇 ГРУППИРУЕМ ПО НАЗВАНИЮ, ЧТОБЫ НАЙТИ ДУБЛИКАТЫ
+    final Map<String, List<WorkoutExercise>> groupedExs = {};
+
+    for (final we in rawExercises) {
+      String key = '${we.itemType}_${we.itemId}';
+
+      // Загружаем подходы
+      final sets = await DatabaseHelper.instance.getWorkoutSets(we.id!);
+      setsMap[we.id!] = sets;
+
+      // Формируем ключ на основе очищенного названия
       if (we.itemType == 'exercise') {
         final effectiveId = we.replacedByItemId ?? we.itemId;
         final ex = await DatabaseHelper.instance.getExerciseById(effectiveId);
-        if (ex != null) exMap[effectiveId] = ex;
-        setsMap[we.id!] = await DatabaseHelper.instance.getWorkoutSets(we.id!);
+        if (ex != null) {
+          exMap[effectiveId] = ex;
+          final cleanName = ex.name.toLowerCase().replaceAll('ё', 'е').replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
+          key = 'exercise_$cleanName';
+        }
       } else {
         final st = await DatabaseHelper.instance.getStretchById(we.itemId);
-        if (st != null) stMap[we.itemId] = st;
+        if (st != null) {
+          stMap[st.id!] = st;
+          final cleanName = st.name.toLowerCase().replaceAll('ё', 'е').replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
+          key = 'stretch_$cleanName';
+        }
+      }
+
+      groupedExs.putIfAbsent(key, () => []).add(we);
+    }
+
+    // 2. ПРОХОДИМ ПО ГРУППАМ И УДАЛЯЕМ МУСОР ИЗ БАЗЫ
+    final List<WorkoutExercise> uniqueExercises = [];
+
+    for (final entry in groupedExs.entries) {
+      final list = entry.value;
+      if (list.length == 1) {
+        uniqueExercises.add(list.first);
+      } else {
+        // Нашли дубликаты. Ищем тот, у которого есть сохраненные результаты
+        WorkoutExercise? keeper;
+        for (final we in list) {
+          final sets = setsMap[we.id!] ?? [];
+          if (sets.any((s) => s.completed || s.weight != null)) {
+            keeper = we;
+            break;
+          }
+        }
+        keeper ??= list.first; // Если результатов нет нигде, оставляем первый
+
+        uniqueExercises.add(keeper);
+
+        // 👇 ФИЗИЧЕСКИ УДАЛЯЕМ ЛИШНИЕ КОПИИ ИЗ БАЗЫ ДАННЫХ
+        for (final we in list) {
+          if (we.id != keeper.id) {
+            await DatabaseHelper.instance.deleteWorkoutExercise(we.id!);
+          }
+        }
       }
     }
-    setState(() { _exercises = exercises; _exerciseMap = exMap; _stretchMap = stMap; _setsMap = setsMap; _loading = false; });
+
+    uniqueExercises.sort((a, b) => a.order.compareTo(b.order));
+
+    setState(() {
+      _exercises = uniqueExercises;
+      _exerciseMap = exMap;
+      _stretchMap = stMap;
+      _setsMap = setsMap;
+      _loading = false;
+    });
   }
 
   bool _isCardio(Exercise ex) {
@@ -71,6 +137,11 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    final warmups = _exercises.where((e) => e.isWarmup).toList();
+    final coolDowns = _exercises.where((e) => e.isCoolDown).toList();
+    final mainExercises = _exercises.where((e) => !e.isWarmup && !e.isCoolDown).toList();
+
     return Scaffold(
       appBar: AppBar(title: Text(widget.workout.name)),
       body: _loading ? const Center(child: CircularProgressIndicator()) : ListView(
@@ -89,14 +160,23 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
             ),
           ],
           const SizedBox(height: 20),
+
+          if (warmups.isNotEmpty) ...[
+            Text('Разминка', style: theme.textTheme.headlineMedium),
+            const SizedBox(height: 12),
+            ...warmups.map((e) => _buildStretchItem(context, e)),
+            const SizedBox(height: 20),
+          ],
+
           Text('Упражнения', style: theme.textTheme.headlineMedium),
           const SizedBox(height: 12),
-          ..._exercises.where((e) => !e.isCoolDown).map((e) => _buildExerciseItem(context, e)),
-          if (_exercises.any((e) => e.isCoolDown)) ...[
+          ...mainExercises.map((e) => _buildExerciseItem(context, e)),
+
+          if (coolDowns.isNotEmpty) ...[
             const SizedBox(height: 20),
             Text('Заминка', style: theme.textTheme.headlineMedium),
             const SizedBox(height: 12),
-            ..._exercises.where((e) => e.isCoolDown).map((e) => _buildStretchItem(context, e)),
+            ...coolDowns.map((e) => _buildStretchItem(context, e)),
           ],
           const SizedBox(height: 32),
         ],
@@ -145,12 +225,10 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
     final isTimed = _isTimed(ex.name);
     final isTimeBased = isCardio || isTimed;
 
-    // 👇 Берем зону и русское название из словаря
     final baseZone = getExerciseZone(ex);
     final zoneLabel = getZoneLabel(baseZone);
     final isBase = isBaseExercise(ex);
 
-    // 👇 Извлекаем ПЕРВОЕ число из плана (например, "15" из "15-18")
     final match = RegExp(r'(\d+)').firstMatch(we.reps);
     String targetTime = match?.group(1) ?? '';
     if (targetTime.isEmpty) targetTime = isTimed ? '60' : '15';
@@ -215,15 +293,13 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
                 Container(width: 28, height: 28, alignment: Alignment.center, decoration: BoxDecoration(color: s.completed ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.08), borderRadius: BorderRadius.circular(8)), child: Text('${s.order}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: s.completed ? Colors.white : theme.colorScheme.onSurface.withOpacity(0.5)))),
                 const SizedBox(width: 10),
                 if (!isTimeBased) ...[
-                  // 👇 Показываем вес, если есть. Если нет — "— кг"
                   Text(s.weight != null ? '${s.weight!.toStringAsFixed(s.weight! % 1 == 0 ? 0 : 1)} кг' : '— кг', style: theme.textTheme.bodyMedium),
                   const SizedBox(width: 12),
                 ],
-                // 👇 Показываем реальные повторы или план
                 Text(
                   s.reps != null
-                    ? '${s.reps}$repsSuffix'
-                    : '$targetTime$repsSuffix',
+                      ? '${s.reps}$repsSuffix'
+                      : '$targetTime$repsSuffix',
                   style: theme.textTheme.bodyMedium,
                 ),
                 const Spacer(),

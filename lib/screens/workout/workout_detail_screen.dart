@@ -141,9 +141,7 @@ return _parseReps(ex.reps);
 return null;
 }
 
-// 👇 УМНЫЙ ПОИСК ПРОШЛЫХ РЕЗУЛЬТАТОВ (ПЕРЕПРЫГИВАЕТ ЧЕЛЛЕНДЖ)
 Future<List<WorkoutSet>> _getSmartPrevSets(int exerciseId, int currentWeek, int? cycle) async {
-// Если мы на 4-й неделе, проверяем, был ли челлендж в СООТВЕТСТВУЮЩИЙ день 3-й недели
 if (currentWeek == 4) {
 final dayNumMatch = RegExp(r'День (\d+)').firstMatch(_day?.name ?? '');
 final currentDayNum = dayNumMatch?.group(1);
@@ -160,7 +158,6 @@ break;
 }
 }
 
-// Если нашли и это был челлендж, берем данные со 2-й недели
 if (correspondingDay3 != null && correspondingDay3.type == 'challenge') {
 final w2Days = await DatabaseHelper.instance.getWorkoutDaysByWeek(
 profileId: widget.profileId, weekNumber: 2, cycleNumber: cycle
@@ -171,7 +168,7 @@ final exs = await DatabaseHelper.instance.getWorkoutExercises(d.id!);
 for (final ex in exs) {
 if (ex.itemId == exerciseId || ex.replacedByItemId == exerciseId) {
 final sets = await DatabaseHelper.instance.getWorkoutSets(ex.id!);
-if (sets.isNotEmpty) return sets; // Нашли во 2-й неделе
+if (sets.isNotEmpty) return sets;
 }
 }
 }
@@ -179,7 +176,6 @@ if (sets.isNotEmpty) return sets; // Нашли во 2-й неделе
 }
 }
 
-// Стандартный поиск
 return await DatabaseHelper.instance.getLastWorkoutExerciseSets(
 profileId: widget.profileId, exerciseId: exerciseId, daysLimit: 365
 );
@@ -239,14 +235,54 @@ _completed = day.status == 'completed';
 _started = day.status == 'completed' || day.status == 'in_progress';
 final workoutExs = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
 
-// 👇 УБИРАЕМ ДУБЛИКАТЫ УПРАЖНЕНИЙ (С УЧЕТОМ ТИПА)
-  final Map<String, WorkoutExercise> uniqueMap = {};
-  for (final we in workoutExs) {
-    final key = '${we.itemType}_${we.itemId}';
-    uniqueMap.putIfAbsent(key, () => we);
-  }
-final uniqueExs = uniqueMap.values.toList();
+// 👇 БЕЗОПАСНОЕ УДАЛЕНИЕ ДУБЛИКАТОВ (ГРУППИРУЕМ ПО НАЗВАНИЮ)
+final Map<String, List<WorkoutExercise>> groupedExs = {};
+for (final we in workoutExs) {
+String key = '${we.itemType}_${we.itemId}';
+if (we.itemType == 'exercise') {
+final ex = await DatabaseHelper.instance.getExerciseById(we.replacedByItemId ?? we.itemId);
+if (ex != null) {
+final cleanName = ex.name.toLowerCase().replaceAll('ё', 'е').replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
+key = 'exercise_$cleanName';
+}
+} else {
+final st = await DatabaseHelper.instance.getStretchById(we.itemId);
+if (st != null) {
+final cleanName = st.name.toLowerCase().replaceAll('ё', 'е').replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
+key = 'stretch_$cleanName';
+}
+}
+groupedExs.putIfAbsent(key, () => []).add(we);
+}
+
+final List<WorkoutExercise> uniqueExs = [];
+for (final entry in groupedExs.entries) {
+final list = entry.value;
+if (list.length == 1) {
+uniqueExs.add(list.first);
+} else {
+WorkoutExercise? keeper;
+for (final we in list) {
+final sets = await DatabaseHelper.instance.getWorkoutSets(we.id!);
+final hasCompleted = sets.any((s) => s.completed || s.weight != null);
+if (hasCompleted) {
+keeper = we;
+break;
+}
+}
+keeper ??= list.first;
+
+uniqueExs.add(keeper);
+
+for (final we in list) {
+if (we.id != keeper.id) {
+await DatabaseHelper.instance.deleteWorkoutExercise(we.id!);
+}
+}
+}
+}
 uniqueExs.sort((a, b) => a.order.compareTo(b.order));
+// 👆 КОНЕЦ ИСПРАВЛЕНИЯ
 
 _hasBlocks = uniqueExs.any((we) => we.blockNumber != null && !we.isWarmup);
 _pendingBlocks.clear();
@@ -275,7 +311,6 @@ for (final item in _items) {
 if (item.id == null) continue;
 final sets = await DatabaseHelper.instance.getWorkoutSets(item.id!);
 
-// 👇 ИСПРАВЛЕНО: УБРАН FINAL, ЧТОБЫ МОЖНО БЫЛО ОБРЕЗАТЬ
 var list = <SetData>[];
 var ids = <int>[];
 
@@ -288,6 +323,23 @@ ids.add(s.id!);
 }
 }
 
+// 👇 ИСПРАВЛЕНИЕ: ЗАГРУЖАЕМ ИСТОРИЮ ДЛЯ ПЛАШКИ "ПРОШЛЫЙ РЕКОРД" ВСЕГДА
+if (!item.isWarmup && !item.isCoolDown && item.itemType == 'exercise') {
+final lastSets = await _getSmartPrevSets(item.replacedByItemId ?? item.itemId, day.weekNumber ?? 1, day.cycleNumber);
+if (lastSets.isNotEmpty) {
+final completed = lastSets.where((s) => s.completed).toList();
+if (completed.isNotEmpty) {
+double? maxW = completed.map((s) => s.weight ?? 0).reduce((a, b) => a > b ? a : b);
+int? maxR = completed.map((s) => s.reps ?? 0).reduce((a, b) => a > b ? a : b);
+if (maxW == 0) maxW = null;
+if (maxR == 0) maxR = null;
+if (maxW != null || maxR != null) {
+_lastRecords[item.id!] = {'weight': maxW, 'reps': maxR};
+}
+}
+}
+}
+
 if (needsPulling && !item.isWarmup && !item.isCoolDown && day.weekNumber != null && day.weekNumber! > 1) {
 final ex = exMap[item.replacedByItemId ?? item.itemId];
 final isCardio = ex != null && _isCardio(ex);
@@ -297,38 +349,26 @@ if (!isCardio && !isTimed) {
 double? baseWeight;
 int? prevReps;
 bool wasInPrevWeek = false;
-bool wasFailedPrevWeek = false;
 final exName = ex?.name ?? '';
 
-if (exName.isNotEmpty) {
-// 👇 ИСПОЛЬЗУЕМ УМНЫЙ ПОИСК
-final lastSets = await _getSmartPrevSets(item.replacedByItemId ?? item.itemId, day.weekNumber!, day.cycleNumber);
-if (lastSets.isNotEmpty) {
+if (exName.isNotEmpty && _lastRecords.containsKey(item.id!)) {
 wasInPrevWeek = true;
-final completed = lastSets.where((s) => s.completed).toList();
-if (completed.isNotEmpty) {
-baseWeight = completed.map((s) => s.weight ?? 0).reduce((a, b) => a > b ? a : b);
-if (baseWeight == 0) baseWeight = null;
-prevReps = completed.map((s) => s.reps ?? 0).reduce((a, b) => a > b ? a : b);
-if (prevReps == 0) prevReps = null;
-
-// ФОРА 3 ПОВТОРЕНИЯ ДЛЯ ПРОВЕРКИ ПРОВАЛА
-final currentPlanMin = _parseReps(item.reps);
-if (currentPlanMin != null && prevReps != null && prevReps < (currentPlanMin - 3)) {
-wasFailedPrevWeek = true;
+baseWeight = _lastRecords[item.id!]!['weight'] as double?;
+prevReps = _lastRecords[item.id!]!['reps'] as int?;
 }
-}
-}
-}
-if (wasInPrevWeek && (baseWeight != null || prevReps != null)) _lastRecords[item.id!] = {'weight': baseWeight, 'reps': prevReps};
 
 double? targetWeight = baseWeight;
 final step = (_profile?.level == 'beginner') ? 1.5 : 2.5;
-int? targetReps = 15;
+
+final prevTarget = await _getPrevTarget(item.itemId, day.weekNumber!, day.cycleNumber);
+final planMin = _parseReps(item.reps) ?? 10;
+final planMax = _parseMaxReps(item.reps) ?? planMin;
+final effectivePrevTarget = prevTarget ?? planMin;
+
+int? targetReps = planMax;
 final isBaseEx = ex != null && isBaseExercise(ex);
 
 if (isBaseEx) {
-// ЛОГИКА ВЕСА
 if (baseWeight != null && baseWeight > 0) {
 if (day.weekNumber == 3 && wasInPrevWeek) {
 targetWeight = baseWeight + step;
@@ -337,37 +377,47 @@ targetWeight = baseWeight;
 }
 }
 
-// ЛОГИКА ПОВТОРЕНИЙ
-final planMin = _parseReps(item.reps) ?? 10;
-final planMax = _parseMaxReps(item.reps) ?? planMin;
+if (wasInPrevWeek && prevReps != null) {
+bool isSuccessful = prevReps >= (effectivePrevTarget - 2);
 
-if (wasFailedPrevWeek) {
-final prevTarget = await _getPrevTarget(item.itemId, day.weekNumber!, day.cycleNumber);
-targetReps = prevTarget ?? planMin;
-} else if (day.weekNumber == 3) {
-targetReps = prevReps ?? planMax;
+if (day.weekNumber == 3) {
+targetReps = prevReps;
 } else if (day.weekNumber == 4) {
+targetReps = 15;
+} else if (isSuccessful) {
 targetReps = planMax;
+} else {
+targetReps = effectivePrevTarget;
+}
 } else {
 targetReps = planMax;
 }
 } else {
-// ИЗОЛЯЦИИ: ФИКСИРОВАННО 15
 targetWeight = baseWeight;
-final planMax = _parseMaxReps(item.reps) ?? 15;
 if (wasInPrevWeek && prevReps != null) {
+if (day.weekNumber == 3) {
+targetReps = prevReps;
+} else if (day.weekNumber == 4) {
+targetReps = 15;
+} else if (prevReps >= (effectivePrevTarget - 2)) {
 targetReps = (prevReps > planMax) ? prevReps : planMax;
 } else {
+targetReps = effectivePrevTarget;
+}
+} else {
 targetReps = planMax;
 }
 }
 
-// 👇 СОХРАНЯЕМ ВЕС ДЛЯ ФЕИ
 if (targetWeight != null) _targetWeights[item.id!] = targetWeight;
 
 for (int i = 0; i < list.length; i++) {
 list[i] = SetData(weight: targetWeight, reps: targetReps, completed: false);
-if (ids[i] > 0) await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: targetWeight, reps: targetReps, completed: false));
+if (ids[i] > 0) {
+await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
+id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: targetWeight, reps: targetReps, completed: false
+));
+}
 }
 }
 
@@ -376,7 +426,6 @@ int? prevSeconds;
 bool wasTimedInPrevWeek = false;
 final exName = ex?.name ?? '';
 if (exName.isNotEmpty) {
-// 👇 ИСПОЛЬЗУЕМ УМНЫЙ ПОИСК
 final lastSets = await _getSmartPrevSets(item.replacedByItemId ?? item.itemId, day.weekNumber!, day.cycleNumber);
 if (lastSets.isNotEmpty) {
 wasTimedInPrevWeek = true;
@@ -399,16 +448,33 @@ else if (day.weekNumber == 4) targetSeconds = isSuccessful ? prevSeconds : (targ
 }
 for (int i = 0; i < list.length; i++) {
 list[i] = SetData(weight: null, reps: targetSeconds, completed: false);
-if (ids[i] > 0) await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: null, reps: targetSeconds, completed: false));
+if (ids[i] > 0) {
+await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
+id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: null, reps: targetSeconds, completed: false
+));
+}
 }
 }
 }
 
-// ЛОГИКА ПОДХОДОВ (ТОЛЬКО ЕСЛИ ДЕНЬ НЕ ЗАВЕРШЕН)
+// 👇 ПРИНУДИТЕЛЬНАЯ РАЗГРУЗКА НА 4-Й НЕДЕЛЕ
+if (day.weekNumber == 4 && !item.isWarmup && !item.isCoolDown) {
+final planMin = _parseReps(item.reps) ?? 15;
+for (int i = 0; i < list.length; i++) {
+if (!list[i].completed) {
+list[i] = SetData(weight: list[i].weight, reps: planMin, completed: false);
+if (ids[i] > 0) {
+await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
+id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: list[i].weight, reps: planMin, completed: false
+));
+}
+}
+}
+}
+
 if (!_completed) {
 final int targetSets = item.sets > 0 ? item.sets : 3;
 
-// Удаляем лишние подходы
 if (list.length > targetSets) {
 for (int i = targetSets; i < list.length; i++) {
 if (ids[i] > 0) await DatabaseHelper.instance.deleteWorkoutSet(ids[i]);
@@ -417,9 +483,10 @@ list = list.sublist(0, targetSets);
 ids = ids.sublist(0, targetSets);
 }
 
-// Добавляем подходы, если их меньше
 while (list.length < targetSets && list.length < 10) {
-final newSetId = await DatabaseHelper.instance.addWorkoutSet(WorkoutSet(workoutExerciseId: item.id!, order: list.length + 1, weight: null, reps: _parseReps(item.reps), completed: false));
+final newSetId = await DatabaseHelper.instance.addWorkoutSet(WorkoutSet(
+workoutExerciseId: item.id!, order: list.length + 1, weight: null, reps: _parseReps(item.reps), completed: false
+));
 list.add(SetData(reps: _parseReps(item.reps), completed: false));
 ids.add(newSetId);
 }
@@ -447,7 +514,6 @@ final nums = matches.map((m) => int.tryParse(m.group(1) ?? '')).whereType<int>()
 if (nums.isEmpty) return null;
 return nums.reduce((a, b) => a > b ? a : b);
 }
-
 // ═══ КОНЕЦ ЧАСТИ 1 ═══
 void _startRestTimer() {
 _restTimer?.cancel();
@@ -552,7 +618,6 @@ weightNotDone.add('«$exName»: ${maxWeight.toStringAsFixed(1)} кг из ${targ
 }
 }
 
-// ФОРА 3 ПОВТОРЕНИЯ ДЛЯ ФЕИ
 if (!allDone || (actualTargetReps > 0 && avgReps < (actualTargetReps - 3))) {
 final realReps = avgReps.round();
 if (realReps < actualTargetReps) {
@@ -597,11 +662,9 @@ message = 'Пиковая неделя, $name! Это пик нагрузки. �
 title = 'Неделя 4: Закрепление 🌿';
 dialogColor = const Color(0xFF0984E3);
 
-// 👇 Проверяем, был ли это особый день (челлендж или отказ от него)
 final isSpecialDay = prevDay.name.toLowerCase().contains('челлендж');
 
 if (isSpecialDay) {
-// 👇 Учитываем род для глагола "проработала/проработал"
 final workedOut = isFemale ? 'проработала' : 'проработал';
 message = 'Привет, $name! На прошлой неделе у нас был особый день — ты отлично $workedOut забытые зоны! А сегодня возвращаемся к нашим фокусным группам. Вес закрепляем с прошлой недели, а повторения снижаем для отдыха. ✨';
 } else {
@@ -725,7 +788,6 @@ taken++;
 }
 blockNum++;
 }
-// ДОБАВЛЯЕМ ОСТАВШИЕСЯ ИЗОЛЯЦИИ В ПОСЛЕДНИЙ БЛОК
 while (isoIndex < isolationIndices.length) {
 distribution[isolationIndices[isoIndex]] = blockNum;
 isoIndex++;
@@ -858,7 +920,6 @@ child: const Text('Сохранить и выйти'),
 
 if (confirm != true) return;
 
-// СОХРАНЯЕМ ВСЁ В БАЗУ ПЕРЕД ВЫХОДОМ
 final updates = <Future>[];
 for (final item in _items) {
 if (item.isCoolDown || item.isWarmup || item.id == null) continue;
@@ -998,7 +1059,6 @@ userName: _profile?.name ?? 'друг',
 
 if (mounted) Navigator.pop(context, true);
 }
-
 // ═══ КОНЕЦ ЧАСТИ 2 ═══
   Future<void> _saveAsTemplate() async {
     if (_day == null || _day!.id == null) return;
@@ -1095,9 +1155,21 @@ if (mounted) Navigator.pop(context, true);
     if (reason == null) return;
     final result = await Navigator.push<Map<String, dynamic>>(context, MaterialPageRoute(builder: (_) => ReplaceExerciseScreen(original: original, reasonCode: reason)));
     if (result == null) return;
+
     final newExercise = result['newExercise'] as Exercise;
     final permanent = result['permanent'] as bool;
     final reasonCode = result['reason'] as String;
+
+    final isAlreadyInWorkout = _items.any((i) =>
+    i.id != item.id &&
+        (i.replacedByItemId ?? i.itemId) == newExercise.id
+    );
+
+    if (isAlreadyInWorkout) {
+      _showMessage('Упражнение «${newExercise.name}» уже есть в этой тренировке!');
+      return;
+    }
+
     setState(() {
       _exerciseMap[newExercise.id!] = newExercise;
       final idx = _items.indexOf(item);
@@ -1449,7 +1521,6 @@ if (mounted) Navigator.pop(context, true);
       if (isCardio) {
         cardios.add(item);
       } else {
-        // ИСПОЛЬЗУЕМ БЛОК 99, ЕСЛИ УПРАЖНЕНИЕ ПОТЕРЯЛОСЬ
         final blockNum = _pendingBlocks[i] ?? 99;
         blocks.putIfAbsent(blockNum, () => []);
         blocks[blockNum]!.add(item);
@@ -1539,13 +1610,11 @@ if (mounted) Navigator.pop(context, true);
       onSetChanged: (index, data) async {
         if (item.id == null || _isViewMode) return;
 
-        // Обновляем в памяти
         setState(() {
           final setsList = _setsData[item.id!];
           if (setsList != null && index >= 0 && index < setsList.length) setsList[index] = data;
         });
 
-        // СРАЗУ СОХРАНЯЕМ В БАЗУ ДАННЫХ
         final ids = _setIds[item.id!];
         if (ids != null && index < ids.length) {
           if (ids[index] == 0) {

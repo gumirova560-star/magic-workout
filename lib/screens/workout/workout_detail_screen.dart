@@ -142,6 +142,23 @@ return null;
 }
 
 Future<List<WorkoutSet>> _getSmartPrevSets(int exerciseId, int currentWeek, int? cycle) async {
+if (currentWeek > 1) {
+final prevDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(
+profileId: widget.profileId, weekNumber: currentWeek - 1, cycleNumber: cycle
+);
+for (final d in prevDays) {
+final exs = await DatabaseHelper.instance.getWorkoutExercises(d.id!);
+for (final ex in exs) {
+if (ex.itemId == exerciseId || ex.replacedByItemId == exerciseId) {
+final sets = await DatabaseHelper.instance.getWorkoutSets(ex.id!);
+if (sets.isNotEmpty && sets.any((s) => s.completed || s.weight != null || s.reps != null)) {
+return sets;
+}
+}
+}
+}
+}
+
 if (currentWeek == 4) {
 final dayNumMatch = RegExp(r'День (\d+)').firstMatch(_day?.name ?? '');
 final currentDayNum = dayNumMatch?.group(1);
@@ -235,7 +252,7 @@ _completed = day.status == 'completed';
 _started = day.status == 'completed' || day.status == 'in_progress';
 final workoutExs = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
 
-// 👇 БЕЗОПАСНОЕ УДАЛЕНИЕ ДУБЛИКАТОВ (ГРУППИРУЕМ ПО НАЗВАНИЮ)
+// УДАЛЕНИЕ ДУБЛИКАТОВ
 final Map<String, List<WorkoutExercise>> groupedExs = {};
 for (final we in workoutExs) {
 String key = '${we.itemType}_${we.itemId}';
@@ -271,18 +288,13 @@ break;
 }
 }
 keeper ??= list.first;
-
 uniqueExs.add(keeper);
-
 for (final we in list) {
-if (we.id != keeper.id) {
-await DatabaseHelper.instance.deleteWorkoutExercise(we.id!);
-}
+if (we.id != keeper.id) await DatabaseHelper.instance.deleteWorkoutExercise(we.id!);
 }
 }
 }
 uniqueExs.sort((a, b) => a.order.compareTo(b.order));
-// 👆 КОНЕЦ ИСПРАВЛЕНИЯ
 
 _hasBlocks = uniqueExs.any((we) => we.blockNumber != null && !we.isWarmup);
 _pendingBlocks.clear();
@@ -323,14 +335,14 @@ ids.add(s.id!);
 }
 }
 
-// 👇 ИСПРАВЛЕНИЕ: ЗАГРУЖАЕМ ИСТОРИЮ ДЛЯ ПЛАШКИ "ПРОШЛЫЙ РЕКОРД" ВСЕГДА
+// 👇 ЗАГРУЖАЕМ РЕКОРДЫ ВСЕГДА (ДАЖЕ БЕЗ ВЕСА)
 if (!item.isWarmup && !item.isCoolDown && item.itemType == 'exercise') {
 final lastSets = await _getSmartPrevSets(item.replacedByItemId ?? item.itemId, day.weekNumber ?? 1, day.cycleNumber);
 if (lastSets.isNotEmpty) {
-final completed = lastSets.where((s) => s.completed).toList();
-if (completed.isNotEmpty) {
-double? maxW = completed.map((s) => s.weight ?? 0).reduce((a, b) => a > b ? a : b);
-int? maxR = completed.map((s) => s.reps ?? 0).reduce((a, b) => a > b ? a : b);
+final doneSets = lastSets.where((s) => s.completed || s.reps != null || s.weight != null).toList();
+if (doneSets.isNotEmpty) {
+double? maxW = doneSets.map((s) => s.weight ?? 0).reduce((a, b) => a > b ? a : b);
+int? maxR = doneSets.map((s) => s.reps ?? 0).reduce((a, b) => a > b ? a : b);
 if (maxW == 0) maxW = null;
 if (maxR == 0) maxR = null;
 if (maxW != null || maxR != null) {
@@ -349,9 +361,8 @@ if (!isCardio && !isTimed) {
 double? baseWeight;
 int? prevReps;
 bool wasInPrevWeek = false;
-final exName = ex?.name ?? '';
 
-if (exName.isNotEmpty && _lastRecords.containsKey(item.id!)) {
+if (_lastRecords.containsKey(item.id!)) {
 wasInPrevWeek = true;
 baseWeight = _lastRecords[item.id!]!['weight'] as double?;
 prevReps = _lastRecords[item.id!]!['reps'] as int?;
@@ -424,19 +435,11 @@ id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: targetWeight, rep
 if (isTimed && !isCardio) {
 int? prevSeconds;
 bool wasTimedInPrevWeek = false;
-final exName = ex?.name ?? '';
-if (exName.isNotEmpty) {
-final lastSets = await _getSmartPrevSets(item.replacedByItemId ?? item.itemId, day.weekNumber!, day.cycleNumber);
-if (lastSets.isNotEmpty) {
+if (_lastRecords.containsKey(item.id!) && _lastRecords[item.id!]!['reps'] != null) {
 wasTimedInPrevWeek = true;
-final completed = lastSets.where((s) => s.completed).toList();
-if (completed.isNotEmpty) {
-prevSeconds = completed.map((s) => s.reps ?? 0).reduce((a, b) => a > b ? a : b);
-if (prevSeconds == 0) prevSeconds = null;
+prevSeconds = _lastRecords[item.id!]!['reps'] as int?;
 }
-}
-}
-if (wasTimedInPrevWeek && prevSeconds != null) _lastRecords[item.id!] = {'weight': null, 'reps': prevSeconds};
+
 int? targetSeconds = _parseReps(item.reps);
 final bool isBaseEx = ex != null && isBaseExercise(ex);
 if (isBaseEx && prevSeconds != null) {
@@ -457,7 +460,6 @@ id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: null, reps: targe
 }
 }
 
-// 👇 ПРИНУДИТЕЛЬНАЯ РАЗГРУЗКА НА 4-Й НЕДЕЛЕ
 if (day.weekNumber == 4 && !item.isWarmup && !item.isCoolDown) {
 final planMin = _parseReps(item.reps) ?? 15;
 for (int i = 0; i < list.length; i++) {
@@ -474,7 +476,6 @@ id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: list[i].weight, r
 
 if (!_completed) {
 final int targetSets = item.sets > 0 ? item.sets : 3;
-
 if (list.length > targetSets) {
 for (int i = targetSets; i < list.length; i++) {
 if (ids[i] > 0) await DatabaseHelper.instance.deleteWorkoutSet(ids[i]);
@@ -482,7 +483,6 @@ if (ids[i] > 0) await DatabaseHelper.instance.deleteWorkoutSet(ids[i]);
 list = list.sublist(0, targetSets);
 ids = ids.sublist(0, targetSets);
 }
-
 while (list.length < targetSets && list.length < 10) {
 final newSetId = await DatabaseHelper.instance.addWorkoutSet(WorkoutSet(
 workoutExerciseId: item.id!, order: list.length + 1, weight: null, reps: _parseReps(item.reps), completed: false
@@ -752,9 +752,11 @@ else _collapsedCircles.add(key);
 
 void _showMessage(String text) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 
+// 👇👇👇 ФИКС: УМНОЕ И РАВНОМЕРНОЕ РАСПРЕДЕЛЕНИЕ БЛОКОВ
 Map<int, int> _computeBlockDistribution() {
 final Map<int, int> distribution = {};
 if (_day?.type == 'challenge') return distribution;
+
 bool hasStored = false;
 for (int i = 0; i < _items.length; i++) {
 final item = _items[i];
@@ -766,6 +768,7 @@ hasStored = true;
 }
 }
 if (hasStored) return distribution;
+
 final List<int> baseIndices = [];
 final List<int> isolationIndices = [];
 for (int i = 0; i < _items.length; i++) {
@@ -776,24 +779,54 @@ if (ex == null || _isCardio(ex)) continue;
 if (isBaseExercise(ex)) baseIndices.add(i);
 else isolationIndices.add(i);
 }
-int blockNum = 1;
+
+if (baseIndices.isEmpty) {
+for (final idx in isolationIndices) {
+distribution[idx] = 1;
+}
+return distribution;
+}
+
+final int baseCount = baseIndices.length;
+final int isoCount = isolationIndices.length;
+
+// 1 база + до 2 изоляций (если изоляций много, распределим равномерно)
+int isoPerBase = isoCount == 0 ? 0 : (isoCount / baseCount).ceil().clamp(1, 2);
+if (isoCount < baseCount) isoPerBase = 1; // Если изоляций меньше баз, по 1 на блок
+
 int isoIndex = 0;
-for (final baseIdx in baseIndices) {
-distribution[baseIdx] = blockNum;
+for (int b = 0; b < baseCount; b++) {
+final blockNum = b + 1;
+distribution[baseIndices[b]] = blockNum;
+
+int remainingBases = baseCount - b - 1;
+int remainingIso = isoCount - isoIndex;
+int maxForThisBlock = isoPerBase;
+
+if (remainingBases > 0) {
+final minForRest = remainingBases * 1; // оставляем минимум по 1 изоляции на остальные базы
+maxForThisBlock = (remainingIso - minForRest).clamp(0, isoPerBase);
+} else {
+maxForThisBlock = remainingIso; // последнему блоку отдаем все остатки
+}
+
 int taken = 0;
-while (taken < 2 && isoIndex < isolationIndices.length) {
+while (taken < maxForThisBlock && isoIndex < isolationIndices.length) {
 distribution[isolationIndices[isoIndex]] = blockNum;
 isoIndex++;
 taken++;
 }
-blockNum++;
 }
+
+// Если остались изоляции, кидаем их в последний блок
 while (isoIndex < isolationIndices.length) {
-distribution[isolationIndices[isoIndex]] = blockNum;
+distribution[isolationIndices[isoIndex]] = baseCount;
 isoIndex++;
 }
+
 return distribution;
 }
+// 👆👆👆 КОНЕЦ ФИКСА
 
 Future<void> _createBlocks() async {
 if (_workoutDayId == null) return;
@@ -880,9 +913,28 @@ _day = updated;
 FairyReactionService().trigger('workout_started', mood: FairyMood.wink);
 _showMessage('Тренировка началась! 💪');
 }
-
+// ═══ КОНЕЦ ЧАСТИ 2 ═══
 Future<void> _finishWorkout() async {
 if (_workoutDayId == null) return;
+
+// 👇 ПРИНУДИТЕЛЬНОЕ СОХРАНЕНИЕ ВСЕХ ПОДХОДОВ ПЕРЕД ПРОВЕРКОЙ (ФИКС "30 ИЗ 33")
+final preUpdates = <Future>[];
+for (final item in _items) {
+if (item.isCoolDown || item.isWarmup || item.id == null) continue;
+final sets = _setsData[item.id!];
+if (sets == null) continue;
+for (int i = 0; i < sets.length; i++) {
+final ids = _setIds[item.id!];
+if (ids != null && i < ids.length && ids[i] > 0) {
+preUpdates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
+id: ids[i], workoutExerciseId: item.id!, order: i + 1,
+weight: sets[i].weight, reps: sets[i].reps, completed: sets[i].completed,
+)));
+}
+}
+}
+if (preUpdates.isNotEmpty) await Future.wait(preUpdates);
+// 👆 КОНЕЦ ФИКСА
 
 int completedSets = 0;
 int totalSets = 0;
@@ -1059,270 +1111,270 @@ userName: _profile?.name ?? 'друг',
 
 if (mounted) Navigator.pop(context, true);
 }
-// ═══ КОНЕЦ ЧАСТИ 2 ═══
-  Future<void> _saveAsTemplate() async {
-    if (_day == null || _day!.id == null) return;
-    if (_items.isEmpty) {
-      _showMessage('Нечего сохранять — нет упражнений');
-      return;
-    }
-    final nameController = TextEditingController(text: _day!.name);
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(children: [Icon(Icons.bookmark_add_rounded), SizedBox(width: 8), Expanded(child: Text('Сохранить как шаблон', style: TextStyle(fontSize: 18)))]),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Создаст шаблон с этими упражнениями. Разминка в шаблон не попадёт.', style: TextStyle(fontSize: 13)),
-            const SizedBox(height: 16),
-            TextField(controller: nameController, autofocus: true, decoration: const InputDecoration(labelText: 'Название шаблона', prefixIcon: Icon(Icons.fitness_center_rounded), hintText: 'Например: Моя силовая A')),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
-        ],
-      ),
-    );
-    if (confirm != true) return;
-    final templateName = nameController.text.trim().isEmpty ? _day!.name : nameController.text.trim();
-    try {
-      await DatabaseHelper.instance.createTemplateFromWorkoutDay(profileId: widget.profileId, workoutDayId: _day!.id!, templateName: templateName, type: _day!.type, estimatedMinutes: _day!.durationMinutes ?? 45);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✅ Шаблон «$templateName» сохранён'), duration: const Duration(seconds: 3)));
-    } catch (e) {
-      if (!mounted) return;
-      _showMessage('Ошибка: $e');
-    }
-  }
 
-  Future<void> _openExerciseMenu(WorkoutExercise item, Exercise exercise) async {
-    if (_isViewMode) return;
-    final result = await showModalBottomSheet<String>(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => _buildExerciseMenu(ctx, exercise),
-    );
-    if (result == null) return;
-    switch (result) {
-      case 'replace': await _replaceExercise(item, exercise); break;
-      case 'edit': await _editExerciseParams(item); break;
-      case 'delete': await _deleteExercise(item); break;
-    }
-  }
+Future<void> _saveAsTemplate() async {
+if (_day == null || _day!.id == null) return;
+if (_items.isEmpty) {
+_showMessage('Нечего сохранять — нет упражнений');
+return;
+}
+final nameController = TextEditingController(text: _day!.name);
+final confirm = await showDialog<bool>(
+context: context,
+builder: (ctx) => AlertDialog(
+shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+title: const Row(children: [Icon(Icons.bookmark_add_rounded), SizedBox(width: 8), Expanded(child: Text('Сохранить как шаблон', style: TextStyle(fontSize: 18)))]),
+content: Column(
+mainAxisSize: MainAxisSize.min,
+crossAxisAlignment: CrossAxisAlignment.start,
+children: [
+const Text('Создаст шаблон с этими упражнениями. Разминка в шаблон не попадёт.', style: TextStyle(fontSize: 13)),
+const SizedBox(height: 16),
+TextField(controller: nameController, autofocus: true, decoration: const InputDecoration(labelText: 'Название шаблона', prefixIcon: Icon(Icons.fitness_center_rounded), hintText: 'Например: Моя силовая A')),
+],
+),
+actions: [
+TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
+],
+),
+);
+if (confirm != true) return;
+final templateName = nameController.text.trim().isEmpty ? _day!.name : nameController.text.trim();
+try {
+await DatabaseHelper.instance.createTemplateFromWorkoutDay(profileId: widget.profileId, workoutDayId: _day!.id!, templateName: templateName, type: _day!.type, estimatedMinutes: _day!.durationMinutes ?? 45);
+if (!mounted) return;
+ScaffoldMessenger.of(context).hideCurrentSnackBar();
+ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✅ Шаблон «$templateName» сохранён'), duration: const Duration(seconds: 3)));
+} catch (e) {
+if (!mounted) return;
+_showMessage('Ошибка: $e');
+}
+}
 
-  Widget _buildExerciseMenu(BuildContext ctx, Exercise exercise) {
-    final theme = Theme.of(ctx);
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.onSurface.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
-          const SizedBox(height: 16),
-          Text(exercise.name, style: theme.textTheme.headlineMedium, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 20),
-          _menuTile(ctx, icon: Icons.swap_horiz_rounded, title: 'Заменить упражнение', color: theme.colorScheme.primary, onTap: () => Navigator.pop(ctx, 'replace')),
-          _menuTile(ctx, icon: Icons.tune_rounded, title: 'Изменить подходы и повторения', color: const Color(0xFF00B894), onTap: () => Navigator.pop(ctx, 'edit')),
-          _menuTile(ctx, icon: Icons.delete_outline_rounded, title: 'Удалить из тренировки', color: theme.colorScheme.error, onTap: () => Navigator.pop(ctx, 'delete')),
-        ],
-      ),
-    );
-  }
+Future<void> _openExerciseMenu(WorkoutExercise item, Exercise exercise) async {
+if (_isViewMode) return;
+final result = await showModalBottomSheet<String>(
+context: context,
+shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+builder: (ctx) => _buildExerciseMenu(ctx, exercise),
+);
+if (result == null) return;
+switch (result) {
+case 'replace': await _replaceExercise(item, exercise); break;
+case 'edit': await _editExerciseParams(item); break;
+case 'delete': await _deleteExercise(item); break;
+}
+}
 
-  Widget _menuTile(BuildContext ctx, {required IconData icon, required String title, required Color color, required VoidCallback onTap}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: Colors.transparent,
-        child: ListTile(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: Theme.of(ctx).colorScheme.onSurface.withOpacity(0.1))),
-          leading: Icon(icon, color: color),
-          title: Text(title),
-          onTap: onTap,
-        ),
-      ),
-    );
-  }
+Widget _buildExerciseMenu(BuildContext ctx, Exercise exercise) {
+final theme = Theme.of(ctx);
+return Padding(
+padding: const EdgeInsets.all(20),
+child: Column(
+mainAxisSize: MainAxisSize.min,
+crossAxisAlignment: CrossAxisAlignment.stretch,
+children: [
+Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.onSurface.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
+const SizedBox(height: 16),
+Text(exercise.name, style: theme.textTheme.headlineMedium, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+const SizedBox(height: 20),
+_menuTile(ctx, icon: Icons.swap_horiz_rounded, title: 'Заменить упражнение', color: theme.colorScheme.primary, onTap: () => Navigator.pop(ctx, 'replace')),
+_menuTile(ctx, icon: Icons.tune_rounded, title: 'Изменить подходы и повторения', color: const Color(0xFF00B894), onTap: () => Navigator.pop(ctx, 'edit')),
+_menuTile(ctx, icon: Icons.delete_outline_rounded, title: 'Удалить из тренировки', color: theme.colorScheme.error, onTap: () => Navigator.pop(ctx, 'delete')),
+],
+),
+);
+}
 
-  Future<void> _replaceExercise(WorkoutExercise item, Exercise original) async {
-    final reason = await showModalBottomSheet<String>(context: context, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))), builder: (ctx) => _buildReasonSheet(ctx));
-    if (reason == null) return;
-    final result = await Navigator.push<Map<String, dynamic>>(context, MaterialPageRoute(builder: (_) => ReplaceExerciseScreen(original: original, reasonCode: reason)));
-    if (result == null) return;
+Widget _menuTile(BuildContext ctx, {required IconData icon, required String title, required Color color, required VoidCallback onTap}) {
+return Padding(
+padding: const EdgeInsets.only(bottom: 8),
+child: Material(
+color: Colors.transparent,
+child: ListTile(
+shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: Theme.of(ctx).colorScheme.onSurface.withOpacity(0.1))),
+leading: Icon(icon, color: color),
+title: Text(title),
+onTap: onTap,
+),
+),
+);
+}
 
-    final newExercise = result['newExercise'] as Exercise;
-    final permanent = result['permanent'] as bool;
-    final reasonCode = result['reason'] as String;
+Future<void> _replaceExercise(WorkoutExercise item, Exercise original) async {
+final reason = await showModalBottomSheet<String>(context: context, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))), builder: (ctx) => _buildReasonSheet(ctx));
+if (reason == null) return;
+final result = await Navigator.push<Map<String, dynamic>>(context, MaterialPageRoute(builder: (_) => ReplaceExerciseScreen(original: original, reasonCode: reason)));
+if (result == null) return;
 
-    final isAlreadyInWorkout = _items.any((i) =>
-    i.id != item.id &&
-        (i.replacedByItemId ?? i.itemId) == newExercise.id
-    );
+final newExercise = result['newExercise'] as Exercise;
+final permanent = result['permanent'] as bool;
+final reasonCode = result['reason'] as String;
 
-    if (isAlreadyInWorkout) {
-      _showMessage('Упражнение «${newExercise.name}» уже есть в этой тренировке!');
-      return;
-    }
+final isAlreadyInWorkout = _items.any((i) =>
+i.id != item.id &&
+(i.replacedByItemId ?? i.itemId) == newExercise.id
+);
 
-    setState(() {
-      _exerciseMap[newExercise.id!] = newExercise;
-      final idx = _items.indexOf(item);
-      if (idx >= 0) {
-        _items[idx] = item.copyWith(itemId: newExercise.id!, replacedByItemId: newExercise.id, replacementReason: reasonCode, replacementPermanent: permanent);
-        if (item.id != null) {
-          final defaultReps = _parseReps(_items[idx].reps);
-          _setsData[item.id!] = List.generate(_items[idx].sets, (_) => SetData(reps: defaultReps, completed: false));
-          _setIds[item.id!] = List.generate(_items[idx].sets, (_) => 0);
-        }
-      }
-    });
-    if (_day?.weekNumber != null) await DatabaseHelper.instance.replaceExerciseInMonth(profileId: widget.profileId, oldItemId: original.id!, newItemId: newExercise.id!, reason: reasonCode, permanent: permanent);
-    _showMessage('Заменено на «${newExercise.name}» во всем месяце');
-  }
+if (isAlreadyInWorkout) {
+_showMessage('Упражнение «${newExercise.name}» уже есть в этой тренировке!');
+return;
+}
 
-  Widget _buildReasonSheet(BuildContext ctx) {
-    final theme = Theme.of(ctx);
-    final reasons = [
-      ('no_equipment', 'Нет оборудования', Icons.block_rounded, theme.colorScheme.error),
-      ('too_hard', 'Слишком тяжело', Icons.trending_down_rounded, const Color(0xFFE17055)),
-      ('too_easy', 'Слишком легко', Icons.trending_up_rounded, const Color(0xFF00B894)),
-      ('dislike', 'Не нравится', Icons.thumb_down_rounded, const Color(0xFFFDCB6E)),
-      ('other', 'Другое (вручную)', Icons.search_rounded, theme.colorScheme.primary)
-    ];
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.onSurface.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
-          const SizedBox(height: 16),
-          Text('Почему заменить?', style: theme.textTheme.headlineMedium, textAlign: TextAlign.center),
-          const SizedBox(height: 8),
-          Text('Приложение подберёт замену с учётом причины', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6)), textAlign: TextAlign.center),
-          const SizedBox(height: 20),
-          ...reasons.map((r) {
-            final (code, label, icon, color) = r;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Material(
-                color: Colors.transparent,
-                child: ListTile(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: theme.colorScheme.onSurface.withOpacity(0.1))),
-                  leading: Icon(icon, color: color),
-                  title: Text(label),
-                  onTap: () => Navigator.pop(ctx, code),
-                ),
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
+setState(() {
+_exerciseMap[newExercise.id!] = newExercise;
+final idx = _items.indexOf(item);
+if (idx >= 0) {
+_items[idx] = item.copyWith(itemId: newExercise.id!, replacedByItemId: newExercise.id, replacementReason: reasonCode, replacementPermanent: permanent);
+if (item.id != null) {
+final defaultReps = _parseReps(_items[idx].reps);
+_setsData[item.id!] = List.generate(_items[idx].sets, (_) => SetData(reps: defaultReps, completed: false));
+_setIds[item.id!] = List.generate(_items[idx].sets, (_) => 0);
+}
+}
+});
+if (_day?.weekNumber != null) await DatabaseHelper.instance.replaceExerciseInMonth(profileId: widget.profileId, oldItemId: original.id!, newItemId: newExercise.id!, reason: reasonCode, permanent: permanent);
+_showMessage('Заменено на «${newExercise.name}» во всем месяце');
+}
 
-  Future<void> _editExerciseParams(WorkoutExercise item) async {
-    final setsController = TextEditingController(text: '${item.sets}');
-    final repsController = TextEditingController(text: item.reps);
-    final restController = TextEditingController(text: '${item.restSeconds}');
-    final isTimed = _isTimed(_exerciseMap[item.replacedByItemId ?? item.itemId]?.name ?? '');
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Изменить параметры'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: setsController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Подходы', prefixIcon: Icon(Icons.repeat_rounded))),
-            const SizedBox(height: 12),
-            TextField(controller: repsController, decoration: InputDecoration(labelText: isTimed ? 'Время (например, 60 сек)' : 'Повторения (например, 10-12)', prefixIcon: const Icon(Icons.numbers_rounded))),
-            const SizedBox(height: 12),
-            TextField(controller: restController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Отдых (сек)', prefixIcon: Icon(Icons.timer_rounded))),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
-        ],
-      ),
-    );
-    if (result != true) return;
-    final newSets = int.tryParse(setsController.text) ?? item.sets;
-    final newReps = repsController.text.trim().isEmpty ? item.reps : repsController.text.trim();
-    final newRest = int.tryParse(restController.text) ?? item.restSeconds;
-    final defaultReps = _parseReps(newReps);
-    setState(() {
-      final idx = _items.indexOf(item);
-      if (idx >= 0) _items[idx] = item.copyWith(sets: newSets, reps: newReps, restSeconds: newRest);
-      if (item.id != null) {
-        _setsData[item.id!] = List.generate(newSets, (_) => SetData(reps: defaultReps));
-        _setIds[item.id!] = List.generate(newSets, (_) => 0);
-      }
-    });
-    _showMessage('Параметры обновлены');
-  }
+Widget _buildReasonSheet(BuildContext ctx) {
+final theme = Theme.of(ctx);
+final reasons = [
+('no_equipment', 'Нет оборудования', Icons.block_rounded, theme.colorScheme.error),
+('too_hard', 'Слишком тяжело', Icons.trending_down_rounded, const Color(0xFFE17055)),
+('too_easy', 'Слишком легко', Icons.trending_up_rounded, const Color(0xFF00B894)),
+('dislike', 'Не нравится', Icons.thumb_down_rounded, const Color(0xFFFDCB6E)),
+('other', 'Другое (вручную)', Icons.search_rounded, theme.colorScheme.primary)
+];
+return Padding(
+padding: const EdgeInsets.all(20),
+child: Column(
+mainAxisSize: MainAxisSize.min,
+crossAxisAlignment: CrossAxisAlignment.stretch,
+children: [
+Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.onSurface.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
+const SizedBox(height: 16),
+Text('Почему заменить?', style: theme.textTheme.headlineMedium, textAlign: TextAlign.center),
+const SizedBox(height: 8),
+Text('Приложение подберёт замену с учётом причины', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6)), textAlign: TextAlign.center),
+const SizedBox(height: 20),
+...reasons.map((r) {
+final (code, label, icon, color) = r;
+return Padding(
+padding: const EdgeInsets.only(bottom: 8),
+child: Material(
+color: Colors.transparent,
+child: ListTile(
+shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: theme.colorScheme.onSurface.withOpacity(0.1))),
+leading: Icon(icon, color: color),
+title: Text(label),
+onTap: () => Navigator.pop(ctx, code),
+),
+),
+);
+}),
+],
+),
+);
+}
 
-  Future<void> _addSetToExercise(WorkoutExercise item) async {
-    if (item.id == null || !_started || _isViewMode) return;
-    final sets = _setsData[item.id!];
-    final ids = _setIds[item.id!];
-    if (sets == null || ids == null) return;
-    final newOrder = sets.length + 1;
-    final defaultReps = _parseReps(item.reps);
-    final newSetId = await DatabaseHelper.instance.addWorkoutSet(WorkoutSet(workoutExerciseId: item.id!, order: newOrder, reps: defaultReps, completed: false));
-    if (!mounted) return;
-    setState(() {
-      sets.add(SetData(reps: defaultReps, completed: false));
-      ids.add(newSetId);
-    });
-  }
+Future<void> _editExerciseParams(WorkoutExercise item) async {
+final setsController = TextEditingController(text: '${item.sets}');
+final repsController = TextEditingController(text: item.reps);
+final restController = TextEditingController(text: '${item.restSeconds}');
+final isTimed = _isTimed(_exerciseMap[item.replacedByItemId ?? item.itemId]?.name ?? '');
+final result = await showDialog<bool>(
+context: context,
+builder: (ctx) => AlertDialog(
+title: const Text('Изменить параметры'),
+content: Column(
+mainAxisSize: MainAxisSize.min,
+children: [
+TextField(controller: setsController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Подходы', prefixIcon: Icon(Icons.repeat_rounded))),
+const SizedBox(height: 12),
+TextField(controller: repsController, decoration: InputDecoration(labelText: isTimed ? 'Время (например, 60 сек)' : 'Повторения (например, 10-12)', prefixIcon: const Icon(Icons.numbers_rounded))),
+const SizedBox(height: 12),
+TextField(controller: restController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Отдых (сек)', prefixIcon: Icon(Icons.timer_rounded))),
+],
+),
+actions: [
+TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
+],
+),
+);
+if (result != true) return;
+final newSets = int.tryParse(setsController.text) ?? item.sets;
+final newReps = repsController.text.trim().isEmpty ? item.reps : repsController.text.trim();
+final newRest = int.tryParse(restController.text) ?? item.restSeconds;
+final defaultReps = _parseReps(newReps);
+setState(() {
+final idx = _items.indexOf(item);
+if (idx >= 0) _items[idx] = item.copyWith(sets: newSets, reps: newReps, restSeconds: newRest);
+if (item.id != null) {
+_setsData[item.id!] = List.generate(newSets, (_) => SetData(reps: defaultReps));
+_setIds[item.id!] = List.generate(newSets, (_) => 0);
+}
+});
+_showMessage('Параметры обновлены');
+}
 
-  Future<void> _deleteSetFromExercise(WorkoutExercise item, int index) async {
-    if (item.id == null || _isViewMode) return;
-    final sets = _setsData[item.id!];
-    final ids = _setIds[item.id!];
-    if (sets == null || ids == null || index < 0 || index >= sets.length) return;
-    if (sets.length <= 1) {
-      _showMessage('Нельзя удалить последний подход');
-      return;
-    }
-    final setId = ids[index];
-    if (setId > 0) await DatabaseHelper.instance.deleteWorkoutSet(setId);
-    if (!mounted) return;
-    setState(() {
-      sets.removeAt(index);
-      ids.removeAt(index);
-    });
-    _showMessage('Подход удалён');
-  }
+Future<void> _addSetToExercise(WorkoutExercise item) async {
+if (item.id == null || !_started || _isViewMode) return;
+final sets = _setsData[item.id!];
+final ids = _setIds[item.id!];
+if (sets == null || ids == null) return;
+final newOrder = sets.length + 1;
+final defaultReps = _parseReps(item.reps);
+final newSetId = await DatabaseHelper.instance.addWorkoutSet(WorkoutSet(workoutExerciseId: item.id!, order: newOrder, reps: defaultReps, completed: false));
+if (!mounted) return;
+setState(() {
+sets.add(SetData(reps: defaultReps, completed: false));
+ids.add(newSetId);
+});
+}
 
-  Future<void> _deleteExercise(WorkoutExercise item) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Удалить упражнение?'),
-        content: const Text('Упражнение будет удалено из этой тренировки.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Удалить', style: TextStyle(color: Colors.red)))
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    setState(() {
-      _items.remove(item);
-      _setsData.remove(item.id);
-      _setIds.remove(item.id);
-    });
-    _showMessage('Упражнение удалено');
-  }
+Future<void> _deleteSetFromExercise(WorkoutExercise item, int index) async {
+if (item.id == null || _isViewMode) return;
+final sets = _setsData[item.id!];
+final ids = _setIds[item.id!];
+if (sets == null || ids == null || index < 0 || index >= sets.length) return;
+if (sets.length <= 1) {
+_showMessage('Нельзя удалить последний подход');
+return;
+}
+final setId = ids[index];
+if (setId > 0) await DatabaseHelper.instance.deleteWorkoutSet(setId);
+if (!mounted) return;
+setState(() {
+sets.removeAt(index);
+ids.removeAt(index);
+});
+_showMessage('Подход удалён');
+}
 
+Future<void> _deleteExercise(WorkoutExercise item) async {
+final confirmed = await showDialog<bool>(
+context: context,
+builder: (ctx) => AlertDialog(
+title: const Text('Удалить упражнение?'),
+content: const Text('Упражнение будет удалено из этой тренировки.'),
+actions: [
+TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Удалить', style: TextStyle(color: Colors.red)))
+],
+),
+);
+if (confirmed != true) return;
+setState(() {
+_items.remove(item);
+_setsData.remove(item.id);
+_setIds.remove(item.id);
+});
+_showMessage('Упражнение удалено');
+}
+// ═══ КОНЕЦ ЧАСТИ 3 ═══
   Future<void> _startStretchTimer(WorkoutExercise item, Stretch st) async {
     if (_isViewMode || !_started || item.id == null) return;
     final result = await showDialog<bool>(
@@ -1431,7 +1483,8 @@ if (mounted) Navigator.pop(context, true);
       return ex != null && _isCardio(ex);
     }).toList();
 
-    if (_profile?.goal == 'lose_weight') {
+    final isLoseWeight = _profile?.goal == 'lose_weight' || (_profile?.goal.contains('weight') ?? false) || (_profile?.goal.contains('lose') ?? false);
+    if (isLoseWeight) {
       int sIdx = 0;
       int cIdx = 0;
       int strengthCounter = 0;
@@ -1531,14 +1584,24 @@ if (mounted) Navigator.pop(context, true);
       slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0), child: _buildWarmupCard(context, warmups))));
     }
 
-    final bool isWeightLoss = _profile?.goal == 'lose_weight';
+    final bool isWeightLoss = _profile?.goal == 'lose_weight' || (_profile?.goal.contains('weight') ?? false) || (_profile?.goal.contains('lose') ?? false);
     final bool shouldInterleave = isWeightLoss && cardios.isNotEmpty;
     final sortedBlockNums = blocks.keys.toList()..sort();
     int cardioIndex = 0;
 
     void addBlockToSlivers(int blockNum) {
       final blockItems = blocks[blockNum]!;
-      for (int circle = 0; circle < 3; circle++) {
+
+      // 👇 ФИКС: Динамическое количество кругов (чтобы профи видел свои 4 подхода)
+      int maxCircles = 3;
+      for (final item in blockItems) {
+        final sets = _setsData[item.id];
+        if (sets != null && sets.length > maxCircles) {
+          maxCircles = sets.length;
+        }
+      }
+
+      for (int circle = 0; circle < maxCircles; circle++) {
         final circleNum = circle + 1;
         final isComplete = _isCircleComplete(blockItems, circle) && _started;
         final completed = _completedInCircle(blockItems, circle);

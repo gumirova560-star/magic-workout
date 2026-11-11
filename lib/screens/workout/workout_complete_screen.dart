@@ -7,6 +7,7 @@ import '../../services/fairy_stats_service.dart';
 import '../../widgets/share_card.dart';
 import '../../services/share_service.dart';
 import 'workout_detail_screen.dart';
+import '../../models/user_profile.dart';
 
 class WorkoutCompleteScreen extends StatefulWidget {
   final WorkoutDay completedDay;
@@ -15,7 +16,7 @@ class WorkoutCompleteScreen extends StatefulWidget {
   final bool isCycleComplete;
   final bool isChallenge;
   final String userName;
-  final String? challengeStat; // 👈 НОВОЕ ПОЛЕ
+  final String? challengeStat;
 
   const WorkoutCompleteScreen({
     super.key,
@@ -25,7 +26,7 @@ class WorkoutCompleteScreen extends StatefulWidget {
     required this.isCycleComplete,
     this.isChallenge = false,
     required this.userName,
-    this.challengeStat, // 👈
+    this.challengeStat,
   });
 
   @override
@@ -38,6 +39,7 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
   int _totalExercisesInPeriod = 0;
   late ShareCardMode _mode;
   String _userName = 'Спортсмен';
+  UserProfile? _profile;
 
   @override
   void initState() {
@@ -57,10 +59,11 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
   }
 
   Future<void> _loadData() async {
+    _profile = await DatabaseHelper.instance.getProfileById(widget.completedDay.profileId);
+
     if (_userName == 'Спортсмен' || _userName.isEmpty) {
-      final profile = await DatabaseHelper.instance.getProfileById(widget.completedDay.profileId);
-      if (profile != null && profile.name.isNotEmpty) {
-        _userName = profile.name;
+      if (_profile != null && _profile!.name.isNotEmpty) {
+        _userName = _profile!.name;
       }
     }
 
@@ -188,6 +191,13 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: () {
+                      final plannedDays = _profile?.daysPerWeek ?? 3;
+                      final isWeekInProgress = !widget.isWeekComplete && _mode != ShareCardMode.challenge;
+
+                      final streakValueToPass = widget.isWeekComplete
+                          ? (widget.completedDay.weekNumber ?? 1)
+                          : _totalWorkoutsInPeriod;
+
                       ShareService.shareWorkoutCard(
                         context: context,
                         mode: _mode,
@@ -196,10 +206,13 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
                         minutes: widget.completedDay.durationMinutes ?? 0,
                         exercisesCount: _totalExercisesInPeriod,
                         workoutsCount: _totalWorkoutsInPeriod,
-                        streakWeeks: _mode == ShareCardMode.cycle
-                            ? 4
-                            : (_mode == ShareCardMode.week ? (widget.completedDay.weekNumber ?? 1) : _streak),
-                        challengeStat: widget.challengeStat, // 👈 ПЕРЕДАЕМ
+                        streakWeeks: streakValueToPass,
+                        isWeekInProgress: isWeekInProgress,
+                        plannedDays: plannedDays,
+                        challengeStat: widget.challengeStat,
+                        challengeMainStat: widget.isChallenge ? (widget.challengeStat ?? 'Выполнено') : null,
+                        challengeSubStat: widget.isChallenge ? '${widget.completedDay.durationMinutes} мин' : null,
+                        challengeTimeStat: widget.isChallenge ? '100%' : null,
                       );
                     },
                     icon: const Icon(Icons.ios_share_rounded),

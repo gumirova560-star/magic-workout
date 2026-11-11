@@ -17,6 +17,10 @@ const Map<String, ExerciseMeta> kAbsoluteExerciseDictionary = {
   'Зашагивания на платформу с гантелями': ExerciseMeta('glutes', ExerciseType.base),
   'Румынская тяга на одной ноге с гантелью': ExerciseMeta('glutes', ExerciseType.base),
 
+  // 👇 НОВЫЕ ДОБАВЛЕННЫЕ:
+  'Отведение ноги в сторону стоя': ExerciseMeta('glutes', ExerciseType.isolation),
+  'Обратные выпады с собственным весом': ExerciseMeta('glutes', ExerciseType.base),
+
   'Отведение ноги назад в блоке': ExerciseMeta('glutes', ExerciseType.isolation),
   'Отведение ноги в сторону с резинкой': ExerciseMeta('glutes', ExerciseType.isolation),
   'Отведение ноги в кроссовере': ExerciseMeta('glutes', ExerciseType.isolation),
@@ -46,6 +50,12 @@ const Map<String, ExerciseMeta> kAbsoluteExerciseDictionary = {
   'Румынская тяга на одной ноге': ExerciseMeta('legs', ExerciseType.base),
   'Наклоны со штангой': ExerciseMeta('legs', ExerciseType.base),
   'Выпады назад с гантелями': ExerciseMeta('legs', ExerciseType.base),
+  'Стульчик у стены': ExerciseMeta('legs', ExerciseType.isolation),
+
+  // 👇 НОВЫЕ ДОБАВЛЕННЫЕ:
+  'Боковые выпады с собственным весом': ExerciseMeta('legs', ExerciseType.base),
+  'Приседания сумо с собственным весом': ExerciseMeta('legs', ExerciseType.base),
+
   'Подъёмы на носки стоя': ExerciseMeta('legs', ExerciseType.base),
   'Подъёмы на носки сидя': ExerciseMeta('legs', ExerciseType.base),
   'Подъемы на носки в тренажере Смита': ExerciseMeta('legs', ExerciseType.base),

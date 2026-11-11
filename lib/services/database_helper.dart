@@ -704,9 +704,18 @@ return Stretch.fromMap(maps.first);
   }
 
   // 👇 ИСПРАВЛЕННЫЙ МЕТОД (ИЩЕТ ПРОШЛЫЕ РЕЗУЛЬТАТЫ ДАЖЕ БЕЗ ВЕСА)
-  Future<List<WorkoutSet>> getLastWorkoutExerciseSets({required int profileId, required int exerciseId, int daysLimit = 365}) async {
+  // 👇 ИСПРАВЛЕННЫЙ МЕТОД (ИЩЕТ ПРОШЛЫЕ РЕЗУЛЬТАТЫ ТОЛЬКО В ЗАВЕРШЕННЫХ ДНЯХ И ИГНОРИРУЕТ ТЕКУЩИЙ)
+  Future<List<WorkoutSet>> getLastWorkoutExerciseSets({
+    required int profileId,
+    required int exerciseId,
+    int daysLimit = 365,
+    int? excludeWorkoutDayId, // 👈 Добавили параметр
+  }) async {
     final db = await database;
     final from = DateTime.now().subtract(Duration(days: daysLimit)).toIso8601String();
+
+    // Строка для исключения текущего дня
+    String excludeCondition = excludeWorkoutDayId != null ? "AND wd.id != $excludeWorkoutDayId" : "";
 
     final weResult = await db.rawQuery('''
       SELECT we.id
@@ -715,11 +724,13 @@ return Stretch.fromMap(maps.first);
       JOIN workout_sets ws ON ws.workoutExerciseId = we.id
       WHERE wd.profileId = ?
         AND wd.date >= ?
+        $excludeCondition 
+        AND wd.status = 'completed' -- 👈 ИЩЕМ ТОЛЬКО В ЗАВЕРШЕННЫХ ДНЯХ
         AND (we.replacedByItemId = ? OR we.itemId = ?)
         AND we.itemType = 'exercise'
         AND we.isWarmup = 0
         AND we.isCoolDown = 0
-        AND ws.completed = 1 -- 👇 ИСПРАВЛЕНИЕ: Ищем выполненные подходы, даже если нет веса
+        AND (ws.completed = 1 OR ws.reps IS NOT NULL OR ws.weight IS NOT NULL)
       ORDER BY wd.date DESC, wd.id DESC, ws."order" ASC
       LIMIT 1
     ''', [profileId, from, exerciseId, exerciseId]);
@@ -731,6 +742,8 @@ return Stretch.fromMap(maps.first);
         JOIN workout_days wd ON wd.id = we.workoutDayId
         WHERE wd.profileId = ?
           AND wd.date >= ?
+          $excludeCondition
+          AND wd.status = 'completed' -- 👈 ТУТ ТОЖЕ ТОЛЬКО ЗАВЕРШЕННЫЕ
           AND (we.replacedByItemId = ? OR we.itemId = ?)
           AND we.itemType = 'exercise'
           AND we.isWarmup = 0

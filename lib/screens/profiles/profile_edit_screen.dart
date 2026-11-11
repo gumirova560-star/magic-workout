@@ -32,12 +32,13 @@ int _daysPerWeek = 3;
 int _sessionMinutes = 45;
 String? _bodyType;
 
-bool _focusAutoFilled = false; // 👈 Показывает сообщение о том, что зоны выбраны по типу фигуры
+bool _focusAutoFilled = false;
 
 final Set<String> _focusAreas = {};
 final Set<String> _limitations = {};
 
-static const int _maxFocusAreas = 3;
+// 👇 ДИНАМИЧЕСКОЕ ОГРАНИЧЕНИЕ ФОКУСНЫХ ЗОН
+int get _maxFocusAreas => _level == 'beginner' ? 2 : 3;
 
 @override
 void initState() {
@@ -76,11 +77,12 @@ super.dispose();
 Future<void> _save() async {
 if (!_formKey.currentState!.validate()) return;
 
-// 👈 Проверка, что фокусные зоны выбраны
 if (_focusAreas.isEmpty) {
 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Выберите хотя бы одну фокусную зону')));
 return;
 }
+
+final finalFocusAreas = _focusAreas.take(_maxFocusAreas).toList();
 
 final profile = UserProfile(
 id: widget.profile?.id,
@@ -91,7 +93,7 @@ height: _height,
 weight: _weight,
 level: _level,
 goal: _goal,
-focusAreas: _focusAreas.take(_maxFocusAreas).toList(),
+focusAreas: finalFocusAreas,
 limitations: _limitations.toList(),
 equipment: _equipment,
 daysPerWeek: _daysPerWeek,
@@ -123,7 +125,7 @@ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка:
 }
 }
 }
-// ═══ КОНЕЦ ЧАСТИ 1 из 3 ═══
+// ═══ КОНЕЦ ЧАСТИ 1 ═══
 @override
 Widget build(BuildContext context) {
 final isEdit = widget.profile != null;
@@ -153,7 +155,6 @@ Expanded(child: _choiceButton(label: 'Мужской', icon: Icons.male_rounded,
 const SizedBox(height: 24),
 
 _sectionTitle('Параметры'),
-
 _buildHybridSlider(
 label: 'Возраст',
 controller: _ageController,
@@ -213,6 +214,43 @@ setState(() => _weight = parsed);
 ),
 const SizedBox(height: 24),
 
+// 👇 СНАЧАЛА УРОВЕНЬ ПОДГОТОВКИ
+_sectionTitle('Уровень подготовки'),
+..._buildOptions(
+options: const [
+('beginner', 'Новичок', Icons.looks_one_rounded),
+('intermediate', 'Средний', Icons.looks_two_rounded),
+('advanced', 'Продвинутый', Icons.looks_3_rounded),
+],
+selected: _level,
+onSelected: (v) => setState(() {
+_level = v;
+if (_focusAreas.length > _maxFocusAreas) {
+final list = _focusAreas.toList();
+_focusAreas.clear();
+_focusAreas.addAll(list.take(_maxFocusAreas));
+ScaffoldMessenger.of(context).showSnackBar(
+SnackBar(content: Text('Для этого уровня доступно не более $_maxFocusAreas фокусных зон'))
+);
+}
+if (_focusAutoFilled && _bodyType != null) {
+final Map<String, List<String>> bodyTypeZones = {
+'pear': ['glutes', 'shoulders', 'legs'],
+'apple': ['abs', 'legs', 'back'],
+'hourglass': ['glutes', 'abs', 'legs'],
+'rectangle': ['glutes', 'shoulders', 'legs'],
+'inverted_triangle': ['glutes', 'legs', 'abs'],
+};
+if (bodyTypeZones.containsKey(_bodyType)) {
+_focusAreas.clear();
+_focusAreas.addAll(bodyTypeZones[_bodyType]!.take(_maxFocusAreas));
+}
+}
+}),
+),
+const SizedBox(height: 24),
+
+// 👇 ТИП ФИГУРЫ
 _sectionTitle('Тип фигуры'),
 Container(
 padding: const EdgeInsets.all(12),
@@ -239,8 +277,8 @@ const SizedBox(height: 12),
 ..._buildBodyTypeOptions(),
 const SizedBox(height: 24),
 
-// 👇 НОВЫЙ БЛОК: Фокусные зоны (чипы + сообщение)
-_sectionTitle('Фокусные зоны'),
+// 👇 ФОКУСНЫЕ ЗОНЫ С УВЕДОМЛЕНИЕМ
+_sectionTitle('Фокусные зоны (макс. $_maxFocusAreas)'),
 Wrap(
 spacing: 8,
 runSpacing: 8,
@@ -252,11 +290,10 @@ _focusChip('chest', 'Грудь'),
 _focusChip('back', 'Спина'),
 _focusChip('arms', 'Руки'),
 _focusChip('shoulders', 'Плечи'),
-_focusChip('cardio', 'Кардио-день'),
+_focusChip('cardio', 'Кардио-день', isDisabled: _daysPerWeek < 3),
 ],
 ),
 const SizedBox(height: 8),
-if (_focusAutoFilled)
 Container(
 padding: const EdgeInsets.all(12),
 decoration: BoxDecoration(
@@ -269,15 +306,27 @@ crossAxisAlignment: CrossAxisAlignment.start,
 children: [
 Row(
 children: [
-Icon(Icons.auto_awesome_rounded, size: 18, color: Theme.of(context).colorScheme.primary),
+Icon(
+_focusAreas.isEmpty ? Icons.info_outline_rounded : Icons.check_circle_outline_rounded,
+size: 18,
+color: Theme.of(context).colorScheme.primary,
+),
 const SizedBox(width: 8),
 Expanded(
 child: Text(
-'Фокусные зоны выбраны по типу фигуры. Ты можешь подтвердить или выбрать вручную.',
-style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary),
+_focusAreas.isEmpty
+? 'Для уровня «${_getLevelLabel(_level)}» доступно до $_maxFocusAreas зон.'
+: 'Для уровня «${_getLevelLabel(_level)}» выбрано ${_focusAreas.length} из $_maxFocusAreas: ${_focusAreas.map(_getZoneLabel).join(', ')}',
+style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary),
 ),
 ),
 ],
+),
+if (_focusAutoFilled) ...[
+const SizedBox(height: 6),
+Text(
+'Зоны подобраны по типу фигуры «${_getBodyTypeLabel(_bodyType)}». Ты можешь их подтвердить или выбрать вручную.',
+style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.primary.withOpacity(0.8)),
 ),
 const SizedBox(height: 8),
 Row(
@@ -291,37 +340,24 @@ child: const Text('Подтвердить', style: TextStyle(fontSize: 13)),
 const SizedBox(width: 8),
 Expanded(
 child: TextButton(
-onPressed: () => setState(() { _focusAreas.clear(); _focusAutoFilled = false; }),
+onPressed: () => setState(() {
+_focusAreas.clear();
+_focusAutoFilled = false;
+}),
 child: const Text('Выбрать вручную', style: TextStyle(fontSize: 13)),
 ),
 ),
 ],
 ),
 ],
-),
-),
-if (_focusAreas.length > _maxFocusAreas)
-Padding(
-padding: const EdgeInsets.only(top: 8),
-child: Text('Можно выбрать не больше $_maxFocusAreas зон', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.error)),
-),
-const SizedBox(height: 24),
-
-_sectionTitle('Уровень подготовки'),
-..._buildOptions(
-options: [
-('beginner', 'Новичок', Icons.looks_one_rounded),
-('intermediate', 'Средний', Icons.looks_two_rounded),
-('advanced', 'Продвинутый', Icons.looks_3_rounded),
 ],
-selected: _level,
-onSelected: (v) => setState(() => _level = v),
+),
 ),
 const SizedBox(height: 24),
 
 _sectionTitle('Цель'),
 ..._buildOptions(
-options: [
+options: const [
 ('lose_weight', 'Похудеть', Icons.trending_down_rounded),
 ('gain_mass', 'Набрать массу', Icons.trending_up_rounded),
 ('tone', 'Тонус', Icons.favorite_rounded),
@@ -347,7 +383,7 @@ const SizedBox(height: 24),
 
 _sectionTitle('Инвентарь'),
 ..._buildOptions(
-options: [
+options: const [
 ('gym', 'Зал', Icons.fitness_center_rounded),
 ('dumbbells', 'Гантели', Icons.sports_gymnastics_rounded),
 ('bodyweight', 'Своё тело', Icons.accessibility_new_rounded),
@@ -366,7 +402,12 @@ min: 2,
 max: 6,
 divisions: 4,
 unit: 'дн',
-onChanged: (v) => setState(() => _daysPerWeek = v.toInt()),
+onChanged: (v) => setState(() {
+_daysPerWeek = v.toInt();
+if (_daysPerWeek < 3) {
+_focusAreas.remove('cardio');
+}
+}),
 ),
 const SizedBox(height: 24),
 
@@ -393,34 +434,34 @@ const SizedBox(height: 24),
 ),
 );
 }
-// ═══ КОНЕЦ ЧАСТИ 2 из 3 ═══
-  Widget _focusChip(String code, String label) {
+// ═══ КОНЕЦ ЧАСТИ 2 ═══
+  Widget _focusChip(String code, String label, {bool isDisabled = false}) {
     final isSelected = _focusAreas.contains(code);
     return FilterChip(
       label: Text(label),
       selected: isSelected,
-      onSelected: (v) {
+      onSelected: isDisabled ? null : (v) {
         setState(() {
           if (v) {
             if (_focusAreas.length >= _maxFocusAreas) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Можно выбрать не больше $_maxFocusAreas зон')));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Для этого уровня можно выбрать не больше $_maxFocusAreas зон')));
               return;
             }
             _focusAreas.add(code);
           } else {
             _focusAreas.remove(code);
           }
-          _focusAutoFilled = false; // При ручном выборе скрываем сообщение
+          _focusAutoFilled = false;
         });
       },
+      labelStyle: isDisabled ? TextStyle(color: Theme.of(context).disabledColor) : null,
     );
   }
 
-  // 👇 Метод выбора типа фигуры с автоподстановкой зон
   List<Widget> _buildBodyTypeOptions() {
     final types = [
-      ('pear', 'Груша', 'Узкие плечи, широкие бедра. Акцент: ягодицы, ноги, плечи (для баланса).'),
-      ('apple', 'Яблоко', 'Широкие плечи и бедра, акцент в животе. Акцент: пресс, кардио.'),
+      ('pear', 'Груша', 'Узкие плечи, широкие бедра. Акцент: плечи (для баланса) и ягодицы.'),
+      ('apple', 'Яблоко', 'Широкие плечи и бедра, акцент в животе. Акцент: пресс, ноги, спина.'),
       ('hourglass', 'Песочные часы', 'Сбалансированные плечи и бедра, талия. Акцент: ягодицы, пресс.'),
       ('rectangle', 'Прямоугольник', 'Плечи = бедра, талия слабо выражена. Акцент: ягодицы, плечи.'),
       ('inverted_triangle', 'Перевернутый треугольник', 'Широкие плечи, узкие бедра. Акцент: ягодицы, ноги.'),
@@ -436,18 +477,17 @@ const SizedBox(height: 24),
         child: GestureDetector(
           onTap: () => setState(() {
             _bodyType = code;
-            // Автоподстановка зон по типу фигуры
             final Map<String, List<String>> bodyTypeZones = {
-              'pear': ['glutes', 'legs', 'shoulders'],
-              'apple': ['abs', 'cardio', 'legs'],
+              'pear': ['glutes', 'shoulders', 'legs'],
+              'apple': ['abs', 'legs', 'back'],
               'hourglass': ['glutes', 'abs', 'legs'],
               'rectangle': ['glutes', 'shoulders', 'legs'],
               'inverted_triangle': ['glutes', 'legs', 'abs'],
             };
             if (bodyTypeZones.containsKey(code)) {
               _focusAreas.clear();
-              _focusAreas.addAll(bodyTypeZones[code]!);
-              _focusAutoFilled = true; // Показываем сообщение "Подтвердить или выбрать вручную"
+              _focusAreas.addAll(bodyTypeZones[code]!.take(_maxFocusAreas));
+              _focusAutoFilled = true;
             }
           }),
           child: Container(
@@ -614,5 +654,29 @@ const SizedBox(height: 24),
       }),
     );
   }
+
+  String _getZoneLabel(String code) {
+    const labels = {
+      'glutes': 'Ягодицы', 'legs': 'Ноги', 'abs': 'Пресс', 'chest': 'Грудь',
+      'back': 'Спина', 'arms': 'Руки', 'shoulders': 'Плечи', 'cardio': 'Кардио',
+    };
+    return labels[code] ?? code;
+  }
+
+  String _getLevelLabel(String level) {
+    const labels = {
+      'beginner': 'Новичок', 'intermediate': 'Средний', 'advanced': 'Продвинутый',
+    };
+    return labels[level] ?? level;
+  }
+
+  String _getBodyTypeLabel(String? type) {
+    if (type == null) return 'не выбран';
+    const labels = {
+      'pear': 'Груша', 'apple': 'Яблоко', 'hourglass': 'Песочные часы',
+      'rectangle': 'Прямоугольник', 'inverted_triangle': 'Перевернутый треугольник',
+    };
+    return labels[type] ?? type;
+  }
 }
-// ═══ КОНЕЦ ЧАСТИ 3 из 3 — ФАЙЛ profile_edit_screen.dart ЗАВЕРШЁН ═══
+// ═══ КОНЕЦ ФАЙЛА profile_edit_screen.dart ═══

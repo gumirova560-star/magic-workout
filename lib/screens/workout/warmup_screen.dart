@@ -28,7 +28,6 @@ class WarmupScreen extends StatefulWidget {
 
 class _WarmupScreenState extends State<WarmupScreen> {
   static const int _totalSeconds = 180; // 3 минуты
-  static const double _volume = 0.3;
 
   int _remaining = _totalSeconds;
   bool _running = false;
@@ -40,7 +39,6 @@ class _WarmupScreenState extends State<WarmupScreen> {
   @override
   void initState() {
     super.initState();
-    _audioPlayer.setVolume(_volume);
   }
 
   @override
@@ -52,7 +50,17 @@ class _WarmupScreenState extends State<WarmupScreen> {
 
   void _start() {
     if (_running) return;
+
+    // 👇 РАЗБЛОКИРУЕМ ЗВУК НА ВЕБЕ (играем на нулевой громкости)
+    try {
+      _audioPlayer.play(AssetSource('sounds/warmup_done.mp3'), volume: 0).then((_) {
+        _audioPlayer.stop(); // Сразу останавливаем
+        _audioPlayer.setVolume(1.0); // Возвращаем нормальную громкость
+      });
+    } catch (_) {}
+
     setState(() { _running = true; _paused = false; });
+
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted || _paused) return;
       if (_remaining > 1) {
@@ -61,8 +69,8 @@ class _WarmupScreenState extends State<WarmupScreen> {
         setState(() { _remaining = 0; _finished = true; _running = false; });
         t.cancel();
         _playSound();
-        // небольшая пауза, чтобы звук успел начаться, и возврат
-        Future.delayed(const Duration(milliseconds: 600), () {
+
+        Future.delayed(const Duration(milliseconds: 1500), () {
           if (mounted) _close(markDone: true);
         });
       }
@@ -76,9 +84,10 @@ class _WarmupScreenState extends State<WarmupScreen> {
 
   Future<void> _playSound() async {
     try {
+      // Используем play, а не resume, чтобы наверняка
       await _audioPlayer.play(AssetSource('sounds/warmup_done.mp3'));
-    } catch (_) {
-      // звук не критичен — если не проигрался, просто молчим
+    } catch (e) {
+      debugPrint('❌ ОШИБКА ВОСПРОИЗВЕДЕНИЯ ЗВУКА: $e');
     }
   }
 
@@ -88,7 +97,6 @@ class _WarmupScreenState extends State<WarmupScreen> {
     Navigator.pop(context, markDone ? _buildUpdatedSets() : null);
   }
 
-  /// Возвращает обновлённую копию setsData с отмеченными разминками.
   Map<int, List<SetData>> _buildUpdatedSets() {
     final updated = <int, List<SetData>>{};
     for (final w in widget.warmups) {
@@ -311,4 +319,3 @@ class _WarmupScreenState extends State<WarmupScreen> {
     );
   }
 }
-// ═══ ФАЙЛ warmup_screen.dart ЗАВЕРШЁН ═══

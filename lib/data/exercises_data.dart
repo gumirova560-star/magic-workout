@@ -3,7 +3,7 @@ import '../models/exercise.dart';
 List<Exercise> getExercisesPart1() {
   return [
     // ═══════════════════════════════════════════════════════════
-    //  ЯГОДИЦЫ (12 изоляций + базы)
+    //  ЯГОДИЦЫ
     // ═══════════════════════════════════════════════════════════
     Exercise(
       name: 'Ягодичный мост',
@@ -93,7 +93,6 @@ List<Exercise> getExercisesPart1() {
       tips: '• 10-12 повторений\n• Держите таз ровно',
       imagePath: 'assets/exercises/single_leg_glute_bridge.jpg',
     ),
-    // 👇 НОВЫЕ
     Exercise(
       name: 'Махи ногой назад (на четвереньках)',
       muscleGroups: ['glutes'],
@@ -171,16 +170,13 @@ List<Exercise> getExercisesPart1() {
       tips: '• 12-15 повторений\n• Контролируйте движение',
       imagePath: 'assets/exercises/cable_kickback_low.jpg',
     ),
-    // ═══════════════════════════════════════════════════════════
-    //  НОВЫЕ ЯГОДИЧНЫЕ (Базы и Изоляция)
-    // ═══════════════════════════════════════════════════════════
     Exercise(
       name: 'Реверанс-выпад',
       muscleGroups: ['glutes', 'quads'],
       equipment: ['dumbbells'],
       difficulty: 'intermediate',
       description: 'Отлично прорабатывает среднюю и большую ягодичную мышцу.',
-      technique: '1. Встаньте прямо, гантели в руках\n2. Сделайте шаг одной ногой назад и в сторону (крест-накрест)\n3. Присядьте\n4. Вернитесь в исходное положение',
+      technique: '1. Встаньте прямо, гантели в руках\n2. Сделайте шаг одной ногой назад и в сторону\n3. Присядьте\n4. Вернитесь в исходное положение',
       mistakes: '❌ Заваливание колена внутрь\n❌ Наклон корпуса вперёд',
       tips: '• 10-12 повторений на каждую ногу\n• Спина прямая',
       imagePath: 'assets/exercises/curtsy_lunge.jpg',
@@ -230,7 +226,7 @@ List<Exercise> getExercisesPart1() {
       imagePath: 'assets/exercises/frog_pump.jpg',
     ),
     // ═══════════════════════════════════════════════════════════
-    //  НОГИ (13 изоляций)
+    //  НОГИ
     // ═══════════════════════════════════════════════════════════
     Exercise(
       name: 'Приседания со штангой',
@@ -397,7 +393,6 @@ List<Exercise> getExercisesPart1() {
       tips: '• 12-15 повторений',
       imagePath: 'assets/exercises/single_leg_calf_raise_db.jpg',
     ),
-    // 👇 НОВЫЕ
     Exercise(
       name: 'Разгибание одной ноги в тренажёре',
       muscleGroups: ['quads'],
@@ -430,6 +425,64 @@ List<Exercise> getExercisesPart1() {
       mistakes: '❌ Резкие движения',
       tips: '• 15-20 повторений',
       imagePath: 'assets/exercises/calf_raise_band.jpg',
+    ),
+    Exercise(
+      name: 'Стульчик у стены',
+      muscleGroups: ['quads', 'glutes'],
+      equipment: ['bodyweight'],
+      difficulty: 'beginner',
+      description: 'Статическое упражнение для выносливости квадрицепса.',
+      technique: '1. Прислонитесь спиной к стене\n2. Опуститесь, будто сидите на стуле\n3. Держите угол 90 градусов',
+      mistakes: '❌ Колени выходят за носки\n❌ Оторванная от стены спина',
+      tips: '• Начните с 30 секунд\n• Следите за дыханием',
+      imagePath: 'assets/exercises/wall_sit.jpg',
+    ),
+    // ═══════════════════════════════════════════════════════════
+    //  НОВЫЕ ДОМАШНИЕ (ДОБАВЛЕНЫ)
+    // ═══════════════════════════════════════════════════════════
+    Exercise(
+      name: 'Отведение ноги в сторону стоя',
+      muscleGroups: ['glutes'],
+      equipment: ['bodyweight'],
+      difficulty: 'beginner',
+      description: 'Простое упражнение для средней ягодичной мышцы без инвентаря.',
+      technique: '1. Встаньте прямо, придерживайтесь за опору\n2. Отведите ногу в сторону\n3. Задержитесь\n4. Медленно вернитесь',
+      mistakes: '❌ Наклон корпуса в сторону\n❌ Быстрый темп',
+      tips: '• 15-20 повторений на ногу\n• Держите корпус ровно',
+      imagePath: 'assets/exercises/standing_leg_abduction.jpg',
+    ),
+    Exercise(
+      name: 'Обратные выпады с собственным весом',
+      muscleGroups: ['glutes', 'quads'],
+      equipment: ['bodyweight'],
+      difficulty: 'beginner',
+      description: 'Безопасный вариант выпадов без инвентаря.',
+      technique: '1. Встаньте прямо\n2. Сделайте шаг назад\n3. Опуститесь до прямого угла\n4. Вернитесь',
+      mistakes: '❌ Заваливание колена внутрь\n❌ Наклон корпуса вперед',
+      tips: '• 10-12 повторений на ногу\n• Спина прямая',
+      imagePath: 'assets/exercises/reverse_lunge_bodyweight.jpg',
+    ),
+    Exercise(
+      name: 'Боковые выпады с собственным весом',
+      muscleGroups: ['legs', 'glutes'],
+      equipment: ['bodyweight'],
+      difficulty: 'beginner',
+      description: 'Упражнение для внутренней поверхности бедра и ягодиц.',
+      technique: '1. Сделайте широкий шаг в сторону\n2. Присядьте, отводя таз назад\n3. Вернитесь в исходное',
+      mistakes: '❌ Округление спины\n❌ Колено выходит за носок',
+      tips: '• 10-12 повторений на ногу',
+      imagePath: 'assets/exercises/side_lunge_bodyweight.jpg',
+    ),
+    Exercise(
+      name: 'Приседания сумо с собственным весом',
+      muscleGroups: ['glutes', 'quads', 'adductors'],
+      equipment: ['bodyweight'],
+      difficulty: 'beginner',
+      description: 'Приседания с широкой постановкой ног.',
+      technique: '1. Поставьте ноги широко, носки развернуты в стороны\n2. Присядьте\n3. Вернитесь',
+      mistakes: '❌ Сведение коленей внутрь\n❌ Отрыв пяток от пола',
+      tips: '• 15-20 повторений\n• Колени смотрят в стороны носков',
+      imagePath: 'assets/exercises/sumo_squat_bodyweight.jpg',
     ),
     // ═══════════════════════════════════════════════════════════
     //  СТОПЫ И ГОЛЕНОСТОП
@@ -502,16 +555,11 @@ List<Exercise> getExercisesPart1() {
     ),
   ];
 }
-// ═══ КОНЕЦ ЧАСТИ 1 ИЗ 5 ═══
-// ═══════════════════════════════════════════════════════════════
-// ЧАСТЬ 2 из 5 — Пресс (12 изоляций) и Руки (12 изоляций)
-// Вставляется сразу после Части 1.
-// ═══════════════════════════════════════════════════════════════
-
+// ═══ КОНЕЦ ЧАСТИ 1 ИЗ 4 ═══
 List<Exercise> getExercisesPart2() {
   return [
     // ═══════════════════════════════════════════════════════════
-    //  ПРЕСС ПРЯМОЙ И КОСЫЕ (12 изоляций)
+    //  ПРЕСС ПРЯМОЙ И КОСЫЕ
     // ═══════════════════════════════════════════════════════════
     Exercise(
       name: 'Скручивания',
@@ -634,7 +682,6 @@ List<Exercise> getExercisesPart2() {
       tips: '• 20 поворотов',
       imagePath: 'assets/exercises/torso_twist.jpg',
     ),
-    // 👇 НОВЫЕ
     Exercise(
       name: 'Подъём ног в висе на турнике (согнутые)',
       muscleGroups: ['abs'],
@@ -690,9 +737,42 @@ List<Exercise> getExercisesPart2() {
       tips: '• 12 повторений на сторону',
       imagePath: 'assets/exercises/side_plank_hip_dip.jpg',
     ),
+    Exercise(
+      name: 'Dead Bug',
+      muscleGroups: ['core', 'abs'],
+      equipment: ['bodyweight'],
+      difficulty: 'beginner',
+      description: 'Упражнение на глубокий кор.',
+      technique: '1. Лягте на спину\n2. Опускайте противоположные руку и ногу\n3. Вернитесь',
+      mistakes: '❌ Прогиб в пояснице\n❌ Слишком быстро',
+      tips: '• 10 повторений на сторону',
+      imagePath: 'assets/exercises/dead_bug.jpg',
+    ),
+    Exercise(
+      name: 'Bird Dog',
+      muscleGroups: ['core', 'lower_back', 'glutes'],
+      equipment: ['bodyweight'],
+      difficulty: 'beginner',
+      description: 'Стабилизация кора.',
+      technique: '1. На четвереньках\n2. Поднимите противоположные руку и ногу\n3. Задержитесь',
+      mistakes: '❌ Прогиб\n❌ Раскачивание',
+      tips: '• 10 повторений на сторону',
+      imagePath: 'assets/exercises/bird_dog.jpg',
+    ),
+    Exercise(
+      name: 'Вакуум живота',
+      muscleGroups: ['core', 'abs'],
+      equipment: ['bodyweight'],
+      difficulty: 'intermediate',
+      description: 'Упражнение для глубоких мышц живота.',
+      technique: '1. Сделайте глубокий вдох\n2. На выдохе втяните живот\n3. Задержите',
+      mistakes: '❌ Задержка дыхания\n❌ Короткая задержка',
+      tips: '• 10 повторений\n• Натощак',
+      imagePath: 'assets/exercises/stomach_vacuum.jpg',
+    ),
 
     // ═══════════════════════════════════════════════════════════
-    //  РУКИ (12 изоляций)
+    //  РУКИ
     // ═══════════════════════════════════════════════════════════
     Exercise(
       name: 'Подъём гантелей на бицепс',
@@ -793,7 +873,6 @@ List<Exercise> getExercisesPart2() {
       tips: '• 12-15 повторений',
       imagePath: 'assets/exercises/tricep_pushdown.jpg',
     ),
-    // 👇 НОВЫЕ
     Exercise(
       name: 'Подъем на бицепс на скамье Скотта',
       muscleGroups: ['biceps'],
@@ -829,16 +908,11 @@ List<Exercise> getExercisesPart2() {
     ),
   ];
 }
-// ═══ КОНЕЦ ЧАСТИ 2 ИЗ 5 ═══
-// ═══════════════════════════════════════════════════════════════
-// ЧАСТЬ 3 из 5 — Спина (12 изоляций) и Грудь (12 изоляций)
-// Вставляется сразу после Части 2.
-// ═══════════════════════════════════════════════════════════════
-
+// ═══ КОНЕЦ ЧАСТИ 2 ИЗ 4 ═══
 List<Exercise> getExercisesPart3() {
   return [
     // ═══════════════════════════════════════════════════════════
-    //  СПИНА (12 изоляций)
+    //  СПИНА
     // ═══════════════════════════════════════════════════════════
     Exercise(
       name: 'Подтягивания',
@@ -950,7 +1024,6 @@ List<Exercise> getExercisesPart3() {
       tips: '• 10-12 повторений',
       imagePath: 'assets/exercises/superman.jpg',
     ),
-    // 👇 НОВЫЕ
     Exercise(
       name: 'Тяга нижнего блока к поясу',
       muscleGroups: ['lats', 'back'],
@@ -1019,7 +1092,7 @@ List<Exercise> getExercisesPart3() {
     ),
 
     // ═══════════════════════════════════════════════════════════
-    //  ГРУДЬ (12 изоляций)
+    //  ГРУДЬ
     // ═══════════════════════════════════════════════════════════
     Exercise(
       name: 'Жим штанги лёжа',
@@ -1076,7 +1149,6 @@ List<Exercise> getExercisesPart3() {
       tips: '• 12-15 повторений',
       imagePath: 'assets/exercises/pec_deck.jpg',
     ),
-    // 👇 НОВЫЕ
     Exercise(
       name: 'Жим гантелей лёжа на наклонной скамье',
       muscleGroups: ['chest', 'shoulders'],
@@ -1156,16 +1228,11 @@ List<Exercise> getExercisesPart3() {
     ),
   ];
 }
-// ═══ КОНЕЦ ЧАСТИ 3 ИЗ 5 ═══
-// ═══════════════════════════════════════════════════════════════
-// ЧАСТЬ 4 из 5 — Плечи (12 изоляций) и Кардио (15 упражнений)
-// Вставляется сразу после Части 3.
-// ═══════════════════════════════════════════════════════════════
-
+// ═══ КОНЕЦ ЧАСТИ 3 ИЗ 4 ═══
 List<Exercise> getExercisesPart4() {
   return [
     // ═══════════════════════════════════════════════════════════
-    //  ПЛЕЧИ (12 изоляций)
+    //  ПЛЕЧИ
     // ═══════════════════════════════════════════════════════════
     Exercise(
       name: 'Жим гантелей сидя',
@@ -1266,7 +1333,6 @@ List<Exercise> getExercisesPart4() {
       tips: '• 10-12 повторений',
       imagePath: 'assets/exercises/arnold_press.jpg',
     ),
-    // 👇 НОВЫЕ
     Exercise(
       name: 'Тяга гантелей к подбородку',
       muscleGroups: ['shoulders', 'traps'],
@@ -1335,7 +1401,7 @@ List<Exercise> getExercisesPart4() {
     ),
 
     // ═══════════════════════════════════════════════════════════
-    //  КАРДИО (15 упражнений)
+    //  КАРДИО
     // ═══════════════════════════════════════════════════════════
     Exercise(
       name: 'Бег на дорожке',
@@ -1504,16 +1570,11 @@ List<Exercise> getExercisesPart4() {
     ),
   ];
 }
-// ═══ КОНЕЦ ЧАСТИ 4 ИЗ 5 ═══
-// ═══════════════════════════════════════════════════════════════
-// ЧАСТЬ 5 из 5 — Ротаторная манжета, Кор и объединяющая функция
-// Вставляется сразу после Части 4. ЗАВЕРШАЕТ ФАЙЛ.
-// ═══════════════════════════════════════════════════════════════
 
 List<Exercise> getExercisesPart5() {
   return [
     // ═══════════════════════════════════════════════════════════
-    //  РОТАТОРНАЯ МАНЖЕТА (3)
+    //  РОТАТОРНАЯ МАНЖЕТА
     // ═══════════════════════════════════════════════════════════
     Exercise(
       name: 'Наружная ротация плеча с резинкой',
@@ -1550,7 +1611,7 @@ List<Exercise> getExercisesPart5() {
     ),
 
     // ═══════════════════════════════════════════════════════════
-    //  КОР (3)
+    //  КОР
     // ═══════════════════════════════════════════════════════════
     Exercise(
       name: 'Dead Bug',
@@ -1601,4 +1662,4 @@ List<Exercise> getExercisesData() {
     ...getExercisesPart5(),
   ];
 }
-// ═══ ФАЙЛ exercises_data.dart ЗАВЕРШЁН ═══
+// ═══ КОНЕЦ ФАЙЛА exercises_data.dart ═══

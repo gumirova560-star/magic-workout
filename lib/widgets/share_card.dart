@@ -4,13 +4,22 @@ enum ShareCardMode { workout, week, cycle, challenge }
 
 class ShareCard extends StatelessWidget {
   final ShareCardMode mode;
-  final String userName;
+  final String userName; // Оставили для совместимости, но больше не используем в тексте
   final String title;
   final int minutes;
   final int exercisesCount;
   final int workoutsCount;
   final int streakWeeks;
-  final String? challengeStat; // 👈 Добавлено поле для текста челленджа
+
+  // 👇 НОВЫЕ ПАРАМЕТРЫ ДЛЯ ЧЕЛЛЕНДЖЕЙ
+  final String? challengeStat;
+  final String? challengeMainStat;
+  final String? challengeSubStat;
+  final String? challengeTimeStat;
+
+  // 👇 НОВЫЕ ПАРАМЕТРЫ ДЛЯ НЕДЕЛЬ
+  final bool isWeekInProgress;
+  final int plannedDays;
 
   const ShareCard({
     super.key,
@@ -21,7 +30,12 @@ class ShareCard extends StatelessWidget {
     required this.exercisesCount,
     required this.workoutsCount,
     required this.streakWeeks,
-    this.challengeStat, // 👈
+    this.challengeStat,
+    this.challengeMainStat,
+    this.challengeSubStat,
+    this.challengeTimeStat,
+    this.isWeekInProgress = false,
+    this.plannedDays = 3,
   });
 
   String get _minutesLabel {
@@ -80,10 +94,10 @@ class ShareCard extends StatelessWidget {
 
   Color get _accent {
     switch (mode) {
-      case ShareCardMode.workout: return const Color(0xFF6C5CE7); // Фиолетовый
-      case ShareCardMode.week: return const Color(0xFF4834D4);    // Индиго
-      case ShareCardMode.cycle: return const Color(0xFF8E44AD);   // Пурпурный
-      case ShareCardMode.challenge: return const Color(0xFFFFA000); // 👈 Яркий желто-оранжевый
+      case ShareCardMode.workout: return const Color(0xFF6C5CE7);
+      case ShareCardMode.week: return const Color(0xFF4834D4);
+      case ShareCardMode.cycle: return const Color(0xFF8E44AD);
+      case ShareCardMode.challenge: return const Color(0xFFFFA000);
     }
   }
 
@@ -166,7 +180,11 @@ class ShareCard extends StatelessWidget {
                 ),
                 const Spacer(),
 
-                Text('Привет, $userName!', style: const TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w500)),
+                // 👇 ЗАМЕНИЛИ ПРИВЕТСТВИЕ
+                Text(
+                    mode == ShareCardMode.challenge ? 'Настоящий вызов!' : 'Вызов принят!',
+                    style: const TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w500)
+                ),
                 const SizedBox(height: 8),
                 Text(_headline, style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, height: 1.1)),
                 const SizedBox(height: 8),
@@ -180,22 +198,34 @@ class ShareCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
 
+                // 👇 УМНАЯ ЛОГИКА ПЛАШЕК
                 Row(
                   children: [
-                    Expanded(
+                    if (mode == ShareCardMode.challenge) ...[
+                      // ЧЕЛЛЕНДЖИ
+                      Expanded(child: _buildStatTile(Icons.emoji_events_rounded, challengeMainStat ?? 'Готово')),
+                      const SizedBox(width: 10),
+                      Expanded(child: _buildStatTile(Icons.timer_rounded, challengeSubStat ?? '—')),
+                      const SizedBox(width: 10),
+                      Expanded(child: _buildStatTile(Icons.local_fire_department_rounded, challengeTimeStat ?? '1-й раз')),
+                    ] else ...[
+                      // ОБЫЧНЫЕ ТРЕНИРОВКИ
+                      Expanded(
+                          child: _buildStatTile(
+                              mode == ShareCardMode.workout ? Icons.timer_rounded : Icons.fitness_center_rounded,
+                              mode == ShareCardMode.workout ? _minutesLabel : _workoutsLabel
+                          )
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(child: _buildStatTile(Icons.fitness_center_rounded, _exercisesLabel)),
+                      const SizedBox(width: 10),
+                      Expanded(
                         child: _buildStatTile(
-                            mode == ShareCardMode.challenge ? Icons.emoji_events_rounded : Icons.timer_rounded,
-                            mode == ShareCardMode.workout
-                                ? _minutesLabel
-                                : (mode == ShareCardMode.challenge
-                                ? (challengeStat ?? 'Челлендж') // 👈 Используем переданный текст
-                                : _workoutsLabel)
-                        )
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(child: _buildStatTile(Icons.fitness_center_rounded, _exercisesLabel)),
-                    const SizedBox(width: 10),
-                    Expanded(child: _buildStatTile(Icons.local_fire_department_rounded, _streakLabel)),
+                          Icons.local_fire_department_rounded,
+                          isWeekInProgress ? '$streakWeeks из $plannedDays' : _streakLabel,
+                        ),
+                      ),
+                    ]
                   ],
                 ),
                 const Spacer(),

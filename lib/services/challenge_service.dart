@@ -1,6 +1,7 @@
 import '../models/daily_challenge.dart';
 import '../data/challenge_data.dart';
 import 'database_helper.dart';
+import 'energy_service.dart';
 
 class ChallengeService {
   // Получить задание на сегодня (или создать новое, если его нет)
@@ -8,14 +9,12 @@ class ChallengeService {
     final db = await DatabaseHelper.instance.database;
     final today = DateTime.now().toIso8601String().split('T')[0];
 
-    // Ищем задание на сегодня
     final maps = await db.query('daily_challenges', where: 'profileId = ? AND date = ?', whereArgs: [profileId, today]);
 
     if (maps.isNotEmpty) {
       return DailyChallenge.fromMap(maps.first);
     }
 
-    // Если нет — выбираем случайное
     final randomConfig = (List.from(kDailyChallenges)..shuffle()).first;
 
     final newChallenge = DailyChallenge(
@@ -59,7 +58,52 @@ class ChallengeService {
 
     await db.update('daily_challenges', {
       'targetValue': newTarget,
-      'isCompleted': 0, // Сбрасываем галочку, чтобы пользователь доделал
+      'isCompleted': 0,
     }, where: 'id = ?', whereArgs: [challengeId]);
+  }
+
+  // 👇 НОВЫЙ МЕТОД: атомарно выдаёт награду. Возвращает true, если это первое начисление.
+  static Future<bool> tryAwardReward({
+    required int profileId,
+    required int challengeId,
+    required int energyAmount,
+  }) async {
+    final db = await DatabaseHelper.instance.database;
+
+    // 1. Проверяем флаг в самой строке челленджа
+    final maps = await db.query(
+      'daily_challenges',
+      columns: ['rewardGranted', 'isCompleted'],
+      where: 'id = ?',
+      whereArgs: [challengeId],
+      limit: 1,
+    );
+    if (maps.isEmpty) return false;
+    final row = maps.first;
+    final alreadyGranted = (row['rewardGranted'] as int? ?? 0) == 1;
+    final isCompleted = (row['isCompleted'] as int? ?? 0) == 1;
+
+    // Награду выдаём только если челлендж выполнен и ещё не выдавался
+    if (!isCompleted || alreadyGranted) return false;
+
+    // 2. Пытаемся начислить энергию (внутри UNIQUE-защита по reason+refId)
+    final success = await EnergyService.addEnergy(
+      profileId: profileId,
+      delta: energyAmount,
+      reason: 'challenge_completed',
+      refId: challengeId,
+    );
+
+    // 3. Ставим флаг в челлендже (чтобы UI больше не пытался)
+    if (success) {
+      await db.update(
+        'daily_challenges',
+        {'rewardGranted': 1},
+        where: 'id = ?',
+        whereArgs: [challengeId],
+      );
+    }
+
+    return success;
   }
 }

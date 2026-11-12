@@ -55,6 +55,7 @@ dependencies:
 
   # ═══ Звук (разминка) ═══
   audioplayers: ^6.0.0
+  wakelock_plus: ^1.5.2
 
 dev_dependencies:
   flutter_test:

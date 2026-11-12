@@ -3,6 +3,10 @@ import '../models/daily_challenge.dart';
 import '../data/challenge_data.dart';
 import '../services/challenge_service.dart';
 import '../screens/challenge/cumulative_challenge_screen.dart';
+import '../screens/challenge/hold_challenge_screen.dart';
+import '../screens/challenge/timer_challenge_screen.dart';
+import '../screens/challenge/photo_challenge_screen.dart';
+import '../screens/challenge/circuit_challenge_screen.dart'; // 👈 НОВЫЙ ИМПОРТ
 
 class DailyChallengeCard extends StatefulWidget {
   final int profileId;
@@ -33,7 +37,6 @@ class _DailyChallengeCardState extends State<DailyChallengeCard> {
         });
       }
     } catch (e) {
-      // Защита от вечной загрузки: Если произошла ошибка (например, нет таблицы в БД), скрываем карточку
       debugPrint('Ошибка загрузки челленджа: $e');
       if (mounted) {
         setState(() {
@@ -58,6 +61,47 @@ class _DailyChallengeCardState extends State<DailyChallengeCard> {
           ),
         ),
       ).then((_) => _loadChallenge());
+    } else if (config.type == 'hold') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => HoldChallengeScreen(
+            profileId: widget.profileId,
+            challenge: _challenge!,
+          ),
+        ),
+      ).then((_) => _loadChallenge());
+    } else if (config.type == 'timer') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TimerChallengeScreen(
+            profileId: widget.profileId,
+            challenge: _challenge!,
+          ),
+        ),
+      ).then((_) => _loadChallenge());
+    } else if (config.type == 'photo') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PhotoChallengeScreen(
+            profileId: widget.profileId,
+            challenge: _challenge!,
+          ),
+        ),
+      ).then((_) => _loadChallenge());
+    } else if (config.type == 'circuit') {
+      // 👇 НОВЫЙ РОУТ ДЛЯ УТРЕННЕГО ВЗРЫВА
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CircuitChallengeScreen(
+            profileId: widget.profileId,
+            challenge: _challenge!,
+          ),
+        ),
+      ).then((_) => _loadChallenge());
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Этот тип челленджа мы скоро добавим! 🚧')),
@@ -67,7 +111,9 @@ class _DailyChallengeCardState extends State<DailyChallengeCard> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const SizedBox(height: 100, child: Center(child: CircularProgressIndicator()));
+    if (_loading) {
+      return const SizedBox(height: 100, child: Center(child: CircularProgressIndicator()));
+    }
     if (_challenge == null) return const SizedBox.shrink();
 
     final config = kDailyChallenges.firstWhere((c) => c.id == _challenge!.taskId);
@@ -94,7 +140,6 @@ class _DailyChallengeCardState extends State<DailyChallengeCard> {
           ),
           child: Row(
             children: [
-              // 👇 ЗАМЕНА ЭМОДЗИ НА ИКОНКУ
               Container(
                 width: 56,
                 height: 56,
@@ -115,22 +160,37 @@ class _DailyChallengeCardState extends State<DailyChallengeCard> {
                   children: [
                     const Text(
                       'Челлендж дня',
-                      style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       config.title,
-                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     if (isDone)
-                      const Text('Выполнено! ✅', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+                      const Text(
+                        'Выполнено! ✅',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      )
                     else
-                      Text('Прогресс: ${_challenge!.currentProgress} из ${_challenge!.targetValue}', style: const TextStyle(color: Colors.white)),
+                      Text(
+                        'Прогресс: ${_challenge!.currentProgress} из ${_challenge!.targetValue}',
+                        style: const TextStyle(color: Colors.white),
+                      ),
                   ],
                 ),
               ),
-              if (!isDone) const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 20),
+              if (!isDone)
+                const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 20),
             ],
           ),
         ),

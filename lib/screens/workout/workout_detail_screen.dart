@@ -246,13 +246,11 @@ _setIds.addAll(setIds);
 return;
 }
 
-// ОБЫЧНАЯ ТРЕНИРОВКА
 _workoutDayId = day.id;
 _completed = day.status == 'completed';
 _started = day.status == 'completed' || day.status == 'in_progress';
 final workoutExs = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
 
-// УДАЛЕНИЕ ДУБЛИКАТОВ
 final Map<String, List<WorkoutExercise>> groupedExs = {};
 for (final we in workoutExs) {
 String key = '${we.itemType}_${we.itemId}';
@@ -335,7 +333,6 @@ ids.add(s.id!);
 }
 }
 
-// 👇 ЗАГРУЖАЕМ РЕКОРДЫ ВСЕГДА (ДАЖЕ БЕЗ ВЕСА)
 if (!item.isWarmup && !item.isCoolDown && item.itemType == 'exercise') {
 final lastSets = await _getSmartPrevSets(item.replacedByItemId ?? item.itemId, day.weekNumber ?? 1, day.cycleNumber);
 if (lastSets.isNotEmpty) {
@@ -752,7 +749,6 @@ else _collapsedCircles.add(key);
 
 void _showMessage(String text) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 
-// 👇👇👇 ФИКС: УМНОЕ И РАВНОМЕРНОЕ РАСПРЕДЕЛЕНИЕ БЛОКОВ
 Map<int, int> _computeBlockDistribution() {
 final Map<int, int> distribution = {};
 if (_day?.type == 'challenge') return distribution;
@@ -760,7 +756,7 @@ if (_day?.type == 'challenge') return distribution;
 bool hasStored = false;
 for (int i = 0; i < _items.length; i++) {
 final item = _items[i];
-if (item.isWarmup) continue;
+if (item.isWarmup || item.order == 150) continue;
 final bn = item.blockNumber;
 if (bn != null) {
 distribution[i] = bn;
@@ -773,7 +769,7 @@ final List<int> baseIndices = [];
 final List<int> isolationIndices = [];
 for (int i = 0; i < _items.length; i++) {
 final item = _items[i];
-if (item.isCoolDown || item.isWarmup) continue;
+if (item.isCoolDown || item.isWarmup || item.order == 150) continue;
 final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
 if (ex == null || _isCardio(ex)) continue;
 if (isBaseExercise(ex)) baseIndices.add(i);
@@ -790,9 +786,8 @@ return distribution;
 final int baseCount = baseIndices.length;
 final int isoCount = isolationIndices.length;
 
-// 1 база + до 2 изоляций (если изоляций много, распределим равномерно)
 int isoPerBase = isoCount == 0 ? 0 : (isoCount / baseCount).ceil().clamp(1, 2);
-if (isoCount < baseCount) isoPerBase = 1; // Если изоляций меньше баз, по 1 на блок
+if (isoCount < baseCount) isoPerBase = 1;
 
 int isoIndex = 0;
 for (int b = 0; b < baseCount; b++) {
@@ -804,10 +799,10 @@ int remainingIso = isoCount - isoIndex;
 int maxForThisBlock = isoPerBase;
 
 if (remainingBases > 0) {
-final minForRest = remainingBases * 1; // оставляем минимум по 1 изоляции на остальные базы
+final minForRest = remainingBases * 1;
 maxForThisBlock = (remainingIso - minForRest).clamp(0, isoPerBase);
 } else {
-maxForThisBlock = remainingIso; // последнему блоку отдаем все остатки
+maxForThisBlock = remainingIso;
 }
 
 int taken = 0;
@@ -818,7 +813,6 @@ taken++;
 }
 }
 
-// Если остались изоляции, кидаем их в последний блок
 while (isoIndex < isolationIndices.length) {
 distribution[isolationIndices[isoIndex]] = baseCount;
 isoIndex++;
@@ -826,7 +820,6 @@ isoIndex++;
 
 return distribution;
 }
-// 👆👆👆 КОНЕЦ ФИКСА
 
 Future<void> _createBlocks() async {
 if (_workoutDayId == null) return;
@@ -917,7 +910,6 @@ _showMessage('Тренировка началась! 💪');
 Future<void> _finishWorkout() async {
 if (_workoutDayId == null) return;
 
-// 👇 ПРИНУДИТЕЛЬНОЕ СОХРАНЕНИЕ ВСЕХ ПОДХОДОВ ПЕРЕД ПРОВЕРКОЙ (ФИКС "30 ИЗ 33")
 final preUpdates = <Future>[];
 for (final item in _items) {
 if (item.isCoolDown || item.isWarmup || item.id == null) continue;
@@ -934,7 +926,6 @@ weight: sets[i].weight, reps: sets[i].reps, completed: sets[i].completed,
 }
 }
 if (preUpdates.isNotEmpty) await Future.wait(preUpdates);
-// 👆 КОНЕЦ ФИКСА
 
 int completedSets = 0;
 int totalSets = 0;
@@ -1208,9 +1199,28 @@ if (reason == null) return;
 final result = await Navigator.push<Map<String, dynamic>>(context, MaterialPageRoute(builder: (_) => ReplaceExerciseScreen(original: original, reasonCode: reason)));
 if (result == null) return;
 
+_applyReplacement(item, original, result);
+}
+
+Future<void> _quickReplaceExercise(WorkoutExercise item, Exercise original) async {
+final result = await Navigator.push<Map<String, dynamic>>(
+context,
+MaterialPageRoute(
+builder: (_) => ReplaceExerciseScreen(
+original: original,
+reasonCode: null,
+),
+),
+);
+if (result == null) return;
+
+_applyReplacement(item, original, result);
+}
+
+void _applyReplacement(WorkoutExercise item, Exercise original, Map<String, dynamic> result) async {
 final newExercise = result['newExercise'] as Exercise;
 final permanent = result['permanent'] as bool;
-final reasonCode = result['reason'] as String;
+final reasonCode = result['reason'] as String? ?? 'other';
 
 final isAlreadyInWorkout = _items.any((i) =>
 i.id != item.id &&
@@ -1468,59 +1478,127 @@ _showMessage('Упражнение удалено');
     );
   }
 
-  List<Widget> _buildUnblockedList(BuildContext context) {
-    final List<WorkoutExercise> displayItems = [];
-    final warmups = _items.where((i) => i.isWarmup).toList();
-    final coolDowns = _items.where((i) => i.isCoolDown).toList();
-    final strength = _items.where((i) {
-      if (i.isCoolDown || i.isWarmup) return false;
-      final ex = _exerciseMap[i.replacedByItemId ?? i.itemId];
-      return ex != null && !_isCardio(ex);
-    }).toList();
-    final cardio = _items.where((i) {
-      if (i.isCoolDown || i.isWarmup) return false;
-      final ex = _exerciseMap[i.replacedByItemId ?? i.itemId];
-      return ex != null && _isCardio(ex);
-    }).toList();
+  Widget _buildCoolDownHeader(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF00B894).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF00B894).withOpacity(0.3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('🧘‍♀️', style: TextStyle(fontSize: 24)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Заминка и восстановление',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF00B894)),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'После тренировки не забудь раскатать мышцы на ролике (МФР). А прямо сейчас — сделай растяжку ниже, чтобы снять напряжение и закрепить результат!',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: const Color(0xFF00B894).withOpacity(0.9),
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-    final isLoseWeight = _profile?.goal == 'lose_weight' || (_profile?.goal.contains('weight') ?? false) || (_profile?.goal.contains('lose') ?? false);
-    if (isLoseWeight) {
-      int sIdx = 0;
-      int cIdx = 0;
-      int strengthCounter = 0;
-      while (sIdx < strength.length || cIdx < cardio.length) {
-        if (sIdx < strength.length) {
-          displayItems.add(strength[sIdx++]);
-          strengthCounter++;
-          if (strengthCounter == 3 && cIdx < cardio.length) {
-            displayItems.add(cardio[cIdx++]);
-            strengthCounter = 0;
-          }
-        } else if (cIdx < cardio.length) {
-          displayItems.add(cardio[cIdx++]);
-        }
+  List<Widget> _buildUnblockedList(BuildContext context) {
+    final warmupCardio = <WorkoutExercise>[];
+    final warmupStretches = <WorkoutExercise>[];
+    final coolDowns = <WorkoutExercise>[];
+    final bonus = <WorkoutExercise>[];
+    final strength = <WorkoutExercise>[];
+    final cardio = <WorkoutExercise>[];
+
+    for (final i in _items) {
+      if (i.isWarmup) {
+        if (i.itemType == 'exercise') warmupCardio.add(i);
+        else warmupStretches.add(i);
+        continue;
       }
-    } else {
-      displayItems.addAll(strength);
-      displayItems.addAll(cardio);
+      if (i.isCoolDown) { coolDowns.add(i); continue; }
+      if (i.order == 150) { bonus.add(i); continue; }
+
+      final ex = _exerciseMap[i.replacedByItemId ?? i.itemId];
+      if (ex == null) continue;
+      if (_isCardio(ex)) cardio.add(i);
+      else strength.add(i);
     }
 
-    return [
-      if (warmups.isNotEmpty) SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0), child: _buildWarmupCard(context, warmups))),
-      SliverPadding(
+    final List<Widget> slivers = [];
+
+    if (warmupCardio.isNotEmpty) {
+      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0), child: Text('🔥 Кардио-разминка', style: Theme.of(context).textTheme.headlineMedium))));
+      slivers.add(SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+        sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) {
+          final ex = _exerciseMap[warmupCardio[idx].itemId];
+          if (ex == null) return const SizedBox.shrink();
+          return _buildExerciseCardWidget(context, warmupCardio[idx], ex);
+        }, childCount: warmupCardio.length)),
+      ));
+    }
+    if (warmupStretches.isNotEmpty) {
+      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0), child: _buildWarmupCard(context, warmupStretches))));
+    }
+
+    if (strength.isNotEmpty) {
+      slivers.add(SliverPadding(
         padding: const EdgeInsets.all(16),
         sliver: SliverList(
           delegate: SliverChildBuilderDelegate(
-                (context, i) => _buildItemCard(context, displayItems[i], index: i + 1),
-            childCount: displayItems.length,
+                (context, i) => _buildItemCard(context, strength[i], index: i + 1),
+            childCount: strength.length,
           ),
         ),
-      ),
-      if (coolDowns.isNotEmpty) ...[
-        SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF00B894).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Заминка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFF00B894))))]))),
-        SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 0), sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) => _buildStretchCard(context, coolDowns[idx]), childCount: coolDowns.length))),
-      ],
-    ];
+      ));
+    }
+
+    if (bonus.isNotEmpty) {
+      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [const Text('💡', style: TextStyle(fontSize: 18)), const SizedBox(width: 8), const Text('На забытые зоны', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFFFFB800)))]))));
+      slivers.add(SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) {
+          final ex = _exerciseMap[bonus[idx].itemId];
+          if (ex == null) return const SizedBox.shrink();
+          return _buildExerciseCardWidget(context, bonus[idx], ex);
+        }, childCount: bonus.length)),
+      ));
+    }
+
+    if (cardio.isNotEmpty) {
+      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFE17055).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Кардио / Добивка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFFE17055))))]))));
+      slivers.add(SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) {
+          final ex = _exerciseMap[cardio[idx].itemId];
+          if (ex == null) return const SizedBox.shrink();
+          return _buildExerciseCardWidget(context, cardio[idx], ex);
+        }, childCount: cardio.length)),
+      ));
+    }
+
+    if (coolDowns.isNotEmpty) {
+      slivers.add(SliverToBoxAdapter(child: _buildCoolDownHeader(context)));
+      slivers.add(SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 0), sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) => _buildStretchCard(context, coolDowns[idx]), childCount: coolDowns.length))));
+    }
+
+    return slivers;
   }
 
   Widget _buildWarmupCard(BuildContext context, List<WorkoutExercise> warmups) {
@@ -1544,7 +1622,7 @@ _showMessage('Упражнение удалено');
               Container(width: 44, height: 44, decoration: BoxDecoration(gradient: LinearGradient(colors: [accent, accent.withOpacity(0.7)]), borderRadius: BorderRadius.circular(12)), child: Icon(allDone ? Icons.check_rounded : Icons.local_fire_department_rounded, color: Colors.white, size: 24)),
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Разминка', style: theme.textTheme.headlineMedium),
+                Text('Разминка (Суставная)', style: theme.textTheme.headlineMedium),
                 const SizedBox(height: 2),
                 Text('Махи и вращения · 3 мин', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6))),
               ])),
@@ -1561,17 +1639,24 @@ _showMessage('Упражнение удалено');
   List<Widget> _buildCircuitsSlivers(BuildContext context) {
     final slivers = <Widget>[];
     final Map<int, List<WorkoutExercise>> blocks = {};
-    final List<WorkoutExercise> warmups = [];
+    final List<WorkoutExercise> warmupCardio = [];
+    final List<WorkoutExercise> warmupStretches = [];
     final List<WorkoutExercise> coolDowns = [];
+    final List<WorkoutExercise> bonus = [];
     final List<WorkoutExercise> cardios = [];
 
     for (int i = 0; i < _items.length; i++) {
       final item = _items[i];
-      if (item.isWarmup) { warmups.add(item); continue; }
+      if (item.isWarmup) {
+        if (item.itemType == 'exercise') warmupCardio.add(item);
+        else warmupStretches.add(item);
+        continue;
+      }
       if (item.isCoolDown) { coolDowns.add(item); continue; }
+      if (item.order == 150) { bonus.add(item); continue; }
+
       final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
-      final isCardio = ex != null && _isCardio(ex);
-      if (isCardio) {
+      if (ex != null && _isCardio(ex)) {
         cardios.add(item);
       } else {
         final blockNum = _pendingBlocks[i] ?? 99;
@@ -1580,8 +1665,19 @@ _showMessage('Упражнение удалено');
       }
     }
 
-    if (warmups.isNotEmpty) {
-      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0), child: _buildWarmupCard(context, warmups))));
+    if (warmupCardio.isNotEmpty) {
+      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Text('🔥 Кардио-разминка', style: Theme.of(context).textTheme.headlineMedium))));
+      slivers.add(SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) {
+          final ex = _exerciseMap[warmupCardio[idx].itemId];
+          if (ex == null) return const SizedBox.shrink();
+          return _buildExerciseCardWidget(context, warmupCardio[idx], ex);
+        }, childCount: warmupCardio.length)),
+      ));
+    }
+    if (warmupStretches.isNotEmpty) {
+      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0), child: _buildWarmupCard(context, warmupStretches))));
     }
 
     final bool isWeightLoss = _profile?.goal == 'lose_weight' || (_profile?.goal.contains('weight') ?? false) || (_profile?.goal.contains('lose') ?? false);
@@ -1591,14 +1687,10 @@ _showMessage('Упражнение удалено');
 
     void addBlockToSlivers(int blockNum) {
       final blockItems = blocks[blockNum]!;
-
-      // 👇 ФИКС: Динамическое количество кругов (чтобы профи видел свои 4 подхода)
       int maxCircles = 3;
       for (final item in blockItems) {
         final sets = _setsData[item.id];
-        if (sets != null && sets.length > maxCircles) {
-          maxCircles = sets.length;
-        }
+        if (sets != null && sets.length > maxCircles) maxCircles = sets.length;
       }
 
       for (int circle = 0; circle < maxCircles; circle++) {
@@ -1609,7 +1701,11 @@ _showMessage('Упражнение удалено');
         final isCollapsed = _isCircleCollapsed(blockNum, circleNum);
         slivers.add(SliverToBoxAdapter(child: CircleHeader(blockNum: blockNum, circleNum: circleNum, circleIndex: circle, blockItems: blockItems, completed: completed, total: total, isComplete: isComplete, isCollapsed: isCollapsed, onToggle: () => _toggleCircle(blockNum, circleNum), started: _started, isViewMode: _isViewMode, onMarkCircleCompleted: (b, c) => _markCircleCompleted(blockItems: blockItems, blockNum: b, circleIndex: c))));
         if (!isCollapsed) {
-          slivers.add(SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 8), sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) => _buildExerciseCardWidget(context, blockItems[idx], _exerciseMap[blockItems[idx].replacedByItemId ?? blockItems[idx].itemId]!, circleIndex: circle), childCount: blockItems.length))));
+          slivers.add(SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 8), sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) {
+            final ex = _exerciseMap[blockItems[idx].replacedByItemId ?? blockItems[idx].itemId];
+            if (ex == null) return const SizedBox.shrink();
+            return _buildExerciseCardWidget(context, blockItems[idx], ex, circleIndex: circle);
+          }, childCount: blockItems.length))));
         }
       }
       if (_started && !_isViewMode) {
@@ -1619,9 +1715,7 @@ _showMessage('Упражнение удалено');
 
     void addCardioToSlivers(WorkoutExercise item) {
       final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
-      if (ex != null) {
-        slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), child: _buildExerciseCardWidget(context, item, ex))));
-      }
+      if (ex != null) slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), child: _buildExerciseCardWidget(context, item, ex))));
     }
 
     if (shouldInterleave) {
@@ -1632,26 +1726,38 @@ _showMessage('Упражнение удалено');
           addCardioToSlivers(cardios[cardioIndex++]);
         }
       }
-      if (cardioIndex < cardios.length) {
-        slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFE17055).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Кардио / Добивка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFFE17055))))]))));
-        while (cardioIndex < cardios.length) {
-          addCardioToSlivers(cardios[cardioIndex++]);
-        }
-      }
     } else {
       for (final blockNum in sortedBlockNums) {
         addBlockToSlivers(blockNum);
       }
-      if (cardios.isNotEmpty) {
-        slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFE17055).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Кардио / Добивка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFFE17055))))]))));
-        for (final item in cardios) {
-          addCardioToSlivers(item);
-        }
+    }
+
+    if (bonus.isNotEmpty) {
+      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), child: Row(children: [const Text('💡', style: TextStyle(fontSize: 18)), const SizedBox(width: 8), const Text('На забытые зоны', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFFFFB800)))]))));
+      slivers.add(SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) {
+          final ex = _exerciseMap[bonus[idx].itemId];
+          if (ex == null) return const SizedBox.shrink();
+          return _buildExerciseCardWidget(context, bonus[idx], ex);
+        }, childCount: bonus.length)),
+      ));
+    }
+
+    if (cardioIndex < cardios.length) {
+      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFE17055).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Кардио / Добивка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFFE17055))))]))));
+      while (cardioIndex < cardios.length) {
+        addCardioToSlivers(cardios[cardioIndex++]);
+      }
+    } else if (!shouldInterleave && cardios.isNotEmpty) {
+      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFE17055).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Кардио / Добивка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFFE17055))))]))));
+      for (final item in cardios) {
+        addCardioToSlivers(item);
       }
     }
 
     if (coolDowns.isNotEmpty) {
-      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF00B894).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Заминка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFF00B894))))]))));
+      slivers.add(SliverToBoxAdapter(child: _buildCoolDownHeader(context)));
       slivers.add(SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 0), sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) => _buildStretchCard(context, coolDowns[idx]), childCount: coolDowns.length))));
     }
 
@@ -1698,6 +1804,7 @@ _showMessage('Упражнение удалено');
       onAddSet: () => _addSetToExercise(item),
       onDeleteSet: (i) => _deleteSetFromExercise(item, i),
       onOpenMenu: () => _openExerciseMenu(item, ex),
+      onQuickReplace: () => _quickReplaceExercise(item, ex),
       onTryAutoCollapse: (idx) => _tryAutoCollapse(item, idx),
       getBaseZone: _getBaseZone,
       isBase: isBaseExercise,

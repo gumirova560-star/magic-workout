@@ -40,6 +40,7 @@ class ExerciseCard extends StatelessWidget {
   final Function() onAddSet;
   final Function(int) onDeleteSet;
   final Function() onOpenMenu;
+  final Function()? onQuickReplace; // 👈 НОВОЕ ПОЛЕ
   final Function(int) onTryAutoCollapse;
 
   final String? Function(Exercise) getBaseZone;
@@ -63,6 +64,7 @@ class ExerciseCard extends StatelessWidget {
     required this.onAddSet,
     required this.onDeleteSet,
     required this.onOpenMenu,
+    this.onQuickReplace, // 👈 ДОБАВЛЕНО В КОНСТРУКТОР
     required this.onTryAutoCollapse,
     required this.getBaseZone,
     required this.isBase,
@@ -83,7 +85,6 @@ class ExerciseCard extends StatelessWidget {
     final isThisBase = isBase(ex);
     final defaultReps = parseReps(item.reps);
 
-    // 👇 ЗАЩИТА: если подходов нет, создаем фиктивный, чтобы UI не ломался
     final List<int> setIndexesToShow;
     if (sets.isEmpty) {
       setIndexesToShow = [0];
@@ -93,10 +94,7 @@ class ExerciseCard extends StatelessWidget {
       setIndexesToShow = List.generate(sets.length, (i) => i);
     }
 
-    // 👇 Определяем, есть ли история
     final bool hasHistory = lastWeight != null || lastReps != null;
-
-    // 👇 Показываем плашку ТОЛЬКО для изоляции, ТОЛЬКО в 1-м круге и ТОЛЬКО если это НЕ кардио
     final bool showFairyBanner = !isThisBase && !isCardio && (circleIndex == null || circleIndex == 0);
 
     return Card(
@@ -144,7 +142,6 @@ class ExerciseCard extends StatelessWidget {
                             children: [
                               Text(ex.name, style: theme.textTheme.headlineMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
 
-                              // 👇 ПЛАШКА РЕКОРДА И ФЕИ (ТОЛЬКО ДЛЯ ИЗОЛЯЦИИ И ТОЛЬКО В 1-М КРУГЕ)
                               if (showFairyBanner) ...[
                                 const SizedBox(height: 8),
                                 Container(
@@ -164,7 +161,6 @@ class ExerciseCard extends StatelessWidget {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      // Заголовок (Рекорд или Новое)
                                       Row(
                                         children: [
                                           Text(hasHistory ? '🏆' : '✨', style: const TextStyle(fontSize: 14)),
@@ -186,7 +182,6 @@ class ExerciseCard extends StatelessWidget {
                                         ],
                                       ),
                                       const SizedBox(height: 6),
-                                      // Фраза Феи
                                       Text(
                                         hasHistory
                                             ? _isolationPhrases[(ex.name.hashCode.abs() + DateTime.now().day) % _isolationPhrases.length]
@@ -235,6 +230,15 @@ class ExerciseCard extends StatelessWidget {
                             ],
                           ),
                         ),
+
+                        // 👇 БЫСТРАЯ ЗАМЕНА (КНОПКА СО СТРЕЛОЧКАМИ)
+                        if (!isViewMode && onQuickReplace != null)
+                          IconButton(
+                            icon: Icon(Icons.swap_horiz_rounded, color: theme.colorScheme.primary, size: 22),
+                            onPressed: onQuickReplace,
+                            tooltip: 'Быстрая замена',
+                          ),
+
                         IconButton(
                           icon: Icon(Icons.info_outline_rounded, color: theme.colorScheme.primary, size: 22),
                           onPressed: () {

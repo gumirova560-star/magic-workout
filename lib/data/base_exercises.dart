@@ -16,11 +16,8 @@ const Map<String, ExerciseMeta> kAbsoluteExerciseDictionary = {
   'Реверанс-выпад': ExerciseMeta('glutes', ExerciseType.base),
   'Зашагивания на платформу с гантелями': ExerciseMeta('glutes', ExerciseType.base),
   'Румынская тяга на одной ноге с гантелью': ExerciseMeta('glutes', ExerciseType.base),
-
-  // 👇 НОВЫЕ ДОБАВЛЕННЫЕ:
-  'Отведение ноги в сторону стоя': ExerciseMeta('glutes', ExerciseType.isolation),
   'Обратные выпады с собственным весом': ExerciseMeta('glutes', ExerciseType.base),
-
+  'Отведение ноги в сторону стоя': ExerciseMeta('glutes', ExerciseType.isolation),
   'Отведение ноги назад в блоке': ExerciseMeta('glutes', ExerciseType.isolation),
   'Отведение ноги в сторону с резинкой': ExerciseMeta('glutes', ExerciseType.isolation),
   'Отведение ноги в кроссовере': ExerciseMeta('glutes', ExerciseType.isolation),
@@ -45,20 +42,21 @@ const Map<String, ExerciseMeta> kAbsoluteExerciseDictionary = {
   'Зашагивания на платформу': ExerciseMeta('legs', ExerciseType.base),
   'Приседания на одной ноге': ExerciseMeta('legs', ExerciseType.base),
   'Боковые выпады': ExerciseMeta('legs', ExerciseType.base),
-  'Жим ногами в тренажёре': ExerciseMeta('legs', ExerciseType.base),
+  'Жим ногами в тренажёре': ExerciseMeta('legs', ExerciseType.base), // 👈 ДОБАВЛЕНО
   'Румынская тяга со штангой': ExerciseMeta('legs', ExerciseType.base),
   'Румынская тяга на одной ноге': ExerciseMeta('legs', ExerciseType.base),
   'Наклоны со штангой': ExerciseMeta('legs', ExerciseType.base),
   'Выпады назад с гантелями': ExerciseMeta('legs', ExerciseType.base),
   'Стульчик у стены': ExerciseMeta('legs', ExerciseType.isolation),
-
-  // 👇 НОВЫЕ ДОБАВЛЕННЫЕ:
   'Боковые выпады с собственным весом': ExerciseMeta('legs', ExerciseType.base),
   'Приседания сумо с собственным весом': ExerciseMeta('legs', ExerciseType.base),
+  'Гакк-приседания': ExerciseMeta('legs', ExerciseType.base), // 👈 ДОБАВЛЕНО
+  'Приседания в тренажере Смита': ExerciseMeta('legs', ExerciseType.base), // 👈 ДОБАВЛЕНО
 
   'Подъёмы на носки стоя': ExerciseMeta('legs', ExerciseType.base),
   'Подъёмы на носки сидя': ExerciseMeta('legs', ExerciseType.base),
   'Подъемы на носки в тренажере Смита': ExerciseMeta('legs', ExerciseType.base),
+  'Подъемы на носки стоя в тренажере': ExerciseMeta('legs', ExerciseType.isolation), // 👈 ДОБАВЛЕНО
   'Разгибание ног в тренажёре': ExerciseMeta('legs', ExerciseType.isolation),
   'Сведение ног в тренажёре': ExerciseMeta('legs', ExerciseType.isolation),
   'Сгибание ног в тренажёре': ExerciseMeta('legs', ExerciseType.isolation),
@@ -105,6 +103,7 @@ const Map<String, ExerciseMeta> kAbsoluteExerciseDictionary = {
   'Подъём штанги на бицепс': ExerciseMeta('arms', ExerciseType.base),
   'Отжимания узким хватом': ExerciseMeta('arms', ExerciseType.base),
   'Французский жим лёжа': ExerciseMeta('arms', ExerciseType.base),
+  'Жим штанги узким хватом': ExerciseMeta('arms', ExerciseType.base), // 👈 ДОБАВЛЕНО
   'Молотковые сгибания': ExerciseMeta('arms', ExerciseType.isolation),
   'Концентрированный подъём': ExerciseMeta('arms', ExerciseType.isolation),
   'Разгибание руки из-за головы': ExerciseMeta('arms', ExerciseType.isolation),
@@ -113,6 +112,9 @@ const Map<String, ExerciseMeta> kAbsoluteExerciseDictionary = {
   'Подъем на бицепс на скамье Скотта': ExerciseMeta('arms', ExerciseType.isolation),
   'Разгибание рук на блоке с канатом': ExerciseMeta('arms', ExerciseType.isolation),
   'Отжимания от скамьи (трицепс)': ExerciseMeta('arms', ExerciseType.isolation),
+  'Сгибание рук в тренажере (на бицепс)': ExerciseMeta('arms', ExerciseType.isolation), // 👈 ДОБАВЛЕНО
+  'Разгибание рук в тренажере (на трицепс)': ExerciseMeta('arms', ExerciseType.isolation), // 👈 ДОБАВЛЕНО
+  'Подъем на бицепс на нижнем блоке': ExerciseMeta('arms', ExerciseType.isolation), // 👈 ДОБАВЛЕНО
 
   // ═══ ПЛЕЧИ ═══
   'Жим гантелей сидя': ExerciseMeta('shoulders', ExerciseType.base),
@@ -120,6 +122,7 @@ const Map<String, ExerciseMeta> kAbsoluteExerciseDictionary = {
   'Тяга штанги к подбородку': ExerciseMeta('shoulders', ExerciseType.base),
   'Жим Арнольда': ExerciseMeta('shoulders', ExerciseType.base),
   'Жим гантелей в тренажёре Смита': ExerciseMeta('shoulders', ExerciseType.base),
+  'Жим в тренажере на плечи': ExerciseMeta('shoulders', ExerciseType.base), // 👈 ДОБАВЛЕНО
   'Разведения гантелей в стороны': ExerciseMeta('shoulders', ExerciseType.isolation),
   'Махи гантелями перед собой': ExerciseMeta('shoulders', ExerciseType.isolation),
   'Разведения в наклоне (задняя дельта)': ExerciseMeta('shoulders', ExerciseType.isolation),
@@ -129,6 +132,8 @@ const Map<String, ExerciseMeta> kAbsoluteExerciseDictionary = {
   'Махи гантелями в стороны сидя': ExerciseMeta('shoulders', ExerciseType.isolation),
   'Разведения гантелей на заднюю дельту (лёжа на животе)': ExerciseMeta('shoulders', ExerciseType.isolation),
   'Тяга резинки к лицу': ExerciseMeta('shoulders', ExerciseType.isolation),
+  'Обратная бабочка': ExerciseMeta('shoulders', ExerciseType.isolation), // 👈 ДОБАВЛЕНО
+  'Махи в сторону на нижнем блоке': ExerciseMeta('shoulders', ExerciseType.isolation), // 👈 ДОБАВЛЕНО
 
   // ═══ СПИНА ═══
   'Шраги с гантелями': ExerciseMeta('back', ExerciseType.base),
@@ -137,12 +142,14 @@ const Map<String, ExerciseMeta> kAbsoluteExerciseDictionary = {
   'Тяга верхнего блока': ExerciseMeta('back', ExerciseType.base),
   'Тяга штанги в наклоне': ExerciseMeta('back', ExerciseType.base),
   'Тяга нижнего блока к поясу': ExerciseMeta('back', ExerciseType.base),
+  'Тяга Т-грифа': ExerciseMeta('back', ExerciseType.base), // 👈 ДОБАВЛЕНО
   'Тяга штанги в наклоне обратным хватом': ExerciseMeta('back', ExerciseType.isolation),
   'Разведения в наклоне на трапеции': ExerciseMeta('back', ExerciseType.isolation),
   'Тяга гантели одной рукой': ExerciseMeta('back', ExerciseType.isolation),
   'Тяга гантели к поясу (в наклоне)': ExerciseMeta('back', ExerciseType.isolation),
   'Тяга резинки к поясу': ExerciseMeta('back', ExerciseType.isolation),
   'Пуловер с гантелью': ExerciseMeta('back', ExerciseType.isolation),
+  'Пулловер на верхнем блоке': ExerciseMeta('back', ExerciseType.isolation), // 👈 ДОБАВЛЕНО
   'Лодочка': ExerciseMeta('back', ExerciseType.isolation),
 
   // ═══ ГРУДЬ ═══
@@ -150,6 +157,9 @@ const Map<String, ExerciseMeta> kAbsoluteExerciseDictionary = {
   'Жим гантелей лёжа': ExerciseMeta('chest', ExerciseType.base),
   'Отжимания от пола': ExerciseMeta('chest', ExerciseType.base),
   'Жим штанги на наклонной скамье': ExerciseMeta('chest', ExerciseType.base),
+  'Жим в тренажере (Chest Press)': ExerciseMeta('chest', ExerciseType.base), // 👈 ДОБАВЛЕНО
+  'Отжимания на брусьях (акцент на грудь)': ExerciseMeta('chest', ExerciseType.base), // 👈 ДОБАВЛЕНО
+  'Жим штанги лежа в Смите': ExerciseMeta('chest', ExerciseType.base), // 👈 ДОБАВЛЕНО
   'Разведения гантелей лёжа': ExerciseMeta('chest', ExerciseType.isolation),
   'Сведение рук в тренажёре': ExerciseMeta('chest', ExerciseType.isolation),
   'Жим гантелей лёжа на наклонной скамье': ExerciseMeta('chest', ExerciseType.isolation),
@@ -226,44 +236,46 @@ String getExerciseFamily(String name) {
   if (lower.contains('сгибание ног') || lower.contains('сгибание одной ноги')) return 'leg_curl';
   // Голень: Подъёмы на носки
   if (lower.contains('носки') || lower.contains('жим носками')) return 'calf_raise';
-  // Ноги: Приседания и Жим ногами
-  if (lower.contains('приседания') || lower.contains('жим ногами')) return 'squat';
+  // Ноги: Приседания и Жим ногами (включая новые)
+  if (lower.contains('приседания') || lower.contains('жим ногами') || lower.contains('гакк-приседания')) return 'squat';
   // Ноги: Выпады
   if (lower.contains('выпады') || lower.contains('болгарский')) return 'lunge';
   // Ноги: Румынская тяга и наклоны
   if (lower.contains('румынская тяга') || lower.contains('наклоны со штангой')) return 'hinge';
 
-  // Спина: Тяги горизонтальные
-  if (lower.contains('тяга штанги в наклоне') || lower.contains('тяга гантели') || lower.contains('тяга нижнего блока') || lower.contains('тяга резинки к поясу')) return 'back_row_horizontal';
+  // Спина: Тяги горизонтальные (включая Т-гриф)
+  if (lower.contains('тяга штанги в наклоне') || lower.contains('тяга гантели') || lower.contains('тяга нижнего блока') || lower.contains('тяга резинки к поясу') || lower.contains('тяга т-грифа')) return 'back_row_horizontal';
   // Спина: Тяги вертикальные
   if (lower.contains('подтягивания') || lower.contains('тяга верхнего блока')) return 'back_row_vertical';
   // Спина: Шраги
   if (lower.contains('шраги') || lower.contains('разведения в наклоне на трапеции')) return 'shrug';
   // Спина: Поясница
   if (lower.contains('гиперэкстензия') || lower.contains('лодочка')) return 'lower_back';
+  // Спина: Пулловеры
+  if (lower.contains('пуловер') || lower.contains('пулловер')) return 'pullover';
 
-  // Грудь: Жимы
-  if (lower.contains('жим штанги') || lower.contains('жим гантелей') || lower.contains('жим в тренажере')) return 'bench_press';
+  // Грудь: Жимы (включая тренажеры и Смит)
+  if (lower.contains('жим штанги') || lower.contains('жим гантелей') || lower.contains('жим в тренажере') || lower.contains('жим в тренажёре')) return 'bench_press';
   // Грудь: Разведения/Сведения
-  if (lower.contains('разведения гантелей') || lower.contains('сведение рук')) return 'chest_fly';
-  // Грудь: Отжимания
+  if (lower.contains('разведения гантелей') || lower.contains('сведение рук') || lower.contains('бабочка')) return 'chest_fly';
+  // Грудь: Отжимания (включая брусья)
   if (lower.contains('отжимания')) return 'pushup';
 
-  // Плечи: Жимы
-  if (lower.contains('жим гантелей сидя') || lower.contains('жим штанги стоя') || lower.contains('жим арнольда') || lower.contains('жим гантелей в тренажёре')) return 'shoulder_press';
-  // Плечи: Средняя дельта
-  if (lower.contains('разведения гантелей в стороны') || lower.contains('махи гантелями в стороны сидя')) return 'shoulder_side';
+  // Плечи: Жимы (включая тренажеры)
+  if (lower.contains('жим гантелей сидя') || lower.contains('жим штанги стоя') || lower.contains('жим арнольда') || lower.contains('жим гантелей в тренажёре') || lower.contains('жим в тренажере на плечи')) return 'shoulder_press';
+  // Плечи: Средняя дельта (включая блоки)
+  if (lower.contains('разведения гантелей в стороны') || lower.contains('махи гантелями в стороны сидя') || lower.contains('махи в сторону на нижнем блоке')) return 'shoulder_side';
   // Плечи: Передняя дельта
   if (lower.contains('махи гантелями перед собой')) return 'shoulder_front';
-  // Плечи: Задняя дельта
-  if (lower.contains('разведения в наклоне') || lower.contains('махи гантелью в наклоне') || lower.contains('обратные разведения') || lower.contains('разведения гантелей на заднюю дельту') || lower.contains('тяга резинки к лицу')) return 'shoulder_rear';
+  // Плечи: Задняя дельта (включая обратную бабочку)
+  if (lower.contains('разведения в наклоне') || lower.contains('махи гантелью в наклоне') || lower.contains('обратные разведения') || lower.contains('разведения гантелей на заднюю дельту') || lower.contains('тяга резинки к лицу') || lower.contains('обратная бабочка')) return 'shoulder_rear';
   // Плечи: Тяга к подбородку
   if (lower.contains('тяга штанги к подбородку') || lower.contains('тяга гантелей к подбородку')) return 'upright_row';
 
-  // Руки: Бицепс
-  if (lower.contains('подъём гантелей на бицепс') || lower.contains('подъём штанги на бицепс') || lower.contains('молотковые сгибания') || lower.contains('концентрированный подъём') || lower.contains('подъем на бицепс')) return 'bicep_curl';
-  // Руки: Трицепс
-  if (lower.contains('французский жим') || lower.contains('разгибание руки') || lower.contains('разгибание рук на блоке') || lower.contains('отжимания от скамьи (трицепс)') || lower.contains('отжимания узким хватом')) return 'tricep_extension';
+  // Руки: Бицепс (включая тренажеры и блоки)
+  if (lower.contains('подъём гантелей на бицепс') || lower.contains('подъём штанги на бицепс') || lower.contains('молотковые сгибания') || lower.contains('концентрированный подъём') || lower.contains('подъем на бицепс') || lower.contains('сгибание рук в тренажере')) return 'bicep_curl';
+  // Руки: Трицепс (включая тренажеры и жим узким хватом)
+  if (lower.contains('французский жим') || lower.contains('разгибание руки') || lower.contains('разгибание рук на блоке') || lower.contains('отжимания от скамьи (трицепс)') || lower.contains('отжимания узким хватом') || lower.contains('жим штанги узким хватом') || lower.contains('разгибание рук в тренажере')) return 'tricep_extension';
 
   // Пресс: Планки
   if (lower.contains('планка')) return 'plank';

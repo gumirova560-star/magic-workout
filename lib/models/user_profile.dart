@@ -12,12 +12,13 @@ class UserProfile {
   String equipment;
   int daysPerWeek;
   int sessionMinutes;
+  String? timeRangeLabel; // 👈 НОВОЕ ПОЛЕ: Красивый текст (например, "60-75 мин")
   DateTime createdAt;
   String? avatarPath;
-  String? beforePhotoPath; // Спереди
-  String? beforeSidePath;  // ⚠️ Сбоку
-  String? beforeBackPath;  // ⚠️ Сзади
-  String? bodyType;        // 👈 НОВОЕ: 'pear', 'apple', 'hourglass', 'rectangle', 'inverted_triangle'
+  String? beforePhotoPath;
+  String? beforeSidePath;
+  String? beforeBackPath;
+  String? bodyType;
 
   UserProfile({
     this.id,
@@ -33,6 +34,7 @@ class UserProfile {
     this.equipment = 'bodyweight',
     this.daysPerWeek = 3,
     this.sessionMinutes = 45,
+    this.timeRangeLabel, // 👈
     DateTime? createdAt,
     this.avatarPath,
     this.beforePhotoPath,
@@ -58,6 +60,7 @@ class UserProfile {
       'equipment': equipment,
       'daysPerWeek': daysPerWeek,
       'sessionMinutes': sessionMinutes,
+      'timeRangeLabel': timeRangeLabel, // 👈
       'createdAt': createdAt.toIso8601String(),
       'avatarPath': avatarPath,
       'beforePhotoPath': beforePhotoPath,
@@ -77,22 +80,13 @@ class UserProfile {
       weight: (map['weight'] as num?)?.toDouble() ?? 60.0,
       level: map['level'] ?? 'beginner',
       goal: map['goal'] ?? 'tone',
-      focusAreas: (map['focusAreas'] as String?)
-          ?.split(',')
-          .where((s) => s.isNotEmpty)
-          .toList() ??
-          [],
-      limitations: (map['limitations'] as String?)
-          ?.split(',')
-          .where((s) => s.isNotEmpty)
-          .toList() ??
-          [],
+      focusAreas: (map['focusAreas'] as String?)?.split(',').where((s) => s.isNotEmpty).toList() ?? [],
+      limitations: (map['limitations'] as String?)?.split(',').where((s) => s.isNotEmpty).toList() ?? [],
       equipment: map['equipment'] ?? 'bodyweight',
       daysPerWeek: map['daysPerWeek'] ?? 3,
       sessionMinutes: map['sessionMinutes'] ?? 45,
-      createdAt: map['createdAt'] != null
-          ? DateTime.parse(map['createdAt'])
-          : DateTime.now(),
+      timeRangeLabel: map['timeRangeLabel'], // 👈
+      createdAt: map['createdAt'] != null ? DateTime.parse(map['createdAt']) : DateTime.now(),
       avatarPath: map['avatarPath'],
       beforePhotoPath: map['beforePhotoPath'],
       beforeSidePath: map['beforeSidePath'],
@@ -115,6 +109,7 @@ class UserProfile {
     String? equipment,
     int? daysPerWeek,
     int? sessionMinutes,
+    String? timeRangeLabel, // 👈
     String? avatarPath,
     String? beforePhotoPath,
     String? beforeSidePath,
@@ -135,6 +130,7 @@ class UserProfile {
       equipment: equipment ?? this.equipment,
       daysPerWeek: daysPerWeek ?? this.daysPerWeek,
       sessionMinutes: sessionMinutes ?? this.sessionMinutes,
+      timeRangeLabel: timeRangeLabel ?? this.timeRangeLabel, // 👈
       createdAt: this.createdAt,
       avatarPath: avatarPath ?? this.avatarPath,
       beforePhotoPath: beforePhotoPath ?? this.beforePhotoPath,
@@ -145,7 +141,6 @@ class UserProfile {
   }
 
   String get genderLabel => gender == 'male' ? 'Мужской' : 'Женский';
-
   String get goalLabel {
     switch (goal) {
       case 'lose_weight': return 'Похудеть';
@@ -155,7 +150,6 @@ class UserProfile {
       default: return 'Тонус';
     }
   }
-
   String get levelLabel {
     switch (level) {
       case 'beginner': return 'Новичок';
@@ -164,7 +158,6 @@ class UserProfile {
       default: return 'Новичок';
     }
   }
-
   String get equipmentLabel {
     switch (equipment) {
       case 'gym': return 'Зал';
@@ -174,8 +167,6 @@ class UserProfile {
       default: return 'Своё тело';
     }
   }
-
-  // 👇 НОВОЕ: Название типа фигуры
   String get bodyTypeLabel {
     switch (bodyType) {
       case 'pear': return 'Груша';

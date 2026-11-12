@@ -15,6 +15,7 @@ import '../trainer/trainer_screen.dart';
 import 'workout_detail_screen.dart';
 import 'my_templates_screen.dart';
 import 'challenge_dice_screen.dart';
+import '../../widgets/daily_challenge_card.dart'; // 👈 Добавлен импорт
 
 class WorkoutScreen extends StatefulWidget {
   const WorkoutScreen({super.key});
@@ -24,518 +25,498 @@ class WorkoutScreen extends StatefulWidget {
 }
 
 class _WorkoutScreenState extends State<WorkoutScreen> {
-UserProfile? _activeProfile;
-List<WorkoutDay> _monthDays = [];
-List<WorkoutDay> _allHistory = [];
-int _selectedWeek = 1;
-WeekSummary? _lastWeek;
-int _streak = 0;
-bool _loading = true;
-bool _generating = false;
-bool _showCompletionBanner = false;
-int _currentWeekWorkouts = 0;
-int _currentWeekMinutes = 0;
+  UserProfile? _activeProfile;
+  List<WorkoutDay> _monthDays = [];
+  List<WorkoutDay> _allHistory = [];
+  int _selectedWeek = 1;
+  WeekSummary? _lastWeek;
+  int _streak = 0;
+  bool _loading = true;
+  bool _generating = false;
+  bool _showCompletionBanner = false;
+  int _currentWeekWorkouts = 0;
+  int _currentWeekMinutes = 0;
 
-@override
-void initState() {
-super.initState();
-_loadData();
-FairyReactionService().addProfileListener(_onProfileChanged);
-FairyReactionService().addWorkoutListener(_onWorkoutCompleted);
-}
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+    FairyReactionService().addProfileListener(_onProfileChanged);
+    FairyReactionService().addWorkoutListener(_onWorkoutCompleted);
+  }
 
-void _onProfileChanged() { if (mounted) _loadData(); }
-void _onWorkoutCompleted() { if (mounted) _loadData(); }
+  void _onProfileChanged() { if (mounted) _loadData(); }
+  void _onWorkoutCompleted() { if (mounted) _loadData(); }
 
-@override
-void dispose() {
-FairyReactionService().removeProfileListener(_onProfileChanged);
-FairyReactionService().removeWorkoutListener(_onWorkoutCompleted);
-super.dispose();
-}
+  @override
+  void dispose() {
+    FairyReactionService().removeProfileListener(_onProfileChanged);
+    FairyReactionService().removeWorkoutListener(_onWorkoutCompleted);
+    super.dispose();
+  }
 
-String _computeProfileHash(UserProfile p) {
-return [p.gender, p.age, p.height, p.weight, p.level, p.goal, p.equipment, p.daysPerWeek, p.sessionMinutes, p.focusAreas.join(','), p.limitations.join(',')].join('|');
-}
+  String _computeProfileHash(UserProfile p) {
+    return [p.gender, p.age, p.height, p.weight, p.level, p.goal, p.equipment, p.daysPerWeek, p.sessionMinutes, p.focusAreas.join(','), p.limitations.join(',')].join('|');
+  }
 
-String _profileHashKey(int profileId) => 'workout_plan_profile_hash_$profileId';
-String _dismissedHashKey(int profileId) => 'workout_plan_profile_hash_dismissed_$profileId';
+  String _profileHashKey(int profileId) => 'workout_plan_profile_hash_$profileId';
+  String _dismissedHashKey(int profileId) => 'workout_plan_profile_hash_dismissed_$profileId';
 
-Future<bool> _shouldSuggestPlanUpdate(UserProfile profile) async {
-if (profile.id == null) return false;
-final prefs = await SharedPreferences.getInstance();
-final key = _profileHashKey(profile.id!);
-final currentHash = _computeProfileHash(profile);
-final savedHash = prefs.getString(key);
-if (savedHash == null) { await prefs.setString(key, currentHash); return false; }
-if (savedHash == currentHash) return false;
-final dismissedKey = _dismissedHashKey(profile.id!);
-final dismissedHash = prefs.getString(dismissedKey);
-if (dismissedHash == currentHash) return false;
-return true;
-}
+  Future<bool> _shouldSuggestPlanUpdate(UserProfile profile) async {
+    if (profile.id == null) return false;
+    final prefs = await SharedPreferences.getInstance();
+    final key = _profileHashKey(profile.id!);
+    final currentHash = _computeProfileHash(profile);
+    final savedHash = prefs.getString(key);
+    if (savedHash == null) { await prefs.setString(key, currentHash); return false; }
+    if (savedHash == currentHash) return false;
+    final dismissedKey = _dismissedHashKey(profile.id!);
+    final dismissedHash = prefs.getString(dismissedKey);
+    if (dismissedHash == currentHash) return false;
+    return true;
+  }
 
-Future<void> _saveProfileHashAsAccepted(UserProfile profile) async {
-if (profile.id == null) return;
-final prefs = await SharedPreferences.getInstance();
-await prefs.setString(_profileHashKey(profile.id!), _computeProfileHash(profile));
-await prefs.remove(_dismissedHashKey(profile.id!));
-}
+  Future<void> _saveProfileHashAsAccepted(UserProfile profile) async {
+    if (profile.id == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_profileHashKey(profile.id!), _computeProfileHash(profile));
+    await prefs.remove(_dismissedHashKey(profile.id!));
+  }
 
-Future<void> _saveProfileHashAsDismissed(UserProfile profile) async {
-if (profile.id == null) return;
-final prefs = await SharedPreferences.getInstance();
-await prefs.setString(_dismissedHashKey(profile.id!), _computeProfileHash(profile));
-}
+  Future<void> _saveProfileHashAsDismissed(UserProfile profile) async {
+    if (profile.id == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_dismissedHashKey(profile.id!), _computeProfileHash(profile));
+  }
 
-Future<void> _loadData() async {
-setState(() => _loading = true);
-var profiles = await DatabaseHelper.instance.getProfiles();
-if (profiles.isEmpty) {
-for (int attempt = 0; attempt < 5; attempt++) {
-await Future.delayed(const Duration(milliseconds: 300));
-profiles = await DatabaseHelper.instance.getProfiles();
-if (profiles.isNotEmpty) break;
-}
-}
-await FairyReactionService().loadActiveProfile();
+  Future<void> _loadData() async {
+    setState(() => _loading = true);
+    var profiles = await DatabaseHelper.instance.getProfiles();
+    if (profiles.isEmpty) {
+      for (int attempt = 0; attempt < 5; attempt++) {
+        await Future.delayed(const Duration(milliseconds: 300));
+        profiles = await DatabaseHelper.instance.getProfiles();
+        if (profiles.isNotEmpty) break;
+      }
+    }
+    await FairyReactionService().loadActiveProfile();
 
-if (profiles.isNotEmpty) {
-final active = profiles.first;
-final allHistory = await DatabaseHelper.instance.getWorkoutDays(profileId: active.id!, limit: 100);
+    if (profiles.isNotEmpty) {
+      final active = profiles.first;
+      final allHistory = await DatabaseHelper.instance.getWorkoutDays(profileId: active.id!, limit: 100);
 
-final activeMonthPlan = allHistory.where((d) => d.status != 'completed').toList();
-activeMonthPlan.sort((a, b) {
-if (a.weekNumber != b.weekNumber) return (a.weekNumber ?? 0).compareTo(b.weekNumber ?? 0);
-return a.date.compareTo(b.date);
-});
+      final activeMonthPlan = allHistory.where((d) => d.status != 'completed').toList();
+      activeMonthPlan.sort((a, b) {
+        if (a.weekNumber != b.weekNumber) return (a.weekNumber ?? 0).compareTo(b.weekNumber ?? 0);
+        return a.date.compareTo(b.date);
+      });
 
-final hasCompletedHistory = allHistory.any((d) => d.status == 'completed');
-_showCompletionBanner = activeMonthPlan.isEmpty && hasCompletedHistory;
+      final hasCompletedHistory = allHistory.any((d) => d.status == 'completed');
+      _showCompletionBanner = activeMonthPlan.isEmpty && hasCompletedHistory;
 
-int activeWeek = 1;
-for (int w = 1; w <= 4; w++) {
-final weekDays = activeMonthPlan.where((d) => d.weekNumber == w).toList();
-if (weekDays.isEmpty) continue;
-final allDone = weekDays.every((d) => d.status == 'completed');
-if (!allDone) { activeWeek = w; break; }
-activeWeek = w + 1;
-}
-if (activeWeek > 4) activeWeek = 4;
+      int activeWeek = 1;
+      for (int w = 1; w <= 4; w++) {
+        final weekDays = activeMonthPlan.where((d) => d.weekNumber == w).toList();
+        if (weekDays.isEmpty) continue;
+        final allDone = weekDays.every((d) => d.status == 'completed');
+        if (!allDone) { activeWeek = w; break; }
+        activeWeek = w + 1;
+      }
+      if (activeWeek > 4) activeWeek = 4;
 
-final lastWeek = await WeekAnalyzer.analyzeLastWeek(active.id!);
-final streak = await FairyStatsService.getStreak();
-final completed = allHistory.where((w) => w.status == 'completed').toList();
+      final lastWeek = await WeekAnalyzer.analyzeLastWeek(active.id!);
+      final streak = await FairyStatsService.getStreak();
+      final completed = allHistory.where((w) => w.status == 'completed').toList();
 
-final now = DateTime.now();
-final todayDate = DateTime(now.year, now.month, now.day);
-final monday = todayDate.subtract(Duration(days: now.weekday - 1));
-final weekStart = DateTime(monday.year, monday.month, monday.day);
-final weekEnd = weekStart.add(const Duration(days: 7));
+      final now = DateTime.now();
+      final todayDate = DateTime(now.year, now.month, now.day);
+      final monday = todayDate.subtract(Duration(days: now.weekday - 1));
+      final weekStart = DateTime(monday.year, monday.month, monday.day);
+      final weekEnd = weekStart.add(const Duration(days: 7));
 
-int curWeekCount = 0;
-int curWeekMinutes = 0;
-for (final w in completed) {
-final d = DateTime(w.date.year, w.date.month, w.date.day);
-if (!d.isBefore(weekStart) && d.isBefore(weekEnd)) {
-curWeekCount++;
-curWeekMinutes += (w.durationMinutes ?? 0).toInt();
-}
-}
+      int curWeekCount = 0;
+      int curWeekMinutes = 0;
+      for (final w in completed) {
+        final d = DateTime(w.date.year, w.date.month, w.date.day);
+        if (!d.isBefore(weekStart) && d.isBefore(weekEnd)) {
+          curWeekCount++;
+          curWeekMinutes += (w.durationMinutes ?? 0).toInt();
+        }
+      }
 
-if (!mounted) return;
-setState(() {
-_activeProfile = active;
-_monthDays = activeMonthPlan;
-_allHistory = allHistory;
-_selectedWeek = activeWeek;
-_lastWeek = lastWeek;
-_streak = streak;
-_currentWeekWorkouts = curWeekCount;
-_currentWeekMinutes = curWeekMinutes;
-_loading = false;
-});
+      if (!mounted) return;
+      setState(() {
+        _activeProfile = active;
+        _monthDays = activeMonthPlan;
+        _allHistory = allHistory;
+        _selectedWeek = activeWeek;
+        _lastWeek = lastWeek;
+        _streak = streak;
+        _currentWeekWorkouts = curWeekCount;
+        _currentWeekMinutes = curWeekMinutes;
+        _loading = false;
+      });
 
-final shouldHold = await _shouldSuggestPlanUpdate(active);
-if (shouldHold) FairyReactionService().holdScreenPhrases();
-await FairyReactionService().setActiveProfile(active.id, active.name, gender: active.gender);
+      final shouldHold = await _shouldSuggestPlanUpdate(active);
+      if (shouldHold) FairyReactionService().holdScreenPhrases();
+      await FairyReactionService().setActiveProfile(active.id, active.name, gender: active.gender);
 
-if (shouldHold) {
-WidgetsBinding.instance.addPostFrameCallback((_) {
-if (mounted) _showProfileChangedBannerNow(active);
-else FairyReactionService().releaseScreenPhrases();
-});
-}
-} else {
-if (!mounted) return;
-setState(() {
-_activeProfile = null;
-_monthDays = [];
-_allHistory = [];
-_selectedWeek = 1;
-_lastWeek = null;
-_streak = 0;
-_currentWeekWorkouts = 0;
-_currentWeekMinutes = 0;
-_showCompletionBanner = false;
-_loading = false;
-});
-await FairyReactionService().setActiveProfile(null, null);
-}
-}
+      if (shouldHold) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _showProfileChangedBannerNow(active);
+          else FairyReactionService().releaseScreenPhrases();
+        });
+      }
+    } else {
+      if (!mounted) return;
+      setState(() {
+        _activeProfile = null;
+        _monthDays = [];
+        _allHistory = [];
+        _selectedWeek = 1;
+        _lastWeek = null;
+        _streak = 0;
+        _currentWeekWorkouts = 0;
+        _currentWeekMinutes = 0;
+        _showCompletionBanner = false;
+        _loading = false;
+      });
+      await FairyReactionService().setActiveProfile(null, null);
+    }
+  }
 
-Future<void> _showProfileChangedBannerNow(UserProfile profile) async {
-if (!mounted) { FairyReactionService().releaseScreenPhrases(); return; }
-await FairyReactionService().setActiveProfile(profile.id, profile.name, gender: profile.gender);
-if (!mounted) { FairyReactionService().releaseScreenPhrases(); return; }
-await FairyReactionService().trigger('profile_changed_ask', mood: FairyMood.think);
-await Future.delayed(const Duration(seconds: 4));
-await _saveProfileHashAsDismissed(profile);
-FairyReactionService().releaseScreenPhrases();
-}
+  Future<void> _showProfileChangedBannerNow(UserProfile profile) async {
+    if (!mounted) { FairyReactionService().releaseScreenPhrases(); return; }
+    await FairyReactionService().setActiveProfile(profile.id, profile.name, gender: profile.gender);
+    if (!mounted) { FairyReactionService().releaseScreenPhrases(); return; }
+    await FairyReactionService().trigger('profile_changed_ask', mood: FairyMood.think);
+    await Future.delayed(const Duration(seconds: 4));
+    await _saveProfileHashAsDismissed(profile);
+    FairyReactionService().releaseScreenPhrases();
+  }
 
-Future<void> _generatePlan({bool isUpdate = false}) async {
-if (_activeProfile == null) { _showMessage('Сначала создайте профиль'); return; }
+  Future<void> _generatePlan({bool isUpdate = false}) async {
+    if (_activeProfile == null) { _showMessage('Сначала создайте профиль'); return; }
 
-final maxCycle = await DatabaseHelper.instance.getMaxCycleNumber(_activeProfile!.id!);
-if (maxCycle >= 2 && maxCycle % 2 == 0) {
-final prefs = await SharedPreferences.getInstance();
-final key = 'base_update_asked_${_activeProfile!.id}_$maxCycle';
-final alreadyAsked = prefs.getBool(key) ?? false;
+    final maxCycle = await DatabaseHelper.instance.getMaxCycleNumber(_activeProfile!.id!);
+    if (maxCycle >= 2 && maxCycle % 2 == 0) {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'base_update_asked_${_activeProfile!.id}_$maxCycle';
+      final alreadyAsked = prefs.getBool(key) ?? false;
 
-if (!alreadyAsked) {
-if (mounted) {
-await FairyReactionService().trigger('base_update_ask', mood: FairyMood.think);
-}
+      if (!alreadyAsked) {
+        if (mounted) {
+          await FairyReactionService().trigger('base_update_ask', mood: FairyMood.think);
+        }
 
-final confirmed = await showDialog<bool>(
-context: context,
-barrierDismissible: false,
-builder: (ctx) => AlertDialog(
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-title: Row(children: [
-Image.asset(FairyMood.think.asset, width: 44, height: 44, fit: BoxFit.contain),
-const SizedBox(width: 10),
-const Expanded(child: Text('Пора обновить базы! 🧚‍♀️', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
-]),
-content: const Text('Ты занимаешься уже 2 месяца. Мышцы привыкают к одним и тем же упражнениям. Давай обновим базы, чтобы прогресс не остановился!'),
-actions: [
-TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Оставить старые')),
-ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE17055)), child: const Text('Обновить базы')),
-],
-),
-);
+        final confirmed = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: Row(children: [
+              Image.asset(FairyMood.think.asset, width: 44, height: 44, fit: BoxFit.contain),
+              const SizedBox(width: 10),
+              const Expanded(child: Text('Пора обновить базы! 🧚‍♀️', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+            ]),
+            content: const Text('Ты занимаешься уже 2 месяца. Мышцы привыкают к одним и тем же упражнениям. Давай обновим базы, чтобы прогресс не остановился!'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Оставить старые')),
+              ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE17055)), child: const Text('Обновить базы')),
+            ],
+          ),
+        );
 
-await prefs.setBool(key, true);
-await prefs.setBool('allow_base_change_${_activeProfile!.id}_$maxCycle', confirmed == true);
-}
-}
+        await prefs.setBool(key, true);
+        await prefs.setBool('allow_base_change_${_activeProfile!.id}_$maxCycle', confirmed == true);
+      }
+    }
 
-setState(() { _generating = true; _showCompletionBanner = false; });
+    setState(() { _generating = true; _showCompletionBanner = false; });
 
-try {
-await FairyReactionService().setActiveProfile(_activeProfile!.id, _activeProfile!.name, gender: _activeProfile!.gender);
-final freshProfile = await DatabaseHelper.instance.getProfileById(_activeProfile!.id!);
-if (freshProfile == null) { setState(() => _generating = false); _showMessage('Профиль не найден'); return; }
-setState(() => _activeProfile = freshProfile);
+    try {
+      await FairyReactionService().setActiveProfile(_activeProfile!.id, _activeProfile!.name, gender: _activeProfile!.gender);
+      final freshProfile = await DatabaseHelper.instance.getProfileById(_activeProfile!.id!);
+      if (freshProfile == null) { setState(() => _generating = false); _showMessage('Профиль не найден'); return; }
+      setState(() => _activeProfile = freshProfile);
 
-final newDays = await WorkoutGenerator.generateMonthPlan(freshProfile, smart: true);
-final lastWeek = await WeekAnalyzer.analyzeLastWeek(freshProfile.id!);
-final streak = await FairyStatsService.getStreak();
+      final newDays = await WorkoutGenerator.generateMonthPlan(freshProfile, smart: true);
+      final lastWeek = await WeekAnalyzer.analyzeLastWeek(freshProfile.id!);
+      final streak = await FairyStatsService.getStreak();
 
-if (!mounted) return;
-setState(() {
-_monthDays = newDays.where((d) => d.status != 'completed').toList();
-_selectedWeek = 1;
-_lastWeek = lastWeek;
-_streak = streak;
-_generating = false;
-_showCompletionBanner = false;
-});
+      if (!mounted) return;
+      setState(() {
+        _monthDays = newDays.where((d) => d.status != 'completed').toList();
+        _selectedWeek = 1;
+        _lastWeek = lastWeek;
+        _streak = streak;
+        _generating = false;
+        _showCompletionBanner = false;
+      });
 
-await _saveProfileHashAsAccepted(freshProfile);
-FairyReactionService().trigger(isUpdate ? 'plan_updated' : 'plan_generated', mood: FairyMood.party);
+      await _saveProfileHashAsAccepted(freshProfile);
+      FairyReactionService().trigger(isUpdate ? 'plan_updated' : 'plan_generated', mood: FairyMood.party);
 
-if (isUpdate) _showMessage('План обновлён! Базы заменены на новые.');
-} catch (e) {
-setState(() => _generating = false);
-_showMessage('Ошибка: $e');
-}
-}
+      if (isUpdate) _showMessage('План обновлён! Базы заменены на новые.');
+    } catch (e) {
+      setState(() => _generating = false);
+      _showMessage('Ошибка: $e');
+    }
+  }
 
-// ═══ КОНЕЦ ЧАСТИ 1 ═══
-// ═══ ЧАСТЬ 2: ОТКРЫТИЕ ДНЯ И ГЕНЕРАЦИЯ ПРИ ОТКАЗЕ ═══
+  Future<void> _openDay(WorkoutDay day) async {
+    final isUnlocked = _isWeekUnlocked(day.weekNumber ?? 1);
+    if (!isUnlocked) {
+      _showMessage('Сначала завершите предыдущую неделю!');
+      return;
+    }
 
-Future<void> _openDay(WorkoutDay day) async {
-final isUnlocked = _isWeekUnlocked(day.weekNumber ?? 1);
-if (!isUnlocked) {
-_showMessage('Сначала завершите предыдущую неделю!');
-return;
-}
+    if (day.type == 'challenge') {
+      final wantsChallenge = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Row(
+            children: [
+              const Icon(Icons.local_fire_department_rounded, color: Color(0xFFFFB800), size: 32),
+              const SizedBox(width: 12),
+              const Expanded(child: Text('День Челленджа! 🔥')),
+            ],
+          ),
+          content: const Text('Сегодня вместо обычной тренировки мы устроим челлендж! Испытай себя и узнай, что тебя ждет. Погнали?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Обычная тренировка')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFB800), foregroundColor: Colors.white),
+              child: const Text('Погнали!'),
+            ),
+          ],
+        ),
+      );
 
-// 👇 ЕСЛИ ЭТО ДЕНЬ ЧЕЛЛЕНДЖА
-if (day.type == 'challenge') {
-final wantsChallenge = await showDialog<bool>(
-context: context,
-builder: (ctx) => AlertDialog(
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-title: Row(
-children: [
-const Icon(Icons.local_fire_department_rounded, color: Color(0xFFFFB800), size: 32),
-const SizedBox(width: 12),
-const Expanded(child: Text('День Челленджа! 🔥')),
-],
-),
-content: const Text('Сегодня вместо обычной тренировки мы устроим челлендж! Испытай себя и узнай, что тебя ждет. Погнали?'),
-actions: [
-TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Обычная тренировка')),
-ElevatedButton(
-onPressed: () => Navigator.pop(ctx, true),
-style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFB800), foregroundColor: Colors.white),
-child: const Text('Погнали!'),
-),
-],
-),
-);
+      if (wantsChallenge == true) {
+        final workoutExs = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
+        final exMap = <int, Exercise>{};
+        for (final we in workoutExs) {
+          if (we.itemType == 'exercise') {
+            final ex = await DatabaseHelper.instance.getExerciseById(we.replacedByItemId ?? we.itemId);
+            if (ex != null) exMap[ex.id!] = ex;
+          }
+        }
 
-if (wantsChallenge == true) {
-// Загружаем упражнения и их модели
-final workoutExs = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
-final exMap = <int, Exercise>{};
-for (final we in workoutExs) {
-if (we.itemType == 'exercise') {
-final ex = await DatabaseHelper.instance.getExerciseById(we.replacedByItemId ?? we.itemId);
-if (ex != null) exMap[ex.id!] = ex;
-}
-}
+        if (!mounted) return;
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ChallengeWheelScreen(
+              day: day,
+              profileId: _activeProfile!.id!,
+              items: workoutExs,
+              exerciseMap: exMap,
+            ),
+          ),
+        );
+        _loadData();
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Окей! Сегодня будет особенный день: проработаем забытые зоны для гармоничного развития 💪'),
+              duration: Duration(seconds: 3),
+              backgroundColor: Color(0xFF6C5CE7),
+            ),
+          );
+        }
 
-if (!mounted) return;
-await Navigator.push(
-context,
-MaterialPageRoute(
-builder: (_) => ChallengeWheelScreen(
-day: day,
-profileId: _activeProfile!.id!,
-items: workoutExs,
-exerciseMap: exMap,
-),
-),
-);
-_loadData();
-} else {
-// 👇 ПОЛЬЗОВАТЕЛЬ ОТКАЗАЛСЯ ОТ ЧЕЛЛЕНДЖА
-if (mounted) {
-ScaffoldMessenger.of(context).showSnackBar(
-const SnackBar(
-content: Text('Окей! Сегодня будет особенный день: проработаем забытые зоны для гармоничного развития 💪'),
-duration: Duration(seconds: 3),
-backgroundColor: Color(0xFF6C5CE7),
-),
-);
-}
+        final updated = day.copyWith(type: 'strength');
+        await DatabaseHelper.instance.updateWorkoutDay(updated);
 
-// Меняем тип на strength
-final updated = day.copyWith(type: 'strength');
-await DatabaseHelper.instance.updateWorkoutDay(updated);
+        if (_activeProfile != null) {
+          await _generateForgottenZonesWorkout(updated, _activeProfile!);
+        }
 
-// Генерируем тренировку (3 базы + 6 изоляций на забытые зоны)
-if (_activeProfile != null) {
-await _generateForgottenZonesWorkout(updated, _activeProfile!);
-}
+        if (!mounted) return;
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => WorkoutDetailScreen(
+              workoutDay: updated,
+              profileId: _activeProfile!.id!,
+            ),
+          ),
+        );
+        if (result == true) {
+          await _loadData();
+          await _checkAndUnlockNextWeek();
+        }
+      }
+      return;
+    }
 
-if (!mounted) return;
-final result = await Navigator.push(
-context,
-MaterialPageRoute(
-builder: (_) => WorkoutDetailScreen(
-workoutDay: updated,
-profileId: _activeProfile!.id!,
-),
-),
-);
-if (result == true) {
-await _loadData();
-await _checkAndUnlockNextWeek();
-}
-}
-return;
-}
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WorkoutDetailScreen(workoutDay: day, profileId: _activeProfile!.id!),
+      ),
+    );
+    if (result == true) {
+      await _loadData();
+      await _checkAndUnlockNextWeek();
+    }
+  }
 
-// Обычная тренировка
-final result = await Navigator.push(
-context,
-MaterialPageRoute(
-builder: (_) => WorkoutDetailScreen(workoutDay: day, profileId: _activeProfile!.id!),
-),
-);
-if (result == true) {
-await _loadData();
-await _checkAndUnlockNextWeek();
-}
-}
+  Future<void> _generateForgottenZonesWorkout(WorkoutDay day, UserProfile profile) async {
+    final existing = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
+    for (final e in existing) {
+      if (e.id != null) await DatabaseHelper.instance.deleteWorkoutExercise(e.id!);
+    }
 
-// 👇 ИСПРАВЛЕННЫЙ МЕТОД: без блоков и с учетом ограничений
-Future<void> _generateForgottenZonesWorkout(WorkoutDay day, UserProfile profile) async {
-// 1. Удаляем старые упражнения из дня
-final existing = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
-for (final e in existing) {
-if (e.id != null) await DatabaseHelper.instance.deleteWorkoutExercise(e.id!);
-}
+    final allExercises = await DatabaseHelper.instance.getExercises();
+    final blockedZones = profile.limitations.map((e) => e.toLowerCase()).toList();
 
-final allExercises = await DatabaseHelper.instance.getExercises();
-final blockedZones = profile.limitations.map((e) => e.toLowerCase()).toList();
+    final bases = allExercises.where((e) {
+      if (!isBaseExercise(e)) return false;
+      final zone = getExerciseZone(e);
+      if (blockedZones.contains(zone)) return false;
+      for (final contra in e.contraindications) {
+        final c = contra.toLowerCase().trim();
+        for (final block in blockedZones) {
+          if (c.contains(block) || block.contains(c)) return false;
+        }
+      }
+      return true;
+    }).toList()..shuffle();
 
-// 2. Ищем 3 базы С УЧЕТОМ ОГРАНИЧЕНИЙ
-final bases = allExercises.where((e) {
-if (!isBaseExercise(e)) return false;
-// Проверка на зону
-final zone = getExerciseZone(e);
-if (blockedZones.contains(zone)) return false;
-// Проверка противопоказаний
-for (final contra in e.contraindications) {
-final c = contra.toLowerCase().trim();
-for (final block in blockedZones) {
-if (c.contains(block) || block.contains(c)) return false;
-}
-}
-return true;
-}).toList()..shuffle();
+    final selectedBases = bases.take(3).toList();
 
-final selectedBases = bases.take(3).toList();
+    int order = 1;
+    for (final ex in selectedBases) {
+      final we = WorkoutExercise(
+        workoutDayId: day.id!,
+        itemType: 'exercise',
+        itemId: ex.id!,
+        order: order++,
+        sets: 3,
+        reps: '10-12',
+      );
+      final newId = await DatabaseHelper.instance.addWorkoutExercise(we);
+      for (int s = 1; s <= 3; s++) {
+        await DatabaseHelper.instance.addWorkoutSet(
+            WorkoutSet(workoutExerciseId: newId, order: s, completed: false)
+        );
+      }
+    }
 
-int order = 1;
-for (final ex in selectedBases) {
-final we = WorkoutExercise(
-workoutDayId: day.id!,
-itemType: 'exercise',
-itemId: ex.id!,
-order: order++,
-sets: 3,
-reps: '10-12',
-// 👇 НЕ задаем blockNumber (остается null)
-);
-final newId = await DatabaseHelper.instance.addWorkoutExercise(we);
-for (int s = 1; s <= 3; s++) {
-await DatabaseHelper.instance.addWorkoutSet(
-WorkoutSet(workoutExerciseId: newId, order: s, completed: false)
-);
-}
-}
+    final allZones = ['chest', 'back', 'arms', 'shoulders', 'glutes', 'legs', 'abs'];
+    final focusZones = profile.focusAreas.map((e) => e.toLowerCase()).toList();
 
-// 3. Генерируем 6 изоляций на забытые зоны
-final allZones = ['chest', 'back', 'arms', 'shoulders', 'glutes', 'legs', 'abs'];
-final focusZones = profile.focusAreas.map((e) => e.toLowerCase()).toList();
+    final forgottenZones = allZones.where((z) =>
+    !blockedZones.contains(z) && !focusZones.contains(z)
+    ).toList();
 
-final forgottenZones = allZones.where((z) =>
-!blockedZones.contains(z) && !focusZones.contains(z)
-).toList();
+    int added = 0;
+    final Set<int> usedIds = selectedBases.map((e) => e.id!).toSet();
 
-int added = 0;
-final Set<int> usedIds = selectedBases.map((e) => e.id!).toSet();
+    for (final zone in forgottenZones) {
+      if (added >= 6) break;
+      final zoneExs = allExercises.where((e) {
+        if (e.id == null) return false;
+        if (usedIds.contains(e.id)) return false;
+        if (isBaseExercise(e) || e.muscleGroups.contains('cardio')) return false;
+        return e.muscleGroups.contains(zone);
+      }).toList()..shuffle();
 
-for (final zone in forgottenZones) {
-if (added >= 6) break;
-final zoneExs = allExercises.where((e) {
-if (e.id == null) return false;
-if (usedIds.contains(e.id)) return false;
-if (isBaseExercise(e) || e.muscleGroups.contains('cardio')) return false;
-return e.muscleGroups.contains(zone);
-}).toList()..shuffle();
+      for (final ex in zoneExs.take(2)) {
+        if (added >= 6) break;
+        usedIds.add(ex.id!);
 
-for (final ex in zoneExs.take(2)) {
-if (added >= 6) break;
-usedIds.add(ex.id!);
+        final we = WorkoutExercise(
+          workoutDayId: day.id!,
+          itemType: 'exercise',
+          itemId: ex.id!,
+          order: order++,
+          sets: 3,
+          reps: '15',
+        );
+        final newId = await DatabaseHelper.instance.addWorkoutExercise(we);
+        for (int s = 1; s <= 3; s++) {
+          await DatabaseHelper.instance.addWorkoutSet(
+              WorkoutSet(workoutExerciseId: newId, order: s, completed: false)
+          );
+        }
+        added++;
+      }
+    }
+  }
 
-final we = WorkoutExercise(
-workoutDayId: day.id!,
-itemType: 'exercise',
-itemId: ex.id!,
-order: order++,
-sets: 3,
-reps: '15',
-// 👇 НЕ задаем blockNumber (остается null)
-);
-final newId = await DatabaseHelper.instance.addWorkoutExercise(we);
-for (int s = 1; s <= 3; s++) {
-await DatabaseHelper.instance.addWorkoutSet(
-WorkoutSet(workoutExerciseId: newId, order: s, completed: false)
-);
-}
-added++;
-}
-}
-}
+  bool _isWeekUnlocked(int weekNumber) {
+    if (weekNumber == 1) return true;
+    final prevWeekDays = _allHistory.where((d) => d.weekNumber == weekNumber - 1).toList();
+    if (prevWeekDays.isEmpty) return false;
+    return prevWeekDays.every((d) => d.status == 'completed');
+  }
 
-bool _isWeekUnlocked(int weekNumber) {
-if (weekNumber == 1) return true;
-final prevWeekDays = _allHistory.where((d) => d.weekNumber == weekNumber - 1).toList();
-if (prevWeekDays.isEmpty) return false;
-return prevWeekDays.every((d) => d.status == 'completed');
-}
+  Future<void> _checkAndUnlockNextWeek() async {
+    if (_activeProfile == null) return;
+    final currentWeekDays = _allHistory.where((d) => d.weekNumber == _selectedWeek).toList();
+    if (currentWeekDays.isEmpty) return;
+    final allDone = currentWeekDays.every((d) => d.status == 'completed');
+    if (allDone && _selectedWeek < 4) {
+      await DatabaseHelper.instance.unlockNextWeek(_activeProfile!.id!, _selectedWeek + 1);
+      await _loadData();
+    }
+  }
 
-Future<void> _checkAndUnlockNextWeek() async {
-if (_activeProfile == null) return;
-final currentWeekDays = _allHistory.where((d) => d.weekNumber == _selectedWeek).toList();
-if (currentWeekDays.isEmpty) return;
-final allDone = currentWeekDays.every((d) => d.status == 'completed');
-if (allDone && _selectedWeek < 4) {
-await DatabaseHelper.instance.unlockNextWeek(_activeProfile!.id!, _selectedWeek + 1);
-await _loadData();
-}
-}
+  Future<void> _openYoga() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const YogaScreen()));
+  }
 
-Future<void> _openYoga() async {
-await Navigator.push(context, MaterialPageRoute(builder: (_) => const YogaScreen()));
-}
+  Future<void> _openMyTemplates() async {
+    if (_activeProfile == null) return;
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => MyTemplatesScreen(profileId: _activeProfile!.id!)));
+    if (mounted) _loadData();
+  }
 
-Future<void> _openMyTemplates() async {
-if (_activeProfile == null) return;
-await Navigator.push(context, MaterialPageRoute(builder: (_) => MyTemplatesScreen(profileId: _activeProfile!.id!)));
-if (mounted) _loadData();
-}
+  Future<void> _openLastCompleted() async {
+    if (_activeProfile == null) return;
+    final history = await DatabaseHelper.instance.getWorkoutDays(profileId: _activeProfile!.id!, limit: 1);
+    final completed = history.where((w) => w.status == 'completed').toList();
+    if (completed.isEmpty) { _showMessage('Пока нет завершённых тренировок'); return; }
+    if (!mounted) return;
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => WorkoutDetailScreen(workoutDay: completed.first, profileId: _activeProfile!.id!)));
+    if (mounted) _loadData();
+  }
 
-Future<void> _openLastCompleted() async {
-if (_activeProfile == null) return;
-final history = await DatabaseHelper.instance.getWorkoutDays(profileId: _activeProfile!.id!, limit: 1);
-final completed = history.where((w) => w.status == 'completed').toList();
-if (completed.isEmpty) { _showMessage('Пока нет завершённых тренировок'); return; }
-if (!mounted) return;
-await Navigator.push(context, MaterialPageRoute(builder: (_) => WorkoutDetailScreen(workoutDay: completed.first, profileId: _activeProfile!.id!)));
-if (mounted) _loadData();
-}
+  Future<void> _continueInProgress() async {
+    if (_activeProfile == null) return;
+    final history = await DatabaseHelper.instance.getWorkoutDays(profileId: _activeProfile!.id!, limit: 20);
+    final inProgress = history.where((w) => w.status == 'in_progress').toList();
+    if (inProgress.isEmpty) { _showMessage('Нет незавершённых тренировок'); return; }
+    inProgress.sort((a, b) => b.date.compareTo(a.date));
+    if (!mounted) return;
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => WorkoutDetailScreen(workoutDay: inProgress.first, profileId: _activeProfile!.id!)));
+    if (mounted) _loadData();
+  }
 
-Future<void> _continueInProgress() async {
-if (_activeProfile == null) return;
-final history = await DatabaseHelper.instance.getWorkoutDays(profileId: _activeProfile!.id!, limit: 20);
-final inProgress = history.where((w) => w.status == 'in_progress').toList();
-if (inProgress.isEmpty) { _showMessage('Нет незавершённых тренировок'); return; }
-inProgress.sort((a, b) => b.date.compareTo(a.date));
-if (!mounted) return;
-await Navigator.push(context, MaterialPageRoute(builder: (_) => WorkoutDetailScreen(workoutDay: inProgress.first, profileId: _activeProfile!.id!)));
-if (mounted) _loadData();
-}
+  Future<void> _confirmRegenerate() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Обновить план?'),
+        content: const Text('Текущий план будет удалён и создан заново. Продолжить?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Обновить')),
+        ],
+      ),
+    );
+    if (confirmed == true) _generatePlan(isUpdate: true);
+  }
 
-Future<void> _confirmRegenerate() async {
-final confirmed = await showDialog<bool>(
-context: context,
-builder: (ctx) => AlertDialog(
-title: const Text('Обновить план?'),
-content: const Text('Текущий план будет удалён и создан заново. Продолжить?'),
-actions: [
-TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Обновить')),
-],
-),
-);
-if (confirmed == true) _generatePlan(isUpdate: true);
-}
-
-void _showMessage(String text) {
-ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
-}
-
-// ═══ КОНЕЦ ЧАСТИ 2 ═══
-  // ═══ ЧАСТЬ 3: ИНТЕРФЕЙС ═══
+  void _showMessage(String text) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -572,6 +553,12 @@ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
           children: [
             _buildGreeting(context),
             const SizedBox(height: 20),
+
+            // 👇👇👇 ВНЕДРЕНА КАРТОЧКА ЧЕЛЛЕНДЖА 👇👇👇
+            DailyChallengeCard(profileId: _activeProfile!.id!),
+            const SizedBox(height: 20),
+            // 👆👆👆 КОНЕЦ ВНЕДРЕНИЯ 👆👆👆
+
             if (_monthDays.isNotEmpty) ...[
               _buildWeekChips(context),
               const SizedBox(height: 20),
@@ -1052,4 +1039,3 @@ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
     );
   }
 }
-// ═══ КОНЕЦ ФАЙЛА workout_screen.dart ═══

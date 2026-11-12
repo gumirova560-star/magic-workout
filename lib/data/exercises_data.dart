@@ -437,9 +437,6 @@ List<Exercise> getExercisesPart1() {
       tips: '• Начните с 30 секунд\n• Следите за дыханием',
       imagePath: 'assets/exercises/wall_sit.jpg',
     ),
-    // ═══════════════════════════════════════════════════════════
-    //  НОВЫЕ ДОМАШНИЕ (ДОБАВЛЕНЫ)
-    // ═══════════════════════════════════════════════════════════
     Exercise(
       name: 'Отведение ноги в сторону стоя',
       muscleGroups: ['glutes'],
@@ -553,9 +550,56 @@ List<Exercise> getExercisesPart1() {
       tips: '• 1-2 минуты на ногу',
       imagePath: 'assets/exercises/foot_massage_ball.jpg',
     ),
+
+    // 👇👇👇 НОВЫЕ УПРАЖНЕНИЯ (НИЗ) 👇👇👇
+    Exercise(
+      name: 'Жим ногами в тренажере (Leg Press)',
+      muscleGroups: ['quads', 'glutes', 'hamstrings'],
+      equipment: ['machine'],
+      difficulty: 'beginner',
+      description: 'Базовое упражнение для ног в тренажере. Безопасно для спины.',
+      technique: '1. Сядьте в тренажер\n2. Опустите платформу до угла 90 градусов\n3. Выжмите ноги',
+      mistakes: '❌ Отрыв таза\n❌ Полное разгибание коленей',
+      tips: '• 10-12 повторений\n• Не блокируйте колени в верхней точке',
+      imagePath: 'assets/exercises/leg_press.jpg',
+    ),
+    Exercise(
+      name: 'Гакк-приседания (Hack Squat)',
+      muscleGroups: ['quads', 'glutes'],
+      equipment: ['machine'],
+      difficulty: 'intermediate',
+      description: 'Приседания в специальном тренажере.',
+      technique: '1. Встаньте в тренажер\n2. Присядьте\n3. Выжмите вес вверх',
+      mistakes: '❌ Колени внутрь\n❌ Округление спины',
+      tips: '• 8-12 повторений\n• Стопы на ширине плеч',
+      imagePath: 'assets/exercises/hack_squat.jpg',
+    ),
+    Exercise(
+      name: 'Приседания в тренажере Смита',
+      muscleGroups: ['quads', 'glutes'],
+      equipment: ['machine', 'barbell'],
+      difficulty: 'intermediate',
+      description: 'Безопасный вариант приседаний со штангой.',
+      technique: '1. Встаньте под гриф\n2. Присядьте\n3. Вернитесь в исходное',
+      mistakes: '❌ Колени за носки\n❌ Округлая спина',
+      tips: '• 10-12 повторений',
+      imagePath: 'assets/exercises/smith_machine_squat.jpg',
+    ),
+    Exercise(
+      name: 'Подъемы на носки стоя в тренажере',
+      muscleGroups: ['calves'],
+      equipment: ['machine'],
+      difficulty: 'beginner',
+      description: 'Изоляция икроножных мышц.',
+      technique: '1. Встаньте в тренажер плечами под упоры\n2. Поднимитесь на носки\n3. Опуститесь',
+      mistakes: '❌ Резкие движения\n❌ Неполная амплитуда',
+      tips: '• 15-20 повторений',
+      imagePath: 'assets/exercises/standing_calf_raise_machine.jpg',
+    ),
+    // 👆 КОНЕЦ НОВЫХ УПРАЖНЕНИЙ
   ];
 }
-// ═══ КОНЕЦ ЧАСТИ 1 ИЗ 4 ═══
+// ═══ КОНЕЦ ЧАСТИ 1 ═══
 List<Exercise> getExercisesPart2() {
   return [
     // ═══════════════════════════════════════════════════════════
@@ -906,9 +950,55 @@ List<Exercise> getExercisesPart2() {
       tips: '• 10-12 повторений',
       imagePath: 'assets/exercises/bench_dips.jpg',
     ),
+
+    // 👇 НОВЫЕ УПРАЖНЕНИЯ (РУКИ)
+    Exercise(
+      name: 'Сгибание рук в тренажере (на бицепс)',
+      muscleGroups: ['biceps'],
+      equipment: ['machine'],
+      difficulty: 'beginner',
+      description: 'Изоляция бицепса на тренажере.',
+      technique: '1. Сядьте, упритесь локтями\n2. Согните руки\n3. Медленно верните',
+      mistakes: '❌ Отрыв локтей\n❌ Рывки',
+      tips: '• 12-15 повторений',
+      imagePath: 'assets/exercises/machine_bicep_curl.jpg',
+    ),
+    Exercise(
+      name: 'Разгибание рук в тренажере (на трицепс)',
+      muscleGroups: ['triceps'],
+      equipment: ['machine'],
+      difficulty: 'beginner',
+      description: 'Изоляция трицепса на тренажере.',
+      technique: '1. Сядьте в тренажер\n2. Разогните руки\n3. Вернитесь в исходное',
+      mistakes: '❌ Локти в стороны\n❌ Помощь корпусом',
+      tips: '• 12-15 повторений',
+      imagePath: 'assets/exercises/machine_tricep_extension.jpg',
+    ),
+    Exercise(
+      name: 'Жим штанги узким хватом',
+      muscleGroups: ['triceps', 'chest', 'shoulders'],
+      equipment: ['barbell', 'bench'],
+      difficulty: 'intermediate',
+      description: 'Лучшая база на трицепс.',
+      technique: '1. Лягте на скамью\n2. Возьмите гриф узко (на ширине плеч)\n3. Опустите к груди\n4. Выжмите',
+      mistakes: '❌ Очень узкий хват (болят кисти)\n❌ Локти в стороны',
+      tips: '• 8-12 повторений',
+      imagePath: 'assets/exercises/close_grip_bench.jpg',
+    ),
+    Exercise(
+      name: 'Подъем на бицепс на нижнем блоке',
+      muscleGroups: ['biceps', 'forearms'],
+      equipment: ['cable', 'machine'],
+      difficulty: 'beginner',
+      description: 'Постоянное натяжение для бицепса.',
+      technique: '1. Встаньте перед блоком\n2. Возьмите прямую рукоять\n3. Согните руки',
+      mistakes: '❌ Раскачивание корпусом\n❌ Отрыв локтей',
+      tips: '• 12-15 повторений',
+      imagePath: 'assets/exercises/cable_curl.jpg',
+    ),
   ];
 }
-// ═══ КОНЕЦ ЧАСТИ 2 ИЗ 4 ═══
+// ═══ КОНЕЦ ЧАСТИ 2 ═══
 List<Exercise> getExercisesPart3() {
   return [
     // ═══════════════════════════════════════════════════════════
@@ -1226,9 +1316,66 @@ List<Exercise> getExercisesPart3() {
       tips: '• 10-12 повторений',
       imagePath: 'assets/exercises/seated_chest_press.jpg',
     ),
+
+    // 👇 НОВЫЕ УПРАЖНЕНИЯ (ГРУДЬ И СПИНА)
+    Exercise(
+      name: 'Жим в тренажере (Chest Press)',
+      muscleGroups: ['chest', 'triceps', 'shoulders'],
+      equipment: ['machine'],
+      difficulty: 'beginner',
+      description: 'Безопасный аналог жима лёжа.',
+      technique: '1. Сядьте в тренажер\n2. Выжмите рукояти вперед\n3. Медленно вернитесь',
+      mistakes: '❌ Отрыв спины\n❌ Резкие движения',
+      tips: '• 10-12 повторений\n• Держите локти под углом 45 градусов',
+      imagePath: 'assets/exercises/machine_chest_press.jpg',
+    ),
+    Exercise(
+      name: 'Отжимания на брусьях (акцент на грудь)',
+      muscleGroups: ['chest', 'triceps'],
+      equipment: ['bodyweight'],
+      difficulty: 'intermediate',
+      description: 'Базовое упражнение для низа груди.',
+      technique: '1. Обопритесь на брусья\n2. Наклоните корпус вперед\n3. Опуститесь до прямого угла в локтях',
+      mistakes: '❌ Вертикальный корпус (перегрузка трицепса)\n❌ Слишком глубокое опускание',
+      tips: '• 8-12 повторений\n• Наклоняйте корпус вперед',
+      imagePath: 'assets/exercises/chest_dips.jpg',
+    ),
+    Exercise(
+      name: 'Жим штанги лежа в Смите',
+      muscleGroups: ['chest', 'triceps', 'shoulders'],
+      equipment: ['machine', 'barbell'],
+      difficulty: 'beginner',
+      description: 'Безопасный вариант классического жима.',
+      technique: '1. Лягте под гриф\n2. Снимите со стоек\n3. Выжмите вверх\n4. Опустите',
+      mistakes: '❌ Отрыв таза\n❌ Локти строго в стороны',
+      tips: '• 10-12 повторений',
+      imagePath: 'assets/exercises/smith_bench_press.jpg',
+    ),
+    Exercise(
+      name: 'Тяга Т-грифа (T-Bar Row)',
+      muscleGroups: ['lats', 'back', 'traps'],
+      equipment: ['barbell', 'machine'],
+      difficulty: 'intermediate',
+      description: 'Массивное упражнение для толщины спины.',
+      technique: '1. Встаньте над грифом\n2. Наклонитесь, возьмитесь за рукояти\n3. Тяните к животу',
+      mistakes: '❌ Округление спины\n❌ Рывки',
+      tips: '• 8-12 повторений\n• Сводите лопатки',
+      imagePath: 'assets/exercises/t_bar_row.jpg',
+    ),
+    Exercise(
+      name: 'Пулловер на верхнем блоке',
+      muscleGroups: ['lats', 'chest'],
+      equipment: ['cable', 'machine'],
+      difficulty: 'beginner',
+      description: 'Изоляция широчайших мышц спины.',
+      technique: '1. Встаньте лицом к блоку\n2. Возьмите рукоять прямыми руками\n3. Тяните вниз к бедрам',
+      mistakes: '❌ Сгибание локтей\n❌ Работа корпусом',
+      tips: '• 12-15 повторений\n• Чувствуйте растяжение в спине',
+      imagePath: 'assets/exercises/cable_pullover.jpg',
+    ),
   ];
 }
-// ═══ КОНЕЦ ЧАСТИ 3 ИЗ 4 ═══
+// ═══ КОНЕЦ ЧАСТИ 3 ═══
 List<Exercise> getExercisesPart4() {
   return [
     // ═══════════════════════════════════════════════════════════
@@ -1398,6 +1545,41 @@ List<Exercise> getExercisesPart4() {
       mistakes: '❌ Раскачивание\n❌ Рывки',
       tips: '• 12-15 повторений',
       imagePath: 'assets/exercises/face_pull_band.jpg',
+    ),
+
+    // 👇 НОВЫЕ УПРАЖНЕНИЯ (ПЛЕЧИ)
+    Exercise(
+      name: 'Жим в тренажере на плечи (Shoulder Press)',
+      muscleGroups: ['shoulders', 'triceps'],
+      equipment: ['machine'],
+      difficulty: 'beginner',
+      description: 'Изолированный жим на дельты.',
+      technique: '1. Сядьте в тренажер\n2. Выжмите рукояти вверх\n3. Медленно опустите',
+      mistakes: '❌ Прогиб в пояснице\n❌ Резкие движения',
+      tips: '• 10-12 повторений',
+      imagePath: 'assets/exercises/machine_shoulder_press.jpg',
+    ),
+    Exercise(
+      name: 'Обратная бабочка (Reverse Pec Deck)',
+      muscleGroups: ['shoulders', 'traps'],
+      equipment: ['machine'],
+      difficulty: 'beginner',
+      description: 'Изоляция задней дельты в тренажере.',
+      technique: '1. Сядьте лицом к тренажеру\n2. Разведите руки назад\n3. Сведите лопатки',
+      mistakes: '❌ Работа корпусом\n❌ Слишком большой вес',
+      tips: '• 12-15 повторений',
+      imagePath: 'assets/exercises/reverse_pec_deck.jpg',
+    ),
+    Exercise(
+      name: 'Махи в сторону на нижнем блоке',
+      muscleGroups: ['shoulders'],
+      equipment: ['cable', 'machine'],
+      difficulty: 'intermediate',
+      description: 'Изоляция средней дельты (постоянное натяжение).',
+      technique: '1. Встаньте боком к блоку\n2. Возьмите рукоять дальней рукой\n3. Сделайте мах в сторону',
+      mistakes: '❌ Поднимать плечо\n❌ Рывки',
+      tips: '• 12-15 повторений на руку',
+      imagePath: 'assets/exercises/cable_lateral_raise.jpg',
     ),
 
     // ═══════════════════════════════════════════════════════════
@@ -1570,7 +1752,7 @@ List<Exercise> getExercisesPart4() {
     ),
   ];
 }
-
+// ═══ КОНЕЦ ЧАСТИ 4 ═══
 List<Exercise> getExercisesPart5() {
   return [
     // ═══════════════════════════════════════════════════════════
@@ -1648,6 +1830,7 @@ List<Exercise> getExercisesPart5() {
     ),
   ];
 }
+// ═══ КОНЕЦ ЧАСТИ 5 ═══
 
 // ═══════════════════════════════════════════════════════════════
 //  ГЛАВНАЯ ФУНКЦИЯ (ОБЪЕДИНЯЕТ ВСЕ ЧАСТИ)

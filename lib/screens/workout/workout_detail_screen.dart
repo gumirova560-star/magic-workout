@@ -253,23 +253,27 @@ final workoutExs = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
 
 final Map<String, List<WorkoutExercise>> groupedExs = {};
 for (final we in workoutExs) {
-String key = '${we.itemType}_${we.itemId}';
+// 👇 ДОБАВЛЯЕМ ПРЕФИКС, ЧТОБЫ РАЗМИНКА НЕ СКЛЕИВАЛАСЬ С ОСНОВНЫМ УПРАЖНЕНИЕМ
+String prefix = we.isWarmup ? 'warmup_' : (we.isCoolDown ? 'cooldown_' : 'main_');
+String key = '$prefix${we.itemType}_${we.itemId}';
+
 if (we.itemType == 'exercise') {
 final ex = await DatabaseHelper.instance.getExerciseById(we.replacedByItemId ?? we.itemId);
 if (ex != null) {
 final cleanName = ex.name.toLowerCase().replaceAll('ё', 'е').replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
-key = 'exercise_$cleanName';
+key = '$prefix' + 'exercise_$cleanName';
 }
 } else {
 final st = await DatabaseHelper.instance.getStretchById(we.itemId);
 if (st != null) {
 final cleanName = st.name.toLowerCase().replaceAll('ё', 'е').replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
-key = 'stretch_$cleanName';
+key = '$prefix' + 'stretch_$cleanName';
 }
 }
 groupedExs.putIfAbsent(key, () => []).add(we);
 }
 
+// ═══ КОНЕЦ ЧАСТИ 4 (1/4 workout_detail_screen.dart) ═══
 final List<WorkoutExercise> uniqueExs = [];
 for (final entry in groupedExs.entries) {
 final list = entry.value;
@@ -511,7 +515,7 @@ final nums = matches.map((m) => int.tryParse(m.group(1) ?? '')).whereType<int>()
 if (nums.isEmpty) return null;
 return nums.reduce((a, b) => a > b ? a : b);
 }
-// ═══ КОНЕЦ ЧАСТИ 1 ═══
+
 void _startRestTimer() {
 _restTimer?.cancel();
 setState(() {
@@ -537,6 +541,7 @@ _isRestTimerPaused = false;
 
 void _togglePauseRestTimer() => setState(() => _isRestTimerPaused = !_isRestTimerPaused);
 
+// ═══ КОНЕЦ ЧАСТИ 5 (2/4 workout_detail_screen.dart) ═══
 Future<void> _showWeekNotification() async {
 final week = _day?.weekNumber;
 if (week == null || week == 1 || _started || _completed) return;
@@ -906,485 +911,486 @@ _day = updated;
 FairyReactionService().trigger('workout_started', mood: FairyMood.wink);
 _showMessage('Тренировка началась! 💪');
 }
-// ═══ КОНЕЦ ЧАСТИ 2 ═══
-Future<void> _finishWorkout() async {
-if (_workoutDayId == null) return;
 
-final preUpdates = <Future>[];
-for (final item in _items) {
-if (item.isCoolDown || item.isWarmup || item.id == null) continue;
-final sets = _setsData[item.id!];
-if (sets == null) continue;
-for (int i = 0; i < sets.length; i++) {
-final ids = _setIds[item.id!];
-if (ids != null && i < ids.length && ids[i] > 0) {
-preUpdates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
-id: ids[i], workoutExerciseId: item.id!, order: i + 1,
-weight: sets[i].weight, reps: sets[i].reps, completed: sets[i].completed,
-)));
-}
-}
-}
-if (preUpdates.isNotEmpty) await Future.wait(preUpdates);
+// ═══ КОНЕЦ ЧАСТИ 6 (3/4 workout_detail_screen.dart) ═══
+  Future<void> _finishWorkout() async {
+    if (_workoutDayId == null) return;
 
-int completedSets = 0;
-int totalSets = 0;
+    final preUpdates = <Future>[];
+    for (final item in _items) {
+      if (item.isCoolDown || item.isWarmup || item.id == null) continue;
+      final sets = _setsData[item.id!];
+      if (sets == null) continue;
+      for (int i = 0; i < sets.length; i++) {
+        final ids = _setIds[item.id!];
+        if (ids != null && i < ids.length && ids[i] > 0) {
+          preUpdates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
+            id: ids[i], workoutExerciseId: item.id!, order: i + 1,
+            weight: sets[i].weight, reps: sets[i].reps, completed: sets[i].completed,
+          )));
+        }
+      }
+    }
+    if (preUpdates.isNotEmpty) await Future.wait(preUpdates);
 
-for (final item in _items) {
-if (item.isCoolDown || item.isWarmup || item.id == null) continue;
-final sets = _setsData[item.id!];
-if (sets == null) continue;
-for (final s in sets) {
-totalSets++;
-if (s.completed) completedSets++;
-}
-}
+    int completedSets = 0;
+    int totalSets = 0;
 
-if (completedSets < totalSets) {
-final confirm = await showDialog<bool>(
-context: context,
-builder: (ctx) => AlertDialog(
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-title: const Text('Тренировка не завершена'),
-content: Text('Вы выполнили $completedSets из $totalSets подходов.\n\nСохранить прогресс и вернуться? День останется в плане как «В процессе».'),
-actions: [
-TextButton(
-onPressed: () => Navigator.pop(ctx, false),
-child: const Text('Продолжить'),
-),
-ElevatedButton(
-onPressed: () => Navigator.pop(ctx, true),
-style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE17055)),
-child: const Text('Сохранить и выйти'),
-),
-],
-),
-);
+    for (final item in _items) {
+      if (item.isCoolDown || item.isWarmup || item.id == null) continue;
+      final sets = _setsData[item.id!];
+      if (sets == null) continue;
+      for (final s in sets) {
+        totalSets++;
+        if (s.completed) completedSets++;
+      }
+    }
 
-if (confirm != true) return;
+    if (completedSets < totalSets) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Тренировка не завершена'),
+          content: Text('Вы выполнили $completedSets из $totalSets подходов.\n\nСохранить прогресс и вернуться? День останется в плане как «В процессе».'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Продолжить'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE17055)),
+              child: const Text('Сохранить и выйти'),
+            ),
+          ],
+        ),
+      );
 
-final updates = <Future>[];
-for (final item in _items) {
-if (item.isCoolDown || item.isWarmup || item.id == null) continue;
-final sets = _setsData[item.id!];
-if (sets == null) continue;
-for (int i = 0; i < sets.length; i++) {
-final ids = _setIds[item.id!];
-if (ids != null && i < ids.length && ids[i] > 0) {
-updates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
-id: ids[i], workoutExerciseId: item.id!, order: i + 1,
-weight: sets[i].weight, reps: sets[i].reps, completed: sets[i].completed,
-)));
-}
-}
-}
-if (updates.isNotEmpty) await Future.wait(updates);
+      if (confirm != true) return;
 
-final day = await DatabaseHelper.instance.getWorkoutDayById(_workoutDayId!);
-if (day == null) return;
-final updated = day.copyWith(status: 'in_progress', startedAt: day.startedAt ?? DateTime.now());
-await DatabaseHelper.instance.updateWorkoutDay(updated);
-if (mounted) Navigator.pop(context, true);
-return;
-}
+      final updates = <Future>[];
+      for (final item in _items) {
+        if (item.isCoolDown || item.isWarmup || item.id == null) continue;
+        final sets = _setsData[item.id!];
+        if (sets == null) continue;
+        for (int i = 0; i < sets.length; i++) {
+          final ids = _setIds[item.id!];
+          if (ids != null && i < ids.length && ids[i] > 0) {
+            updates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
+              id: ids[i], workoutExerciseId: item.id!, order: i + 1,
+              weight: sets[i].weight, reps: sets[i].reps, completed: sets[i].completed,
+            )));
+          }
+        }
+      }
+      if (updates.isNotEmpty) await Future.wait(updates);
 
-String? note;
-final noteController = TextEditingController();
-final noteResult = await showDialog<bool>(
-context: context,
-builder: (ctx) => AlertDialog(
-title: const Text('Заметка к тренировке'),
-content: TextField(
-controller: noteController,
-autofocus: true,
-maxLines: 3,
-decoration: const InputDecoration(hintText: 'Как прошло?', border: OutlineInputBorder()),
-),
-actions: [
-TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Пропустить')),
-ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
-],
-),
-);
-if (noteResult == true) note = noteController.text.trim();
+      final day = await DatabaseHelper.instance.getWorkoutDayById(_workoutDayId!);
+      if (day == null) return;
+      final updated = day.copyWith(status: 'in_progress', startedAt: day.startedAt ?? DateTime.now());
+      await DatabaseHelper.instance.updateWorkoutDay(updated);
+      if (mounted) Navigator.pop(context, true);
+      return;
+    }
 
-final updates = <Future>[];
-for (final item in _items) {
-if (item.isCoolDown || item.isWarmup || item.id == null) continue;
-final sets = _setsData[item.id!];
-if (sets == null) continue;
-for (int i = 0; i < sets.length; i++) {
-final ids = _setIds[item.id!];
-if (ids != null && i < ids.length) {
-updates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: sets[i].weight, reps: sets[i].reps, completed: true)));
-}
-}
-}
-if (updates.isNotEmpty) await Future.wait(updates);
+    String? note;
+    final noteController = TextEditingController();
+    final noteResult = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Заметка к тренировке'),
+        content: TextField(
+          controller: noteController,
+          autofocus: true,
+          maxLines: 3,
+          decoration: const InputDecoration(hintText: 'Как прошло?', border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Пропустить')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
+        ],
+      ),
+    );
+    if (noteResult == true) note = noteController.text.trim();
 
-bool isOverperformed = false;
-for (final item in _items) {
-if (item.isCoolDown || item.isWarmup || item.id == null) continue;
-final sets = _setsData[item.id!];
-if (sets == null) continue;
-final targetW = _targetWeights[item.id!];
-for (final s in sets) {
-if (s.completed && targetW != null && targetW > 0 && s.weight != null && s.weight! > targetW) isOverperformed = true;
-}
-}
+    final updates = <Future>[];
+    for (final item in _items) {
+      if (item.isCoolDown || item.isWarmup || item.id == null) continue;
+      final sets = _setsData[item.id!];
+      if (sets == null) continue;
+      for (int i = 0; i < sets.length; i++) {
+        final ids = _setIds[item.id!];
+        if (ids != null && i < ids.length) {
+          updates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: sets[i].weight, reps: sets[i].reps, completed: true)));
+        }
+      }
+    }
+    if (updates.isNotEmpty) await Future.wait(updates);
 
-final day = await DatabaseHelper.instance.getWorkoutDayById(_workoutDayId!);
-if (day == null) return;
-final minutes = DateTime.now().difference(day.startedAt ?? DateTime.now()).inMinutes;
+    bool isOverperformed = false;
+    for (final item in _items) {
+      if (item.isCoolDown || item.isWarmup || item.id == null) continue;
+      final sets = _setsData[item.id!];
+      if (sets == null) continue;
+      final targetW = _targetWeights[item.id!];
+      for (final s in sets) {
+        if (s.completed && targetW != null && targetW > 0 && s.weight != null && s.weight! > targetW) isOverperformed = true;
+      }
+    }
 
-final updated = day.copyWith(status: 'completed', completedAt: DateTime.now(), durationMinutes: minutes > 0 ? minutes : 1, notes: note);
-await DatabaseHelper.instance.updateWorkoutDay(updated);
-if (!mounted) return;
+    final day = await DatabaseHelper.instance.getWorkoutDayById(_workoutDayId!);
+    if (day == null) return;
+    final minutes = DateTime.now().difference(day.startedAt ?? DateTime.now()).inMinutes;
 
-if (isOverperformed) FairyReactionService().trigger('workout_overperformed', mood: FairyMood.party);
-else FairyReactionService().trigger('workout_completed', mood: FairyMood.party);
+    final updated = day.copyWith(status: 'completed', completedAt: DateTime.now(), durationMinutes: minutes > 0 ? minutes : 1, notes: note);
+    await DatabaseHelper.instance.updateWorkoutDay(updated);
+    if (!mounted) return;
 
-final unlocked = await AchievementService.checkAchievements(widget.profileId);
-if (unlocked.isNotEmpty && mounted) {
-for (final a in unlocked) {
-ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-content: Row(children: [
-Text(a.icon, style: const TextStyle(fontSize: 24)),
-const SizedBox(width: 12),
-Expanded(child: Text('Новое достижение: ${a.title}!', style: const TextStyle(fontWeight: FontWeight.w600)))
-]),
-backgroundColor: const Color(0xFF6C5CE7),
-duration: const Duration(seconds: 3),
-));
-}
-}
+    if (isOverperformed) FairyReactionService().trigger('workout_overperformed', mood: FairyMood.party);
+    else FairyReactionService().trigger('workout_completed', mood: FairyMood.party);
 
-bool isWeekComplete = false;
-bool isCycleComplete = false;
+    final unlocked = await AchievementService.checkAchievements(widget.profileId);
+    if (unlocked.isNotEmpty && mounted) {
+      for (final a in unlocked) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Row(children: [
+            Text(a.icon, style: const TextStyle(fontSize: 24)),
+            const SizedBox(width: 12),
+            Expanded(child: Text('Новое достижение: ${a.title}!', style: const TextStyle(fontWeight: FontWeight.w600)))
+          ]),
+          backgroundColor: const Color(0xFF6C5CE7),
+          duration: const Duration(seconds: 3),
+        ));
+      }
+    }
 
-if (updated.weekNumber != null) {
-final weekDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(profileId: widget.profileId, weekNumber: updated.weekNumber!, cycleNumber: updated.cycleNumber);
-final plannedDays = _profile?.daysPerWeek ?? 3;
-final completedCount = weekDays.where((d) => d.status == 'completed').length;
-final hasSkipped = weekDays.any((d) => d.status != 'completed');
-isWeekComplete = completedCount >= plannedDays && !hasSkipped;
+    bool isWeekComplete = false;
+    bool isCycleComplete = false;
 
-if (isWeekComplete && updated.cycleNumber != null) {
-bool allWeeksDone = true;
-for (int w = 1; w <= 4; w++) {
-final wDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(profileId: widget.profileId, weekNumber: w, cycleNumber: updated.cycleNumber);
-final wCompleted = wDays.where((d) => d.status == 'completed').length;
-final wHasSkipped = wDays.any((d) => d.status != 'completed');
-if (wCompleted < plannedDays || wHasSkipped) {
-allWeeksDone = false;
-break;
-}
-}
-isCycleComplete = allWeeksDone;
-}
-}
+    if (updated.weekNumber != null) {
+      final weekDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(profileId: widget.profileId, weekNumber: updated.weekNumber!, cycleNumber: updated.cycleNumber);
+      final plannedDays = _profile?.daysPerWeek ?? 3;
+      final completedCount = weekDays.where((d) => d.status == 'completed').length;
+      final hasSkipped = weekDays.any((d) => d.status != 'completed');
+      isWeekComplete = completedCount >= plannedDays && !hasSkipped;
 
-await Future.delayed(const Duration(milliseconds: 300));
-if (!mounted) return;
+      if (isWeekComplete && updated.cycleNumber != null) {
+        bool allWeeksDone = true;
+        for (int w = 1; w <= 4; w++) {
+          final wDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(profileId: widget.profileId, weekNumber: w, cycleNumber: updated.cycleNumber);
+          final wCompleted = wDays.where((d) => d.status == 'completed').length;
+          final wHasSkipped = wDays.any((d) => d.status != 'completed');
+          if (wCompleted < plannedDays || wHasSkipped) {
+            allWeeksDone = false;
+            break;
+          }
+        }
+        isCycleComplete = allWeeksDone;
+      }
+    }
 
-await Navigator.pushReplacement(
-context,
-MaterialPageRoute(
-builder: (_) => WorkoutCompleteScreen(
-completedDay: updated,
-exercisesCount: _items.where((i) => !i.isCoolDown && !i.isWarmup).length,
-isWeekComplete: isWeekComplete,
-isCycleComplete: isCycleComplete,
-userName: _profile?.name ?? 'друг',
-),
-),
-);
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
 
-if (mounted) Navigator.pop(context, true);
-}
+    await Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WorkoutCompleteScreen(
+          completedDay: updated,
+          exercisesCount: _items.where((i) => !i.isCoolDown && !i.isWarmup).length,
+          isWeekComplete: isWeekComplete,
+          isCycleComplete: isCycleComplete,
+          userName: _profile?.name ?? 'друг',
+        ),
+      ),
+    );
 
-Future<void> _saveAsTemplate() async {
-if (_day == null || _day!.id == null) return;
-if (_items.isEmpty) {
-_showMessage('Нечего сохранять — нет упражнений');
-return;
-}
-final nameController = TextEditingController(text: _day!.name);
-final confirm = await showDialog<bool>(
-context: context,
-builder: (ctx) => AlertDialog(
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-title: const Row(children: [Icon(Icons.bookmark_add_rounded), SizedBox(width: 8), Expanded(child: Text('Сохранить как шаблон', style: TextStyle(fontSize: 18)))]),
-content: Column(
-mainAxisSize: MainAxisSize.min,
-crossAxisAlignment: CrossAxisAlignment.start,
-children: [
-const Text('Создаст шаблон с этими упражнениями. Разминка в шаблон не попадёт.', style: TextStyle(fontSize: 13)),
-const SizedBox(height: 16),
-TextField(controller: nameController, autofocus: true, decoration: const InputDecoration(labelText: 'Название шаблона', prefixIcon: Icon(Icons.fitness_center_rounded), hintText: 'Например: Моя силовая A')),
-],
-),
-actions: [
-TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
-],
-),
-);
-if (confirm != true) return;
-final templateName = nameController.text.trim().isEmpty ? _day!.name : nameController.text.trim();
-try {
-await DatabaseHelper.instance.createTemplateFromWorkoutDay(profileId: widget.profileId, workoutDayId: _day!.id!, templateName: templateName, type: _day!.type, estimatedMinutes: _day!.durationMinutes ?? 45);
-if (!mounted) return;
-ScaffoldMessenger.of(context).hideCurrentSnackBar();
-ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✅ Шаблон «$templateName» сохранён'), duration: const Duration(seconds: 3)));
-} catch (e) {
-if (!mounted) return;
-_showMessage('Ошибка: $e');
-}
-}
+    if (mounted) Navigator.pop(context, true);
+  }
 
-Future<void> _openExerciseMenu(WorkoutExercise item, Exercise exercise) async {
-if (_isViewMode) return;
-final result = await showModalBottomSheet<String>(
-context: context,
-shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-builder: (ctx) => _buildExerciseMenu(ctx, exercise),
-);
-if (result == null) return;
-switch (result) {
-case 'replace': await _replaceExercise(item, exercise); break;
-case 'edit': await _editExerciseParams(item); break;
-case 'delete': await _deleteExercise(item); break;
-}
-}
+  Future<void> _saveAsTemplate() async {
+    if (_day == null || _day!.id == null) return;
+    if (_items.isEmpty) {
+      _showMessage('Нечего сохранять — нет упражнений');
+      return;
+    }
+    final nameController = TextEditingController(text: _day!.name);
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(children: [Icon(Icons.bookmark_add_rounded), SizedBox(width: 8), Expanded(child: Text('Сохранить как шаблон', style: TextStyle(fontSize: 18)))]),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Создаст шаблон с этими упражнениями. Разминка в шаблон не попадёт.', style: TextStyle(fontSize: 13)),
+            const SizedBox(height: 16),
+            TextField(controller: nameController, autofocus: true, decoration: const InputDecoration(labelText: 'Название шаблона', prefixIcon: Icon(Icons.fitness_center_rounded), hintText: 'Например: Моя силовая A')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    final templateName = nameController.text.trim().isEmpty ? _day!.name : nameController.text.trim();
+    try {
+      await DatabaseHelper.instance.createTemplateFromWorkoutDay(profileId: widget.profileId, workoutDayId: _day!.id!, templateName: templateName, type: _day!.type, estimatedMinutes: _day!.durationMinutes ?? 45);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✅ Шаблон «$templateName» сохранён'), duration: const Duration(seconds: 3)));
+    } catch (e) {
+      if (!mounted) return;
+      _showMessage('Ошибка: $e');
+    }
+  }
 
-Widget _buildExerciseMenu(BuildContext ctx, Exercise exercise) {
-final theme = Theme.of(ctx);
-return Padding(
-padding: const EdgeInsets.all(20),
-child: Column(
-mainAxisSize: MainAxisSize.min,
-crossAxisAlignment: CrossAxisAlignment.stretch,
-children: [
-Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.onSurface.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
-const SizedBox(height: 16),
-Text(exercise.name, style: theme.textTheme.headlineMedium, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-const SizedBox(height: 20),
-_menuTile(ctx, icon: Icons.swap_horiz_rounded, title: 'Заменить упражнение', color: theme.colorScheme.primary, onTap: () => Navigator.pop(ctx, 'replace')),
-_menuTile(ctx, icon: Icons.tune_rounded, title: 'Изменить подходы и повторения', color: const Color(0xFF00B894), onTap: () => Navigator.pop(ctx, 'edit')),
-_menuTile(ctx, icon: Icons.delete_outline_rounded, title: 'Удалить из тренировки', color: theme.colorScheme.error, onTap: () => Navigator.pop(ctx, 'delete')),
-],
-),
-);
-}
+  Future<void> _openExerciseMenu(WorkoutExercise item, Exercise exercise) async {
+    if (_isViewMode) return;
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => _buildExerciseMenu(ctx, exercise),
+    );
+    if (result == null) return;
+    switch (result) {
+      case 'replace': await _replaceExercise(item, exercise); break;
+      case 'edit': await _editExerciseParams(item); break;
+      case 'delete': await _deleteExercise(item); break;
+    }
+  }
 
-Widget _menuTile(BuildContext ctx, {required IconData icon, required String title, required Color color, required VoidCallback onTap}) {
-return Padding(
-padding: const EdgeInsets.only(bottom: 8),
-child: Material(
-color: Colors.transparent,
-child: ListTile(
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: Theme.of(ctx).colorScheme.onSurface.withOpacity(0.1))),
-leading: Icon(icon, color: color),
-title: Text(title),
-onTap: onTap,
-),
-),
-);
-}
+  Widget _buildExerciseMenu(BuildContext ctx, Exercise exercise) {
+    final theme = Theme.of(ctx);
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.onSurface.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
+          const SizedBox(height: 16),
+          Text(exercise.name, style: theme.textTheme.headlineMedium, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 20),
+          _menuTile(ctx, icon: Icons.swap_horiz_rounded, title: 'Заменить упражнение', color: theme.colorScheme.primary, onTap: () => Navigator.pop(ctx, 'replace')),
+          _menuTile(ctx, icon: Icons.tune_rounded, title: 'Изменить подходы и повторения', color: const Color(0xFF00B894), onTap: () => Navigator.pop(ctx, 'edit')),
+          _menuTile(ctx, icon: Icons.delete_outline_rounded, title: 'Удалить из тренировки', color: theme.colorScheme.error, onTap: () => Navigator.pop(ctx, 'delete')),
+        ],
+      ),
+    );
+  }
 
-Future<void> _replaceExercise(WorkoutExercise item, Exercise original) async {
-final reason = await showModalBottomSheet<String>(context: context, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))), builder: (ctx) => _buildReasonSheet(ctx));
-if (reason == null) return;
-final result = await Navigator.push<Map<String, dynamic>>(context, MaterialPageRoute(builder: (_) => ReplaceExerciseScreen(original: original, reasonCode: reason)));
-if (result == null) return;
+  Widget _menuTile(BuildContext ctx, {required IconData icon, required String title, required Color color, required VoidCallback onTap}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.transparent,
+        child: ListTile(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: Theme.of(ctx).colorScheme.onSurface.withOpacity(0.1))),
+          leading: Icon(icon, color: color),
+          title: Text(title),
+          onTap: onTap,
+        ),
+      ),
+    );
+  }
 
-_applyReplacement(item, original, result);
-}
+  Future<void> _replaceExercise(WorkoutExercise item, Exercise original) async {
+    final reason = await showModalBottomSheet<String>(context: context, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))), builder: (ctx) => _buildReasonSheet(ctx));
+    if (reason == null) return;
+    final result = await Navigator.push<Map<String, dynamic>>(context, MaterialPageRoute(builder: (_) => ReplaceExerciseScreen(original: original, reasonCode: reason)));
+    if (result == null) return;
 
-Future<void> _quickReplaceExercise(WorkoutExercise item, Exercise original) async {
-final result = await Navigator.push<Map<String, dynamic>>(
-context,
-MaterialPageRoute(
-builder: (_) => ReplaceExerciseScreen(
-original: original,
-reasonCode: null,
-),
-),
-);
-if (result == null) return;
+    _applyReplacement(item, original, result);
+  }
 
-_applyReplacement(item, original, result);
-}
+  Future<void> _quickReplaceExercise(WorkoutExercise item, Exercise original) async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReplaceExerciseScreen(
+          original: original,
+          reasonCode: null,
+        ),
+      ),
+    );
+    if (result == null) return;
 
-void _applyReplacement(WorkoutExercise item, Exercise original, Map<String, dynamic> result) async {
-final newExercise = result['newExercise'] as Exercise;
-final permanent = result['permanent'] as bool;
-final reasonCode = result['reason'] as String? ?? 'other';
+    _applyReplacement(item, original, result);
+  }
 
-final isAlreadyInWorkout = _items.any((i) =>
-i.id != item.id &&
-(i.replacedByItemId ?? i.itemId) == newExercise.id
-);
+  void _applyReplacement(WorkoutExercise item, Exercise original, Map<String, dynamic> result) async {
+    final newExercise = result['newExercise'] as Exercise;
+    final permanent = result['permanent'] as bool;
+    final reasonCode = result['reason'] as String? ?? 'other';
 
-if (isAlreadyInWorkout) {
-_showMessage('Упражнение «${newExercise.name}» уже есть в этой тренировке!');
-return;
-}
+    final isAlreadyInWorkout = _items.any((i) =>
+    i.id != item.id &&
+        (i.replacedByItemId ?? i.itemId) == newExercise.id
+    );
 
-setState(() {
-_exerciseMap[newExercise.id!] = newExercise;
-final idx = _items.indexOf(item);
-if (idx >= 0) {
-_items[idx] = item.copyWith(itemId: newExercise.id!, replacedByItemId: newExercise.id, replacementReason: reasonCode, replacementPermanent: permanent);
-if (item.id != null) {
-final defaultReps = _parseReps(_items[idx].reps);
-_setsData[item.id!] = List.generate(_items[idx].sets, (_) => SetData(reps: defaultReps, completed: false));
-_setIds[item.id!] = List.generate(_items[idx].sets, (_) => 0);
-}
-}
-});
-if (_day?.weekNumber != null) await DatabaseHelper.instance.replaceExerciseInMonth(profileId: widget.profileId, oldItemId: original.id!, newItemId: newExercise.id!, reason: reasonCode, permanent: permanent);
-_showMessage('Заменено на «${newExercise.name}» во всем месяце');
-}
+    if (isAlreadyInWorkout) {
+      _showMessage('Упражнение «${newExercise.name}» уже есть в этой тренировке!');
+      return;
+    }
 
-Widget _buildReasonSheet(BuildContext ctx) {
-final theme = Theme.of(ctx);
-final reasons = [
-('no_equipment', 'Нет оборудования', Icons.block_rounded, theme.colorScheme.error),
-('too_hard', 'Слишком тяжело', Icons.trending_down_rounded, const Color(0xFFE17055)),
-('too_easy', 'Слишком легко', Icons.trending_up_rounded, const Color(0xFF00B894)),
-('dislike', 'Не нравится', Icons.thumb_down_rounded, const Color(0xFFFDCB6E)),
-('other', 'Другое (вручную)', Icons.search_rounded, theme.colorScheme.primary)
-];
-return Padding(
-padding: const EdgeInsets.all(20),
-child: Column(
-mainAxisSize: MainAxisSize.min,
-crossAxisAlignment: CrossAxisAlignment.stretch,
-children: [
-Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.onSurface.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
-const SizedBox(height: 16),
-Text('Почему заменить?', style: theme.textTheme.headlineMedium, textAlign: TextAlign.center),
-const SizedBox(height: 8),
-Text('Приложение подберёт замену с учётом причины', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6)), textAlign: TextAlign.center),
-const SizedBox(height: 20),
-...reasons.map((r) {
-final (code, label, icon, color) = r;
-return Padding(
-padding: const EdgeInsets.only(bottom: 8),
-child: Material(
-color: Colors.transparent,
-child: ListTile(
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: theme.colorScheme.onSurface.withOpacity(0.1))),
-leading: Icon(icon, color: color),
-title: Text(label),
-onTap: () => Navigator.pop(ctx, code),
-),
-),
-);
-}),
-],
-),
-);
-}
+    setState(() {
+      _exerciseMap[newExercise.id!] = newExercise;
+      final idx = _items.indexOf(item);
+      if (idx >= 0) {
+        _items[idx] = item.copyWith(itemId: newExercise.id!, replacedByItemId: newExercise.id, replacementReason: reasonCode, replacementPermanent: permanent);
+        if (item.id != null) {
+          final defaultReps = _parseReps(_items[idx].reps);
+          _setsData[item.id!] = List.generate(_items[idx].sets, (_) => SetData(reps: defaultReps, completed: false));
+          _setIds[item.id!] = List.generate(_items[idx].sets, (_) => 0);
+        }
+      }
+    });
+    if (_day?.weekNumber != null) await DatabaseHelper.instance.replaceExerciseInMonth(profileId: widget.profileId, oldItemId: original.id!, newItemId: newExercise.id!, reason: reasonCode, permanent: permanent);
+    _showMessage('Заменено на «${newExercise.name}» во всем месяце');
+  }
 
-Future<void> _editExerciseParams(WorkoutExercise item) async {
-final setsController = TextEditingController(text: '${item.sets}');
-final repsController = TextEditingController(text: item.reps);
-final restController = TextEditingController(text: '${item.restSeconds}');
-final isTimed = _isTimed(_exerciseMap[item.replacedByItemId ?? item.itemId]?.name ?? '');
-final result = await showDialog<bool>(
-context: context,
-builder: (ctx) => AlertDialog(
-title: const Text('Изменить параметры'),
-content: Column(
-mainAxisSize: MainAxisSize.min,
-children: [
-TextField(controller: setsController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Подходы', prefixIcon: Icon(Icons.repeat_rounded))),
-const SizedBox(height: 12),
-TextField(controller: repsController, decoration: InputDecoration(labelText: isTimed ? 'Время (например, 60 сек)' : 'Повторения (например, 10-12)', prefixIcon: const Icon(Icons.numbers_rounded))),
-const SizedBox(height: 12),
-TextField(controller: restController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Отдых (сек)', prefixIcon: Icon(Icons.timer_rounded))),
-],
-),
-actions: [
-TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
-],
-),
-);
-if (result != true) return;
-final newSets = int.tryParse(setsController.text) ?? item.sets;
-final newReps = repsController.text.trim().isEmpty ? item.reps : repsController.text.trim();
-final newRest = int.tryParse(restController.text) ?? item.restSeconds;
-final defaultReps = _parseReps(newReps);
-setState(() {
-final idx = _items.indexOf(item);
-if (idx >= 0) _items[idx] = item.copyWith(sets: newSets, reps: newReps, restSeconds: newRest);
-if (item.id != null) {
-_setsData[item.id!] = List.generate(newSets, (_) => SetData(reps: defaultReps));
-_setIds[item.id!] = List.generate(newSets, (_) => 0);
-}
-});
-_showMessage('Параметры обновлены');
-}
+  Widget _buildReasonSheet(BuildContext ctx) {
+    final theme = Theme.of(ctx);
+    final reasons = [
+      ('no_equipment', 'Нет оборудования', Icons.block_rounded, theme.colorScheme.error),
+      ('too_hard', 'Слишком тяжело', Icons.trending_down_rounded, const Color(0xFFE17055)),
+      ('too_easy', 'Слишком легко', Icons.trending_up_rounded, const Color(0xFF00B894)),
+      ('dislike', 'Не нравится', Icons.thumb_down_rounded, const Color(0xFFFDCB6E)),
+      ('other', 'Другое (вручную)', Icons.search_rounded, theme.colorScheme.primary)
+    ];
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.onSurface.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
+          const SizedBox(height: 16),
+          Text('Почему заменить?', style: theme.textTheme.headlineMedium, textAlign: TextAlign.center),
+          const SizedBox(height: 8),
+          Text('Приложение подберёт замену с учётом причины', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6)), textAlign: TextAlign.center),
+          const SizedBox(height: 20),
+          ...reasons.map((r) {
+            final (code, label, icon, color) = r;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Material(
+                color: Colors.transparent,
+                child: ListTile(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: theme.colorScheme.onSurface.withOpacity(0.1))),
+                  leading: Icon(icon, color: color),
+                  title: Text(label),
+                  onTap: () => Navigator.pop(ctx, code),
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
 
-Future<void> _addSetToExercise(WorkoutExercise item) async {
-if (item.id == null || !_started || _isViewMode) return;
-final sets = _setsData[item.id!];
-final ids = _setIds[item.id!];
-if (sets == null || ids == null) return;
-final newOrder = sets.length + 1;
-final defaultReps = _parseReps(item.reps);
-final newSetId = await DatabaseHelper.instance.addWorkoutSet(WorkoutSet(workoutExerciseId: item.id!, order: newOrder, reps: defaultReps, completed: false));
-if (!mounted) return;
-setState(() {
-sets.add(SetData(reps: defaultReps, completed: false));
-ids.add(newSetId);
-});
-}
+  Future<void> _editExerciseParams(WorkoutExercise item) async {
+    final setsController = TextEditingController(text: '${item.sets}');
+    final repsController = TextEditingController(text: item.reps);
+    final restController = TextEditingController(text: '${item.restSeconds}');
+    final isTimed = _isTimed(_exerciseMap[item.replacedByItemId ?? item.itemId]?.name ?? '');
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Изменить параметры'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: setsController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Подходы', prefixIcon: Icon(Icons.repeat_rounded))),
+            const SizedBox(height: 12),
+            TextField(controller: repsController, decoration: InputDecoration(labelText: isTimed ? 'Время (например, 60 сек)' : 'Повторения (например, 10-12)', prefixIcon: const Icon(Icons.numbers_rounded))),
+            const SizedBox(height: 12),
+            TextField(controller: restController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Отдых (сек)', prefixIcon: Icon(Icons.timer_rounded))),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
+        ],
+      ),
+    );
+    if (result != true) return;
+    final newSets = int.tryParse(setsController.text) ?? item.sets;
+    final newReps = repsController.text.trim().isEmpty ? item.reps : repsController.text.trim();
+    final newRest = int.tryParse(restController.text) ?? item.restSeconds;
+    final defaultReps = _parseReps(newReps);
+    setState(() {
+      final idx = _items.indexOf(item);
+      if (idx >= 0) _items[idx] = item.copyWith(sets: newSets, reps: newReps, restSeconds: newRest);
+      if (item.id != null) {
+        _setsData[item.id!] = List.generate(newSets, (_) => SetData(reps: defaultReps));
+        _setIds[item.id!] = List.generate(newSets, (_) => 0);
+      }
+    });
+    _showMessage('Параметры обновлены');
+  }
 
-Future<void> _deleteSetFromExercise(WorkoutExercise item, int index) async {
-if (item.id == null || _isViewMode) return;
-final sets = _setsData[item.id!];
-final ids = _setIds[item.id!];
-if (sets == null || ids == null || index < 0 || index >= sets.length) return;
-if (sets.length <= 1) {
-_showMessage('Нельзя удалить последний подход');
-return;
-}
-final setId = ids[index];
-if (setId > 0) await DatabaseHelper.instance.deleteWorkoutSet(setId);
-if (!mounted) return;
-setState(() {
-sets.removeAt(index);
-ids.removeAt(index);
-});
-_showMessage('Подход удалён');
-}
+  Future<void> _addSetToExercise(WorkoutExercise item) async {
+    if (item.id == null || !_started || _isViewMode) return;
+    final sets = _setsData[item.id!];
+    final ids = _setIds[item.id!];
+    if (sets == null || ids == null) return;
+    final newOrder = sets.length + 1;
+    final defaultReps = _parseReps(item.reps);
+    final newSetId = await DatabaseHelper.instance.addWorkoutSet(WorkoutSet(workoutExerciseId: item.id!, order: newOrder, reps: defaultReps, completed: false));
+    if (!mounted) return;
+    setState(() {
+      sets.add(SetData(reps: defaultReps, completed: false));
+      ids.add(newSetId);
+    });
+  }
 
-Future<void> _deleteExercise(WorkoutExercise item) async {
-final confirmed = await showDialog<bool>(
-context: context,
-builder: (ctx) => AlertDialog(
-title: const Text('Удалить упражнение?'),
-content: const Text('Упражнение будет удалено из этой тренировки.'),
-actions: [
-TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Удалить', style: TextStyle(color: Colors.red)))
-],
-),
-);
-if (confirmed != true) return;
-setState(() {
-_items.remove(item);
-_setsData.remove(item.id);
-_setIds.remove(item.id);
-});
-_showMessage('Упражнение удалено');
-}
-// ═══ КОНЕЦ ЧАСТИ 3 ═══
+  Future<void> _deleteSetFromExercise(WorkoutExercise item, int index) async {
+    if (item.id == null || _isViewMode) return;
+    final sets = _setsData[item.id!];
+    final ids = _setIds[item.id!];
+    if (sets == null || ids == null || index < 0 || index >= sets.length) return;
+    if (sets.length <= 1) {
+      _showMessage('Нельзя удалить последний подход');
+      return;
+    }
+    final setId = ids[index];
+    if (setId > 0) await DatabaseHelper.instance.deleteWorkoutSet(setId);
+    if (!mounted) return;
+    setState(() {
+      sets.removeAt(index);
+      ids.removeAt(index);
+    });
+    _showMessage('Подход удалён');
+  }
+
+  Future<void> _deleteExercise(WorkoutExercise item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Удалить упражнение?'),
+        content: const Text('Упражнение будет удалено из этой тренировки.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Удалить', style: TextStyle(color: Colors.red)))
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() {
+      _items.remove(item);
+      _setsData.remove(item.id);
+      _setIds.remove(item.id);
+    });
+    _showMessage('Упражнение удалено');
+  }
+
   Future<void> _startStretchTimer(WorkoutExercise item, Stretch st) async {
     if (_isViewMode || !_started || item.id == null) return;
     final result = await showDialog<bool>(
@@ -1521,10 +1527,9 @@ _showMessage('Упражнение удалено');
     final warmupCardio = <WorkoutExercise>[];
     final warmupStretches = <WorkoutExercise>[];
     final coolDowns = <WorkoutExercise>[];
-    final bonus = <WorkoutExercise>[];
-    final strength = <WorkoutExercise>[];
-    final cardio = <WorkoutExercise>[];
+    final mainItems = <WorkoutExercise>[];
 
+    // 1. Разделяем на разминку, заминку и основные
     for (final i in _items) {
       if (i.isWarmup) {
         if (i.itemType == 'exercise') warmupCardio.add(i);
@@ -1532,16 +1537,12 @@ _showMessage('Упражнение удалено');
         continue;
       }
       if (i.isCoolDown) { coolDowns.add(i); continue; }
-      if (i.order == 150) { bonus.add(i); continue; }
-
-      final ex = _exerciseMap[i.replacedByItemId ?? i.itemId];
-      if (ex == null) continue;
-      if (_isCardio(ex)) cardio.add(i);
-      else strength.add(i);
+      mainItems.add(i);
     }
 
     final List<Widget> slivers = [];
 
+    // 2. Рендерим кардио-разминку и разминку
     if (warmupCardio.isNotEmpty) {
       slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0), child: Text('🔥 Кардио-разминка', style: Theme.of(context).textTheme.headlineMedium))));
       slivers.add(SliverPadding(
@@ -1557,42 +1558,43 @@ _showMessage('Упражнение удалено');
       slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0), child: _buildWarmupCard(context, warmupStretches))));
     }
 
-    if (strength.isNotEmpty) {
-      slivers.add(SliverPadding(
-        padding: const EdgeInsets.all(16),
-        sliver: SliverList(
-          delegate: SliverChildBuilderDelegate(
-                (context, i) => _buildItemCard(context, strength[i], index: i + 1),
-            childCount: strength.length,
+    // 3. Рендерим основные упражнения строго по порядку, вставляя заголовки
+    String? lastCategory;
+    int strengthIdx = 1;
+
+    for (final item in mainItems) {
+      final isBonus = item.order == 150;
+      final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
+      if (ex == null) continue;
+
+      final isCardio = _isCardio(ex);
+      final currentCategory = isBonus ? 'bonus' : (isCardio ? 'cardio' : 'strength');
+
+      // Вставляем заголовок, если категория изменилась
+      if (currentCategory != lastCategory) {
+        if (currentCategory == 'bonus') {
+          slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), child: Row(children: [const Text('💡', style: TextStyle(fontSize: 18)), const SizedBox(width: 8), const Text('На забытые зоны', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFFFFB800)))]))));
+        } else if (currentCategory == 'cardio') {
+          slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFE17055).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Кардио / Добивка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFFE17055))))]))));
+        }
+        lastCategory = currentCategory;
+      }
+
+      // Добавляем само упражнение
+      slivers.add(SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: _buildExerciseCardWidget(
+              context,
+              item,
+              ex,
+              index: currentCategory == 'strength' ? strengthIdx++ : null
           ),
         ),
       ));
     }
 
-    if (bonus.isNotEmpty) {
-      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [const Text('💡', style: TextStyle(fontSize: 18)), const SizedBox(width: 8), const Text('На забытые зоны', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFFFFB800)))]))));
-      slivers.add(SliverPadding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) {
-          final ex = _exerciseMap[bonus[idx].itemId];
-          if (ex == null) return const SizedBox.shrink();
-          return _buildExerciseCardWidget(context, bonus[idx], ex);
-        }, childCount: bonus.length)),
-      ));
-    }
-
-    if (cardio.isNotEmpty) {
-      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFE17055).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Кардио / Добивка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFFE17055))))]))));
-      slivers.add(SliverPadding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) {
-          final ex = _exerciseMap[cardio[idx].itemId];
-          if (ex == null) return const SizedBox.shrink();
-          return _buildExerciseCardWidget(context, cardio[idx], ex);
-        }, childCount: cardio.length)),
-      ));
-    }
-
+    // 4. Рендерим заминку
     if (coolDowns.isNotEmpty) {
       slivers.add(SliverToBoxAdapter(child: _buildCoolDownHeader(context)));
       slivers.add(SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 0), sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) => _buildStretchCard(context, coolDowns[idx]), childCount: coolDowns.length))));
@@ -1721,7 +1723,8 @@ _showMessage('Упражнение удалено');
     if (shouldInterleave) {
       for (int i = 0; i < sortedBlockNums.length; i++) {
         addBlockToSlivers(sortedBlockNums[i]);
-        if (cardioIndex < cardios.length) {
+        // Вставляем кардио ТОЛЬКО между блоками (не после последнего)
+        if (i < sortedBlockNums.length - 1 && cardioIndex < cardios.length) {
           slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFE17055).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Кардио / Добивка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFFE17055))))]))));
           addCardioToSlivers(cardios[cardioIndex++]);
         }
@@ -2099,4 +2102,5 @@ class _StretchTimerDialogState extends State<_StretchTimerDialog> {
     );
   }
 }
+// ═══ КОНЕЦ ЧАСТИ 7 (4/4 workout_detail_screen.dart) ═══
 // ═══ КОНЕЦ ФАЙЛА workout_detail_screen.dart ═══

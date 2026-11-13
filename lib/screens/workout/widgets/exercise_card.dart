@@ -4,7 +4,7 @@ import '../../../models/workout_day.dart';
 import '../widgets/set_row.dart';
 import '../../exercise/exercise_detail_screen.dart';
 
-// 👇 ФРАЗЫ ДЛЯ ИЗОЛЯЦИИ (когда есть рекорд)
+// 👇 ФРАЗЫ ДЛЯ СТАРЫХ УПРАЖНЕНИЙ (когда есть рекорд)
 final List<String> _isolationPhrases = [
   'Можешь больше? Делай, но не переусердствуй! С верой в тебя, твоя Фея 🧚‍♀️',
   'Почувствуй жжение в мышце! С верой в тебя, твоя Фея 🧚‍♀️',
@@ -12,15 +12,6 @@ final List<String> _isolationPhrases = [
   'Не гонись за весом, гонись за ощущениями. С верой в тебя, твоя Фея 🧚‍♀️',
   'Сожги эту мышцу! С верой в тебя, твоя Фея 🧚‍♀️',
   'Идеальная форма — залог результата. С верой в тебя, твоя Фея 🧚‍♀️',
-];
-
-// 👇 ФРАЗЫ ДЛЯ НОВЫХ УПРАЖНЕНИЙ (когда истории нет)
-final List<String> _newExercisePhrases = [
-  'Новое упражнение! Осваиваем технику без спешки. С верой в тебя, твоя Фея 🧚‍♀️',
-  'Новое движение — новые возможности. С верой в тебя, твоя Фея 🧚‍♀️',
-  'Впервые делаешь это? Главное — прочувствовать мышцу. С верой в тебя, твоя Фея 🧚‍♀️',
-  'Новое упражнение. Не гонись за весом, сначала идеальная форма. С верой в тебя, твоя Фея 🧚‍♀️',
-  'Осваиваем новое! Слушай свои ощущения. С верой в тебя, твоя Фея 🧚‍♀️',
 ];
 
 class ExerciseCard extends StatelessWidget {
@@ -181,18 +172,20 @@ class ExerciseCard extends StatelessWidget {
                                           ),
                                         ],
                                       ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        hasHistory
-                                            ? _isolationPhrases[(ex.name.hashCode.abs() + DateTime.now().day) % _isolationPhrases.length]
-                                            : _newExercisePhrases[(ex.name.hashCode.abs() + DateTime.now().day) % _newExercisePhrases.length],
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
-                                          color: theme.colorScheme.primary,
-                                          height: 1.3,
+
+                                      // 👇 ФРАЗЫ ФЕИ ПОКАЗЫВАЕМ ТОЛЬКО ДЛЯ СТАРЫХ УПРАЖНЕНИЙ
+                                      if (hasHistory) ...[
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          _isolationPhrases[(ex.name.hashCode.abs() + DateTime.now().day) % _isolationPhrases.length],
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: theme.colorScheme.primary,
+                                            height: 1.3,
+                                          ),
                                         ),
-                                      ),
+                                      ],
                                     ],
                                   ),
                                 ),

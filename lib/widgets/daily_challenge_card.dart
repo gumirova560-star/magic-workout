@@ -6,7 +6,7 @@ import '../screens/challenge/cumulative_challenge_screen.dart';
 import '../screens/challenge/hold_challenge_screen.dart';
 import '../screens/challenge/timer_challenge_screen.dart';
 import '../screens/challenge/photo_challenge_screen.dart';
-import '../screens/challenge/circuit_challenge_screen.dart'; // 👈 НОВЫЙ ИМПОРТ
+import '../screens/challenge/circuit_challenge_screen.dart';
 
 class DailyChallengeCard extends StatefulWidget {
   final int profileId;
@@ -92,7 +92,6 @@ class _DailyChallengeCardState extends State<DailyChallengeCard> {
         ),
       ).then((_) => _loadChallenge());
     } else if (config.type == 'circuit') {
-      // 👇 НОВЫЙ РОУТ ДЛЯ УТРЕННЕГО ВЗРЫВА
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -112,7 +111,10 @@ class _DailyChallengeCardState extends State<DailyChallengeCard> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const SizedBox(height: 100, child: Center(child: CircularProgressIndicator()));
+      return const SizedBox(
+        height: 100,
+        child: Center(child: CircularProgressIndicator()),
+      );
     }
     if (_challenge == null) return const SizedBox.shrink();
 

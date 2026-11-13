@@ -28,7 +28,7 @@ const List<ChallengeConfig> kDailyChallenges = [
   ChallengeConfig(id: 'chair_30', title: 'Стульчик у стены', emoji: '🪑', type: 'hold', baseTarget: 30, unit: 'сек', energyReward: 15),
 
   // Статика (с проверками)
-  ChallengeConfig(id: 'plank_180', title: 'Планка', emoji: '⏱', type: 'timer', baseTarget: 180, unit: 'сек', energyReward: 25),
+  ChallengeConfig(id: 'plank_180', title: 'Планка', emoji: '⏱', type: 'timer', baseTarget: 300, unit: 'сек', energyReward: 25),
 
   // Кардио/Шаги (фото)
   ChallengeConfig(id: 'steps_5000', title: 'Пройди 5000 шагов', emoji: '🚶‍♀️', type: 'photo', baseTarget: 5000, unit: 'шагов', energyReward: 30),

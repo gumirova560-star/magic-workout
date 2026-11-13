@@ -21,7 +21,8 @@ static Database? _database;
 
 DatabaseHelper._init();
 
-static const int _dbVersion = 14;
+// 👇 ВЕРСИЯ ПОДНЯТА ДО 15 (было 14)
+static const int _dbVersion = 15;
 static const String _dbName = 'workout_tracker.db';
 
 Future<Database> get database async {
@@ -161,6 +162,7 @@ await db.execute('''
         FOREIGN KEY (profileId) REFERENCES user_profiles (id) ON DELETE CASCADE
       )
     ''');
+// 👇 ДОБАВЛЕНО ПОЛЕ attemptsCount ДЛЯ ЧИСТЫХ УСТАНОВОК (версия 15)
 await db.execute('''
       CREATE TABLE daily_challenges (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -173,6 +175,7 @@ await db.execute('''
         isCompleted INTEGER DEFAULT 0,
         proofImagePath TEXT,
         rewardGranted INTEGER DEFAULT 0,
+        attemptsCount INTEGER DEFAULT 0,
         UNIQUE(profileId, date)
       )
     ''');
@@ -196,6 +199,8 @@ await db.execute('CREATE INDEX idx_workout_sets_exercise ON workout_sets (workou
 await db.execute('CREATE INDEX idx_replacement_profile ON replacement_logs (profileId)');
 await db.execute('CREATE INDEX idx_energy_profile ON energy_transactions (profileId)');
 }
+
+// ═══ КОНЕЦ ЧАСТИ 1 / 4 ═══
 Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
 if (oldVersion < 2) {
 await db.execute('ALTER TABLE template_items ADD COLUMN replacedByItemId INTEGER');
@@ -250,7 +255,7 @@ try {
 await db.execute('ALTER TABLE user_profiles ADD COLUMN timeRangeLabel TEXT');
 } catch (_) {}
 }
-// 👇 НОВАЯ МИГРАЦИЯ ДЛЯ 14-й ВЕРСИИ
+// 👇 МИГРАЦИЯ ДЛЯ 14-й ВЕРСИИ (энергия)
 if (oldVersion < 14) {
 try {
 await db.execute('ALTER TABLE user_profiles ADD COLUMN life_energy INTEGER DEFAULT 0');
@@ -267,6 +272,12 @@ await db.execute('''
           )
         ''');
 await db.execute('CREATE INDEX idx_energy_profile ON energy_transactions (profileId)');
+} catch (_) {}
+}
+// 👇 НОВАЯ МИГРАЦИЯ ДЛЯ 15-й ВЕРСИИ (счётчик подходов в планке)
+if (oldVersion < 15) {
+try {
+await db.execute('ALTER TABLE daily_challenges ADD COLUMN attemptsCount INTEGER DEFAULT 0');
 } catch (_) {}
 }
 }
@@ -359,7 +370,8 @@ final maps = await db.query('stretches', where: 'name = ?', whereArgs: [name], l
 if (maps.isEmpty) return null;
 return Stretch.fromMap(maps.first);
 }
-// ═══ КОНЕЦ ЧАСТИ 2 ═══
+
+// ═══ КОНЕЦ ЧАСТИ 2 / 4 ═══
 // ═══════════════════════════════════════════════════════════
 //  ЙОГА
 // ═══════════════════════════════════════════════════════════
@@ -492,7 +504,7 @@ Future<int> getMaxCycleNumber(int profileId) async {
 final db = await database;
 final result = await db.rawQuery(
 'SELECT MAX(cycleNumber) as maxCycle FROM workout_days WHERE profileId = ? AND status != ?',
-[profileId, 'planned']
+[profileId, 'planned'],
 );
 return Sqflite.firstIntValue(result) ?? 0;
 }
@@ -603,7 +615,7 @@ return await db.delete('workout_sets', where: 'id = ?', whereArgs: [id]);
 }
 
 // ═══════════════════════════════════════════════════════════
-//  ЭНЕРГИЯ (НОВОЕ)
+//  ЭНЕРГИЯ
 // ═══════════════════════════════════════════════════════════
 
 Future<int> getEnergyBalance(int profileId) async {
@@ -651,7 +663,8 @@ orderBy: 'createdAt DESC',
 limit: limit,
 );
 }
-// ═══ КОНЕЦ ЧАСТИ 3 ═══
+
+// ═══ КОНЕЦ ЧАСТИ 3 / 4 ═══
   // ═══════════════════════════════════════════════════════════
   //  ЧЕЛЛЕНДЖИ
   // ═══════════════════════════════════════════════════════════
@@ -1026,3 +1039,4 @@ limit: limit,
   }
 }
 // ═══ КОНЕЦ ФАЙЛА database_helper.dart ═══
+// ═══ КОНЕЦ ЧАСТИ 4 / 4 ═══

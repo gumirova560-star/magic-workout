@@ -25,7 +25,7 @@ class CircuitExercise {
 const List<CircuitExercise> kCircuitExercises = [
   CircuitExercise(name: 'Приседания', emoji: '🏋️', durationSeconds: 30),
   CircuitExercise(name: 'Отжимания', emoji: '💪', durationSeconds: 30),
-  CircuitExercise(name: 'Прыжки на месте', emoji: '🤸', durationSeconds: 30),
+  CircuitExercise(name: 'Скручивания', emoji: '🎯', durationSeconds: 30),
   CircuitExercise(name: 'Планка', emoji: '🧘', durationSeconds: 30),
   CircuitExercise(name: 'Берпи', emoji: '🔥', durationSeconds: 30),
 ];

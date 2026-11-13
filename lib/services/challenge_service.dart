@@ -2,6 +2,7 @@ import '../models/daily_challenge.dart';
 import '../data/challenge_data.dart';
 import 'database_helper.dart';
 import 'energy_service.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // 👈 ДОБАВЛЕН ИМПОРТ
 
 class ChallengeService {
   // Получить задание на сегодня (или создать новое, если его нет)
@@ -9,7 +10,11 @@ class ChallengeService {
     final db = await DatabaseHelper.instance.database;
     final today = DateTime.now().toIso8601String().split('T')[0];
 
-    final maps = await db.query('daily_challenges', where: 'profileId = ? AND date = ?', whereArgs: [profileId, today]);
+    final maps = await db.query(
+      'daily_challenges',
+      where: 'profileId = ? AND date = ?',
+      whereArgs: [profileId, today],
+    );
 
     if (maps.isNotEmpty) {
       return DailyChallenge.fromMap(maps.first);
@@ -17,12 +22,22 @@ class ChallengeService {
 
     final randomConfig = (List.from(kDailyChallenges)..shuffle()).first;
 
+    // 👇 ЧИТАЕМ СОХРАНЁННУЮ ЦЕЛЬ ИЗ SHARED PREFERENCES
+    final prefs = await SharedPreferences.getInstance();
+    final targetKey = 'challenge_target_${profileId}_${randomConfig.id}';
+    final savedTarget = prefs.getInt(targetKey);
+
+    // Если сохранённая цель больше базовой — используем её
+    final effectiveTarget = (savedTarget != null && savedTarget > randomConfig.baseTarget)
+        ? savedTarget
+        : randomConfig.baseTarget;
+
     final newChallenge = DailyChallenge(
       profileId: profileId,
       date: today,
       challengeType: randomConfig.type,
       taskId: randomConfig.id,
-      targetValue: randomConfig.baseTarget,
+      targetValue: effectiveTarget, // 👈 ПРИМЕНЯЕМ СОХРАНЁННУЮ ЦЕЛЬ
     );
 
     final id = await db.insert('daily_challenges', newChallenge.toMap());
@@ -40,10 +55,15 @@ class ChallengeService {
     final challenge = DailyChallenge.fromMap(maps.first);
     final bool isCompleted = newProgress >= challenge.targetValue;
 
-    await db.update('daily_challenges', {
-      'currentProgress': newProgress,
-      'isCompleted': isCompleted ? 1 : 0,
-    }, where: 'id = ?', whereArgs: [challengeId]);
+    await db.update(
+      'daily_challenges',
+      {
+        'currentProgress': newProgress,
+        'isCompleted': isCompleted ? 1 : 0,
+      },
+      where: 'id = ?',
+      whereArgs: [challengeId],
+    );
   }
 
   // Кнопка "Могу больше" (увеличить цель)
@@ -56,13 +76,18 @@ class ChallengeService {
     final challenge = DailyChallenge.fromMap(maps.first);
     final newTarget = challenge.targetValue + extraValue;
 
-    await db.update('daily_challenges', {
-      'targetValue': newTarget,
-      'isCompleted': 0,
-    }, where: 'id = ?', whereArgs: [challengeId]);
+    await db.update(
+      'daily_challenges',
+      {
+        'targetValue': newTarget,
+        'isCompleted': 0,
+      },
+      where: 'id = ?',
+      whereArgs: [challengeId],
+    );
   }
 
-  // 👇 НОВЫЙ МЕТОД: атомарно выдаёт награду. Возвращает true, если это первое начисление.
+  // Атомарно выдаёт награду. Возвращает true, если это первое начисление.
   static Future<bool> tryAwardReward({
     required int profileId,
     required int challengeId,
@@ -70,7 +95,6 @@ class ChallengeService {
   }) async {
     final db = await DatabaseHelper.instance.database;
 
-    // 1. Проверяем флаг в самой строке челленджа
     final maps = await db.query(
       'daily_challenges',
       columns: ['rewardGranted', 'isCompleted'],
@@ -83,10 +107,8 @@ class ChallengeService {
     final alreadyGranted = (row['rewardGranted'] as int? ?? 0) == 1;
     final isCompleted = (row['isCompleted'] as int? ?? 0) == 1;
 
-    // Награду выдаём только если челлендж выполнен и ещё не выдавался
     if (!isCompleted || alreadyGranted) return false;
 
-    // 2. Пытаемся начислить энергию (внутри UNIQUE-защита по reason+refId)
     final success = await EnergyService.addEnergy(
       profileId: profileId,
       delta: energyAmount,
@@ -94,7 +116,6 @@ class ChallengeService {
       refId: challengeId,
     );
 
-    // 3. Ставим флаг в челлендже (чтобы UI больше не пытался)
     if (success) {
       await db.update(
         'daily_challenges',

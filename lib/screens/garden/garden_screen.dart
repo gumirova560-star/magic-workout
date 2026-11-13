@@ -47,15 +47,59 @@ class _GardenScreenState extends State<GardenScreen> {
       return;
     }
 
-    // Проверяем, является ли эта ячейка частью слова
     bool isWordSlot = GardenService.superPattern.any((coord) => (coord[0] * 15 + coord[1]) == index);
 
     if (isWordSlot) {
-      final success = await GardenService.plantNextFlower(profileId: widget.profileId);
-      if (success) _loadGarden();
+      _showFlowerDialog(index);
     } else {
       _showDecorDialog(index);
     }
+  }
+
+  void _showFlowerDialog(int index) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Место для цветка 🌸', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Text(
+              'Выполни челлендж дня, чтобы он расцвел здесь бесплатно. Или купи прямо сейчас:',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.bolt_rounded, color: Colors.amber),
+                label: const Text('Купить за 15 ⚡️'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final success = await GardenService.buyFlowerAtSlot(profileId: widget.profileId, slotIndex: index);
+                  if (success) {
+                    _loadGarden();
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Недостаточно энергии! Сделай тренировку 💪'), backgroundColor: Colors.red),
+                    );
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showDecorDialog(int index) {
@@ -78,9 +122,7 @@ class _GardenScreenState extends State<GardenScreen> {
                 if (success) {
                   _loadGarden();
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Недостаточно энергии! Сначала сделай тренировку 💪'), backgroundColor: Colors.red),
-                  );
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Недостаточно энергии! 😢'), backgroundColor: Colors.red));
                 }
               },
             ),
@@ -94,9 +136,7 @@ class _GardenScreenState extends State<GardenScreen> {
                 if (success) {
                   _loadGarden();
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Недостаточно энергии! Сначала сделай тренировку 💪'), backgroundColor: Colors.red),
-                  );
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Недостаточно энергии! 😢'), backgroundColor: Colors.red));
                 }
               },
             ),
@@ -112,6 +152,27 @@ class _GardenScreenState extends State<GardenScreen> {
       appBar: AppBar(
         title: const Text('Сад Феи'),
         actions: [
+          IconButton(
+            tooltip: 'Очистить сад',
+            icon: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent),
+            onPressed: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Очистить сад?'),
+                  content: const Text('Все посаженные цветы и декор будут удалены. Начать заново?'),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+                    TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Очистить', style: TextStyle(color: Colors.red))),
+                  ],
+                ),
+              );
+              if (confirm == true) {
+                await GardenService.clearGarden(widget.profileId);
+                _loadGarden();
+              }
+            },
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
             child: Center(
@@ -122,7 +183,6 @@ class _GardenScreenState extends State<GardenScreen> {
       ),
       body: Container(
         decoration: const BoxDecoration(
-          // 👇 НОВЫЙ СОЧНЫЙ ГРАДИЕНТ (Весенняя поляна)
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
@@ -136,64 +196,78 @@ class _GardenScreenState extends State<GardenScreen> {
             const Padding(
               padding: EdgeInsets.all(12.0),
               child: Text(
-                'Тапай по траве, чтобы выращивать слово «СУПЕР».\nПустые места можно украсить декором!',
+                'Тапай по светлым клеткам, чтобы выращивать слово «СУПЕР».',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black54),
                 textAlign: TextAlign.center,
               ),
             ),
             Expanded(
-              child: InteractiveViewer(
-                minScale: 0.5,
-                maxScale: 2.5,
-                child: Center(
-                  child: SizedBox(
-                    width: 15 * 36.0,
-                    height: 7 * 36.0,
-                    child: GridView.builder(
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 15,
-                        crossAxisSpacing: 2,
-                        mainAxisSpacing: 2,
-                      ),
-                      itemCount: GardenService.totalGridCells,
-                      itemBuilder: (context, index) {
-                        final item = _gardenItems.firstWhere(
-                              (e) => e['slotIndex'] == index,
-                          orElse: () => {},
-                        );
+              // 👇 ИСПОЛЬЗУЕМ LayoutBuilder, ЧТОБЫ СЕТКА ВЛЕЗАЛА В ЭКРАН
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // Вычисляем ширину ячейки, чтобы 15 колонок ровно влезли в экран
+                  // Отнимаем немного места под отступы между клетками (crossAxisSpacing: 2)
+                  final double cellWidth = (constraints.maxWidth - (14 * 2)) / 15;
+                  final double gridHeight = (cellWidth * 7) + (6 * 2); // 7 строк + отступы
 
-                        String emoji = '';
-                        if (item.isNotEmpty) {
-                          if (item['flowerType'] == 'fountain') emoji = '🏛️';
-                          else if (item['flowerType'] == 'bench') emoji = '🪑';
-                          else emoji = '🌸';
-                        }
-
-                        return GestureDetector(
-                          onTap: () => _onCellTap(index),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              // 👇 ВМЕСТО ЗАЛИВКИ ТЕПЕРЬ КРАСИВАЯ ТРАВА
-                              color: item.isEmpty ? Colors.green.shade400.withOpacity(0.5) : Colors.transparent,
-                              borderRadius: BorderRadius.circular(6),
-                              border: item.isEmpty
-                                  ? Border.all(color: Colors.green.shade600.withOpacity(0.3), width: 1)
-                                  : null,
-                            ),
-                            child: Center(
-                              child: item.isEmpty
-                              // Если пусто — рисуем кустик травы 🌿
-                                  ? const Text('🌿', style: TextStyle(fontSize: 22))
-                              // Если занято — цветок/декор
-                                  : Text(emoji, style: const TextStyle(fontSize: 24)),
-                            ),
+                  return InteractiveViewer(
+                    minScale: 0.5,
+                    maxScale: 3.0,
+                    child: Center(
+                      child: SizedBox(
+                        width: constraints.maxWidth,
+                        height: gridHeight,
+                        child: GridView.builder(
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 15,
+                            crossAxisSpacing: 2,
+                            mainAxisSpacing: 2,
                           ),
-                        );
-                      },
+                          itemCount: GardenService.totalGridCells,
+                          itemBuilder: (context, index) {
+                            final item = _gardenItems.firstWhere(
+                                  (e) => e['slotIndex'] == index,
+                              orElse: () => {},
+                            );
+
+                            final isWord = GardenService.superPattern.any((c) => (c[0] * 15 + c[1]) == index);
+
+                            String emoji = '';
+                            if (item.isNotEmpty) {
+                              if (item['flowerType'] == 'fountain') emoji = '🏛️';
+                              else if (item['flowerType'] == 'bench') emoji = '🪑';
+                              else emoji = '🌸';
+                            }
+
+                            return GestureDetector(
+                              onTap: () => _onCellTap(index),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: item.isEmpty
+                                      ? (isWord ? Colors.white.withOpacity(0.2) : Colors.green.shade600.withOpacity(0.3))
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: isWord && item.isEmpty
+                                      ? Border.all(color: Colors.white54, width: 1)
+                                      : Border.all(color: Colors.green.shade600.withOpacity(0.2), width: 1),
+                                ),
+                                child: Center(
+                                  child: item.isEmpty
+                                      ? (isWord ? const Icon(Icons.add, color: Colors.white30, size: 12) : null)
+                                      : FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(emoji, style: const TextStyle(fontSize: 24)),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
             ),
           ],

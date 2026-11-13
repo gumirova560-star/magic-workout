@@ -128,7 +128,7 @@ class _CumulativeChallengeScreenState extends State<CumulativeChallengeScreen> {
         title: const Text('🎉 Челлендж выполнен!', textAlign: TextAlign.center),
         content: Text(
           granted
-              ? 'Ты заработал $reward ⚡️ Жизненной Энергии!\nТак держать!'
+              ? 'Ты заработал $reward ⚡️ Жизненной Энергии!\n\n🌿 Загляни в свой Сад Феи — благодаря твоей энергии там расцвел новый цветок! 🌸'
               : 'Ты уже получал награду за этот челлендж. Но всё равно молодец!',
           textAlign: TextAlign.center,
         ),

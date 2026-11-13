@@ -18,6 +18,7 @@ import 'widgets/exercise_card.dart';
 import 'widgets/circle_header.dart';
 import '../exercise/exercise_detail_screen.dart';
 import '../exercise/stretch_detail_screen.dart';
+import '../../services/energy_service.dart';
 
 class WorkoutDetailScreen extends StatefulWidget {
   final WorkoutDay? workoutDay;
@@ -1046,6 +1047,14 @@ _showMessage('Тренировка началась! 💪');
     final updated = day.copyWith(status: 'completed', completedAt: DateTime.now(), durationMinutes: minutes > 0 ? minutes : 1, notes: note);
     await DatabaseHelper.instance.updateWorkoutDay(updated);
     if (!mounted) return;
+    // 👇 НАЧИСЛЯЕМ ЭНЕРГИЮ ЗА ТРЕНИРОВКУ (+15 ⚡️)
+    await EnergyService.addEnergy(
+      profileId: widget.profileId,
+      delta: 15,
+      reason: 'workout_completed',
+      refId: _workoutDayId, // защита от дублей (за эту тренировку дадут только раз)
+    );
+    // 👆 КОНЕЦ НАЧИСЛЕНИЯ
 
     if (isOverperformed) FairyReactionService().trigger('workout_overperformed', mood: FairyMood.party);
     else FairyReactionService().trigger('workout_completed', mood: FairyMood.party);

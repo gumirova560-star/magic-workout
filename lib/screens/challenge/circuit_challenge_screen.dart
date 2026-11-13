@@ -120,7 +120,7 @@ class _CircuitChallengeScreenState extends State<CircuitChallengeScreen> {
         title: const Text('🎉 Утренний взрыв выполнен!', textAlign: TextAlign.center),
         content: Text(
           granted
-              ? 'Все $_total упражнений пройдены!\n\n+$reward ⚡️ Жизненной Энергии.'
+              ? 'Все $_total упражнений пройдены!\n\n+$reward ⚡️ Жизненной Энергии.\n\n🌿 Загляни в свой Сад Феи — там расцвел новый цветок! 🌸'
               : 'Все упражнения пройдены! (Награда уже была получена ранее)',
           textAlign: TextAlign.center,
         ),

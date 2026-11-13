@@ -89,7 +89,7 @@ class _PhotoChallengeScreenState extends State<PhotoChallengeScreen> {
         title: const Text('🎉 Отлично!', textAlign: TextAlign.center),
         content: Text(
           granted
-              ? 'Скриншот загружен!\nТы заработал $reward ⚡️ Жизненной Энергии.'
+              ? 'Скриншот загружен!\nТы заработал $reward ⚡️ Жизненной Энергии.\n\n🌿 Загляни в свой Сад Феи — там расцвел новый цветок! 🌸'
               : 'Скриншот загружен! (Награда уже была получена ранее)',
           textAlign: TextAlign.center,
         ),

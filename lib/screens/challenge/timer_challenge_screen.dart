@@ -406,8 +406,7 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
         title: const Text('🎉 Планка на сегодня закрыта!', textAlign: TextAlign.center),
         content: Text(
           granted
-              ? 'Ты набрал ${_formatTime(_targetSeconds)} планки за день!'
-              '$attemptsLine$upgradedHint\n\n+$reward ⚡️ Жизненной Энергии.'
+              ? 'Ты набрал ${_formatTime(_targetSeconds)} планки за день!$attemptsLine\n\n+$reward ⚡️ Жизненной Энергии.\n\n🌿 Загляни в свой Сад Феи — там расцвел новый цветок! 🌸'
               : 'Ты уже получал награду за этот челлендж. Но всё равно молодец!',
           textAlign: TextAlign.center,
         ),

@@ -16,7 +16,8 @@ import 'workout_detail_screen.dart';
 import 'my_templates_screen.dart';
 import 'challenge_dice_screen.dart';
 import '../../widgets/daily_challenge_card.dart';
-import '../../widgets/energy_badge.dart'; // 👈 НОВЫЙ ИМПОРТ
+import '../../widgets/energy_badge.dart';
+import '../garden/garden_screen.dart'; // 👈 Импорт Сада
 
 class WorkoutScreen extends StatefulWidget {
   const WorkoutScreen({super.key});
@@ -529,9 +530,22 @@ return Scaffold(
 appBar: AppBar(
 title: const Text('Тренировки'),
 actions: [
-// 👇👇👇 БЕЙДЖ ЭНЕРГИИ ВНЕДРЁН СЮДА 👇👇👇
+// 👇 БЕЙДЖ ЭНЕРГИИ
 EnergyBadge(profileId: _activeProfile!.id!),
-// 👆👆👆 КОНЕЦ ВНЕДРЕНИЯ 👆👆👆
+
+// 👇 НОВАЯ КНОПКА САДА
+IconButton(
+tooltip: 'Сад Феи',
+icon: const Icon(Icons.local_florist_rounded, color: Colors.green),
+onPressed: () {
+Navigator.push(
+context,
+MaterialPageRoute(
+builder: (_) => GardenScreen(profileId: _activeProfile!.id!),
+),
+).then((_) => _loadData());
+},
+),
 
 IconButton(
 tooltip: 'Шпаргалка от Феи',
@@ -1045,3 +1059,4 @@ const SizedBox(height: 32),
   }
 }
 // ═══ КОНЕЦ ЧАСТИ 3 / 3 ═══
+// ═══ КОНЕЦ ФАЙЛА workout_screen.dart ═══

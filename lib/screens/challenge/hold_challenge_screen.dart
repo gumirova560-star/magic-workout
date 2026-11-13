@@ -135,7 +135,7 @@ class _HoldChallengeScreenState extends State<HoldChallengeScreen> {
         title: const Text('🎉 Челлендж выполнен!', textAlign: TextAlign.center),
         content: Text(
           granted
-              ? 'Ты продержался $_targetSeconds секунд!\n\n+$reward ⚡️ Жизненной Энергии.'
+              ? 'Ты продержался $_targetSeconds секунд!\n\n+$reward ⚡️ Жизненной Энергии.\n\n🌿 Загляни в свой Сад Феи — там расцвел новый цветок! 🌸'
               : 'Ты уже получал награду за этот челлендж. Но всё равно молодец!',
           textAlign: TextAlign.center,
         ),

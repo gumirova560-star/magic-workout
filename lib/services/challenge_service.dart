@@ -1,11 +1,11 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/daily_challenge.dart';
 import '../data/challenge_data.dart';
 import 'database_helper.dart';
 import 'energy_service.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // 👈 ДОБАВЛЕН ИМПОРТ
+import 'garden_service.dart';
 
 class ChallengeService {
-  // Получить задание на сегодня (или создать новое, если его нет)
   static Future<DailyChallenge?> getTodayChallenge(int profileId) async {
     final db = await DatabaseHelper.instance.database;
     final today = DateTime.now().toIso8601String().split('T')[0];
@@ -22,12 +22,10 @@ class ChallengeService {
 
     final randomConfig = (List.from(kDailyChallenges)..shuffle()).first;
 
-    // 👇 ЧИТАЕМ СОХРАНЁННУЮ ЦЕЛЬ ИЗ SHARED PREFERENCES
+    // Читаем сохранённую цель (для планки, которая растет до 7 минут)
     final prefs = await SharedPreferences.getInstance();
     final targetKey = 'challenge_target_${profileId}_${randomConfig.id}';
     final savedTarget = prefs.getInt(targetKey);
-
-    // Если сохранённая цель больше базовой — используем её
     final effectiveTarget = (savedTarget != null && savedTarget > randomConfig.baseTarget)
         ? savedTarget
         : randomConfig.baseTarget;
@@ -37,7 +35,7 @@ class ChallengeService {
       date: today,
       challengeType: randomConfig.type,
       taskId: randomConfig.id,
-      targetValue: effectiveTarget, // 👈 ПРИМЕНЯЕМ СОХРАНЁННУЮ ЦЕЛЬ
+      targetValue: effectiveTarget,
     );
 
     final id = await db.insert('daily_challenges', newChallenge.toMap());
@@ -45,7 +43,6 @@ class ChallengeService {
     return newChallenge;
   }
 
-  // Обновить прогресс
   static Future<void> updateProgress(int challengeId, int newProgress) async {
     final db = await DatabaseHelper.instance.database;
 
@@ -66,7 +63,6 @@ class ChallengeService {
     );
   }
 
-  // Кнопка "Могу больше" (увеличить цель)
   static Future<void> increaseTarget(int challengeId, int extraValue) async {
     final db = await DatabaseHelper.instance.database;
 
@@ -87,7 +83,6 @@ class ChallengeService {
     );
   }
 
-  // Атомарно выдаёт награду. Возвращает true, если это первое начисление.
   static Future<bool> tryAwardReward({
     required int profileId,
     required int challengeId,
@@ -123,6 +118,9 @@ class ChallengeService {
         where: 'id = ?',
         whereArgs: [challengeId],
       );
+
+      // 👇 ВЫРАЩИВАЕМ ЦВЕТОК В САДУ (вот эта строчка связывает челлендж и сад)
+      await GardenService.plantNextFlower(profileId: profileId);
     }
 
     return success;

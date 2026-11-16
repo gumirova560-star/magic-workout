@@ -1,22 +1,13 @@
+import 'dart:math';
 import 'database_helper.dart';
 import 'energy_service.dart';
 
 class GardenService {
-  static const List<List<int>> superPattern = [
-    // Буква С
-    [1,1],[1,2], [2,1], [3,1],[3,2], [4,2], [5,1],[5,2],
-    // Буква У
-    [1,4],[1,5], [2,4],[2,5], [3,4],[3,5], [4,4],[4,5], [5,4],[5,5], [6,4],
-    // Буква П
-    [1,7],[1,8], [2,7],[2,8], [3,7],[3,8], [4,7],[4,8], [5,7],[5,8],
-    // Буква Е
-    [1,10],[1,11], [2,10], [3,10],[3,11], [4,10], [5,10],[5,11],
-    // Буква Р
-    [1,13],[1,14], [2,13],[2,14], [3,13],[3,14], [4,13], [5,13]
-  ];
+  static const String currentPattern = 'free_sandbox';
 
-  static const String currentPattern = 'fairy_super';
-  static const int totalGridCells = 15 * 7;
+  static const int gridColumns = 30;
+  static const int gridRows = 40;
+  static const int totalGridCells = gridColumns * gridRows;
 
   static Future<List<Map<String, dynamic>>> getGarden(int profileId) async {
     final db = await DatabaseHelper.instance.database;
@@ -27,18 +18,32 @@ class GardenService {
     );
   }
 
-  static Future<bool> plantNextFlower({required int profileId}) async {
+  // 👇 ЦВЕТОК САЖАЕТСЯ В ЦЕНТР (по спирали). Принимает тип цветка.
+  static Future<bool> plantNextFlower({required int profileId, String flowerType = 'normal'}) async {
     final db = await DatabaseHelper.instance.database;
     final existing = await getGarden(profileId);
     final existingSlots = existing.map((e) => e['slotIndex'] as int).toSet();
 
+    final centerCol = gridColumns ~/ 2;
+    final centerRow = gridRows ~/ 2;
+
     int? nextSlot;
-    for (final coord in superPattern) {
-      int index = coord[0] * 15 + coord[1];
-      if (!existingSlots.contains(index)) {
-        nextSlot = index;
-        break;
+    for (int r = 0; r < max(gridRows, gridColumns); r++) {
+      for (int dy = -r; dy <= r; dy++) {
+        for (int dx = -r; dx <= r; dx++) {
+          if (dx.abs() != r && dy.abs() != r) continue;
+          int col = centerCol + dx;
+          int row = centerRow + dy;
+          if (col < 0 || col >= gridColumns || row < 0 || row >= gridRows) continue;
+          int index = row * gridColumns + col;
+          if (!existingSlots.contains(index)) {
+            nextSlot = index;
+            break;
+          }
+        }
+        if (nextSlot != null) break;
       }
+      if (nextSlot != null) break;
     }
 
     if (nextSlot == null) return false;
@@ -47,7 +52,8 @@ class GardenService {
       'profileId': profileId,
       'slotIndex': nextSlot,
       'state': 'bloomed',
-      'flowerType': 'normal',
+      'flowerType': flowerType, // 👈 normal или legendary
+      'rotation': 0,
       'createdAt': DateTime.now().toIso8601String(),
     });
 
@@ -74,6 +80,7 @@ class GardenService {
         'slotIndex': slotIndex,
         'state': 'bloomed',
         'flowerType': 'normal',
+        'rotation': 0,
         'createdAt': DateTime.now().toIso8601String(),
       });
       return true;
@@ -83,12 +90,18 @@ class GardenService {
 
   static Future<bool> placeDecor({required int profileId, required int slotIndex, required String type}) async {
     final db = await DatabaseHelper.instance.database;
-    final cost = type == 'fountain' ? 50 : 20;
+
+    final cost = type == 'pond' ? 80
+        : type == 'tree' ? 60
+        : type == 'fountain' ? 50
+        : type == 'pavilion' ? 40
+        : type == 'swing' ? 30
+        : type == 'bush' ? 25
+        : type == 'bench' ? 20
+        : 10;
 
     final currentBalance = await EnergyService.getBalance(profileId);
-    if (currentBalance < cost) {
-      return false;
-    }
+    if (currentBalance < cost) return false;
 
     final success = await EnergyService.addEnergy(
       profileId: profileId,
@@ -103,6 +116,7 @@ class GardenService {
         'slotIndex': slotIndex,
         'state': 'bloomed',
         'flowerType': type,
+        'rotation': 0,
         'createdAt': DateTime.now().toIso8601String(),
       });
       return true;
@@ -110,8 +124,53 @@ class GardenService {
     return false;
   }
 
+  static Future<void> setRotation(int profileId, int slotIndex, int rotation) async {
+    final db = await DatabaseHelper.instance.database;
+    await db.update(
+      'garden_flowers',
+      {'rotation': rotation},
+      where: 'profileId = ? AND slotIndex = ?',
+      whereArgs: [profileId, slotIndex],
+    );
+  }
+
+  static Future<void> moveItem(int profileId, int oldSlotIndex, int newSlotIndex) async {
+    final db = await DatabaseHelper.instance.database;
+    await db.update(
+      'garden_flowers',
+      {'slotIndex': newSlotIndex},
+      where: 'profileId = ? AND slotIndex = ?',
+      whereArgs: [profileId, oldSlotIndex],
+    );
+  }
+
+  static Future<void> removeItem(int profileId, int slotIndex, int refundAmount) async {
+    final db = await DatabaseHelper.instance.database;
+    if (refundAmount > 0) {
+      await EnergyService.addEnergy(
+        profileId: profileId,
+        delta: refundAmount,
+        reason: 'garden_item_removed',
+        refId: slotIndex,
+      );
+    }
+    await db.delete(
+      'garden_flowers',
+      where: 'profileId = ? AND slotIndex = ?',
+      whereArgs: [profileId, slotIndex],
+    );
+  }
+
   static Future<void> clearGarden(int profileId) async {
     final db = await DatabaseHelper.instance.database;
     await db.delete('garden_flowers', where: 'profileId = ?', whereArgs: [profileId]);
+  }
+
+  static Future<void> witherOneFlower(int profileId) async {
+    final db = await DatabaseHelper.instance.database;
+    final maps = await db.query('garden_flowers', where: 'profileId = ? AND flowerType = ?', whereArgs: [profileId, 'normal'], limit: 1);
+    if (maps.isNotEmpty) {
+      await db.update('garden_flowers', {'flowerType': 'wilted'}, where: 'id = ?', whereArgs: [maps.first['id']]);
+    }
   }
 }

@@ -21,8 +21,7 @@ class TimerChallengeScreen extends StatefulWidget {
 
 class _TimerChallengeScreenState extends State<TimerChallengeScreen> with WidgetsBindingObserver {
   static const int _checkWindowSeconds = 5;
-  static const int _upgradeBonusSeconds = 120;   // +2 минуты за шаг
-  static const int _upgradeBonusReward = 15;     // доп. энергия за легенду
+  static const int _upgradeBonusSeconds = 120;
 
   late int _targetSeconds;
   late bool _isCompleted;
@@ -75,7 +74,6 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
     }
   }
 
-  // Проверяем, находимся ли мы в режиме легенды (цель выше базовой)
   bool get _isUpgradedLevel {
     try {
       final cfg = kDailyChallenges.firstWhere((c) => c.id == widget.challenge.taskId);
@@ -87,17 +85,9 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
 
   Future<void> _loadTodayAttempts() async {
     final db = await DatabaseHelper.instance.database;
-    final rows = await db.query(
-      'daily_challenges',
-      columns: ['attemptsCount'],
-      where: 'id = ?',
-      whereArgs: [widget.challenge.id],
-      limit: 1,
-    );
+    final rows = await db.query('daily_challenges', columns: ['attemptsCount'], where: 'id = ?', whereArgs: [widget.challenge.id], limit: 1);
     if (rows.isNotEmpty && mounted) {
-      setState(() {
-        _todayAttempts = (rows.first['attemptsCount'] as int?) ?? 0;
-      });
+      setState(() => _todayAttempts = (rows.first['attemptsCount'] as int?) ?? 0);
     }
   }
 
@@ -107,24 +97,18 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
 
   Future<void> _start() async {
     if (_isFinished || _isRunning) return;
-
     WakelockPlus.enable();
     HapticFeedback.mediumImpact();
-
     _stopwatch.reset();
     _stopwatch.start();
-
     setState(() => _isRunning = true);
 
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(milliseconds: 200), (_) {
       if (!mounted) return;
       setState(() {});
-      if (_totalSeconds >= _targetSeconds && !_isFinished) {
-        _handleAttemptEnd(null);
-      }
+      if (_totalSeconds >= _targetSeconds && !_isFinished) _handleAttemptEnd(null);
     });
-
     _scheduleNextCheck();
   }
 
@@ -139,18 +123,13 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
   void _triggerCheck() {
     if (!_isRunning || _isFinished) return;
     HapticFeedback.heavyImpact();
-    setState(() {
-      _checkActive = true;
-      _checkCountdown = _checkWindowSeconds;
-    });
+    setState(() { _checkActive = true; _checkCountdown = _checkWindowSeconds; });
     _checkTimer?.cancel();
     _checkTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) return;
       HapticFeedback.mediumImpact();
       setState(() => _checkCountdown--);
-      if (_checkCountdown <= 0) {
-        _handleAttemptEnd('Пропустил проверку');
-      }
+      if (_checkCountdown <= 0) _handleAttemptEnd('Пропустил проверку');
     });
   }
 
@@ -158,10 +137,7 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
     if (!_checkActive) return;
     _checkTimer?.cancel();
     HapticFeedback.lightImpact();
-    setState(() {
-      _checkActive = false;
-      _checkCountdown = 0;
-    });
+    setState(() { _checkActive = false; _checkCountdown = 0; });
     _scheduleNextCheck();
   }
 
@@ -220,11 +196,7 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            '$failReason\n'
-                'За попытку: ${_formatTime(attemptSecs)}. '
-                'Всего: ${_formatTime(newAccumulated)} / ${_formatTime(_targetSeconds)}',
-          ),
+          content: Text('$failReason\nЗа попытку: ${_formatTime(attemptSecs)}. Всего: ${_formatTime(newAccumulated)} / ${_formatTime(_targetSeconds)}'),
           backgroundColor: const Color(0xFFE17055),
           duration: const Duration(seconds: 3),
         ),
@@ -233,97 +205,65 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
   }
 
   Future<void> _awardAndShowDialog({required int attemptSecs}) async {
-    final config = kDailyChallenges.firstWhere((c) => c.id == widget.challenge.taskId);
     final isUpgraded = _isUpgradedLevel;
     final madeStepAtOnce = attemptSecs >= _upgradeBonusSeconds;
 
-    // 1. Всю ТЕКУЩУЮ цель сделал за ОДИН подход → предложить новый апгрейд
     if (attemptSecs >= _targetSeconds) {
-      await _offerUpgrade(config, isLegend: isUpgraded);
+      await _offerUpgrade(isLegend: isUpgraded);
       return;
     }
 
-    // 2. В режиме легенды доделал шаг (+2 мин) за раз → легенда засчитана
     if (isUpgraded && madeStepAtOnce) {
-      await _awardLegend(config);
+      await _awardLegend();
       return;
     }
 
-    // 3. Обычное завершение (или набрал подходами)
     final granted = await ChallengeService.tryAwardReward(
       profileId: widget.profileId,
       challengeId: widget.challenge.id!,
-      energyAmount: config.energyReward,
+      isLegendary: isUpgraded, // 👈 Передаем флаг легенды
     );
     if (!mounted) return;
-    _showCompletionDialog(granted, config.energyReward, isUpgraded: isUpgraded);
+    _showCompletionDialog(granted, isUpgraded: isUpgraded);
   }
 
-  Future<void> _awardLegend(ChallengeConfig config) async {
-    final amount = config.energyReward + _upgradeBonusReward;
+  Future<void> _awardLegend() async {
     final granted = await ChallengeService.tryAwardReward(
       profileId: widget.profileId,
       challengeId: widget.challenge.id!,
-      energyAmount: amount,
+      isLegendary: true, // 👈 Всегда легенда
     );
     if (!mounted) return;
-    _showLegendDialog(granted, amount);
+    _showLegendDialog(granted);
   }
 
-  Future<void> _offerUpgrade(ChallengeConfig config, {required bool isLegend}) async {
+  Future<void> _offerUpgrade({required bool isLegend}) async {
     final upgraded = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        title: Text(
-          isLegend ? '🏆 ЛЕГЕНДА ПРОДОЛЖАЕТСЯ!' : '🔥 ВАУ! ЛЕГЕНДА!',
-          textAlign: TextAlign.center,
-        ),
+        title: Text(isLegend ? '🏆 ЛЕГЕНДА ПРОДОЛЖАЕТСЯ!' : '🔥 ВАУ! ЛЕГЕНДА!', textAlign: TextAlign.center),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text('🧘', style: TextStyle(fontSize: 64)),
             const SizedBox(height: 12),
-            Text(
-              '${_formatTime(_targetSeconds)} за ОДИН подход!',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-            ),
+            Text('${_formatTime(_targetSeconds)} за ОДИН подход!', textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 20),
             const Divider(),
             const SizedBox(height: 12),
-            const Text(
-              'Поднять планку ещё выше? 🔥',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
-            ),
+            const Text('Поднять планку ещё выше? 🔥', textAlign: TextAlign.center, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
-            Text(
-              'Новая цель: ${_formatTime(_targetSeconds + _upgradeBonusSeconds)} навсегда. '
-                  'Награда за легенду: ${config.energyReward + _upgradeBonusReward} ⚡️.',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, height: 1.4),
-            ),
+            Text('Новая цель: ${_formatTime(_targetSeconds + _upgradeBonusSeconds)} навсегда.', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, height: 1.4)),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Оставить ${_formatTime(_targetSeconds)}'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Оставить ${_formatTime(_targetSeconds)}')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFE17055),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE17055), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              'ПОДНЯТЬ ДО ${_formatTime(_targetSeconds + _upgradeBonusSeconds)} 🔥',
-              style: const TextStyle(fontWeight: FontWeight.w800),
-            ),
+            child: Text('ПОДНЯТЬ ДО ${_formatTime(_targetSeconds + _upgradeBonusSeconds)} 🔥', style: const TextStyle(fontWeight: FontWeight.w800)),
           ),
         ],
       ),
@@ -335,12 +275,7 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
       final newTarget = _targetSeconds + _upgradeBonusSeconds;
       await _saveTarget(newTarget);
       final db = await DatabaseHelper.instance.database;
-      await db.update(
-        'daily_challenges',
-        {'targetValue': newTarget, 'isCompleted': 0},
-        where: 'id = ?',
-        whereArgs: [widget.challenge.id],
-      );
+      await db.update('daily_challenges', {'targetValue': newTarget, 'isCompleted': 0}, where: 'id = ?', whereArgs: [widget.challenge.id]);
 
       if (!mounted) return;
       setState(() {
@@ -351,29 +286,19 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '🔥 Новая цель: ${_formatTime(newTarget)}. '
-                'Сделай ${_formatTime(_upgradeBonusSeconds)} без перерыва!',
-          ),
-          backgroundColor: const Color(0xFFE17055),
-          duration: const Duration(seconds: 4),
-        ),
+        SnackBar(content: Text('🔥 Новая цель: ${_formatTime(newTarget)}. Сделай ${_formatTime(_upgradeBonusSeconds)} без перерыва!'), backgroundColor: const Color(0xFFE17055), duration: const Duration(seconds: 4)),
       );
     } else {
-      final reward = isLegend
-          ? config.energyReward + _upgradeBonusReward
-          : config.energyReward;
       final granted = await ChallengeService.tryAwardReward(
         profileId: widget.profileId,
         challengeId: widget.challenge.id!,
-        energyAmount: reward,
+        isLegendary: isLegend,
       );
       if (!mounted) return;
       if (isLegend) {
-        _showLegendDialog(granted, reward);
+        _showLegendDialog(granted);
       } else {
-        _showCompletionDialog(granted, reward);
+        _showCompletionDialog(granted);
       }
     }
   }
@@ -382,21 +307,12 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
     final prefs = await SharedPreferences.getInstance();
     final key = 'challenge_target_${widget.profileId}_${widget.challenge.taskId}';
     final current = prefs.getInt(key) ?? 0;
-    if (newTarget > current) {
-      await prefs.setInt(key, newTarget);
-    }
+    if (newTarget > current) await prefs.setInt(key, newTarget);
   }
 
-  void _showCompletionDialog(bool granted, int reward, {bool isUpgraded = false}) {
-    final attemptsLine = _todayAttempts > 0
-        ? '\n\nПонадобилось: ${_pluralAttempts(_todayAttempts)}.'
-        : '';
-
-    final upgradedHint = isUpgraded
-        ? '\n\nЦель повышена до ${_formatTime(_targetSeconds)}, '
-        'но шаг ${_formatTime(_upgradeBonusSeconds)} не был сделан за раз — '
-        'легенда не засчитана.'
-        : '';
+  void _showCompletionDialog(bool granted, {bool isUpgraded = false}) {
+    final attemptsLine = _todayAttempts > 0 ? '\n\nПонадобилось: ${_pluralAttempts(_todayAttempts)}.' : '';
+    final upgradedHint = isUpgraded ? '\n\nЦель повышена до ${_formatTime(_targetSeconds)}.' : '';
 
     showDialog(
       context: context,
@@ -406,7 +322,9 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
         title: const Text('🎉 Планка на сегодня закрыта!', textAlign: TextAlign.center),
         content: Text(
           granted
-              ? 'Ты набрал ${_formatTime(_targetSeconds)} планки за день!$attemptsLine\n\n+$reward ⚡️ Жизненной Энергии.\n\n🌿 Загляни в свой Сад Феи — там расцвел новый цветок! 🌸'
+              ? (isUpgraded
+              ? 'Ты набрал ${_formatTime(_targetSeconds)} планки за день!$attemptsLine$upgradedHint\n\n🌟 В твоем Саду Феи расцвел ЗОЛОТОЙ цветок! Загляни туда, чтобы полюбоваться.'
+              : 'Ты набрал ${_formatTime(_targetSeconds)} планки за день!$attemptsLine$upgradedHint\n\n🌸 В твоем Саду Феи расцвел новый цветок! Загляни туда, чтобы полюбоваться.')
               : 'Ты уже получал награду за этот челлендж. Но всё равно молодец!',
           textAlign: TextAlign.center,
         ),
@@ -423,7 +341,7 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
     );
   }
 
-  void _showLegendDialog(bool granted, int reward) {
+  void _showLegendDialog(bool granted) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -435,40 +353,22 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
           children: [
             const Text('🧘', style: TextStyle(fontSize: 72)),
             const SizedBox(height: 12),
-            Text(
-              '${_formatTime(_targetSeconds)} планки!',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-            ),
+            Text('${_formatTime(_targetSeconds)} планки!', textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
             const SizedBox(height: 8),
-            Text(
-              _todayAttempts > 0 ? 'Понадобилось: ${_pluralAttempts(_todayAttempts)}.' : '',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, color: Colors.grey),
-            ),
+            Text(_todayAttempts > 0 ? 'Понадобилось: ${_pluralAttempts(_todayAttempts)}.' : '', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: Colors.grey)),
             const SizedBox(height: 20),
             Text(
               granted
-                  ? 'Ты поднял планку на новый уровень!\n\n+$reward ⚡️ Жизненной Энергии.\n\n'
-                  '🔥 Следующая цель: ${_formatTime(_targetSeconds + _upgradeBonusSeconds)}'
+                  ? 'Ты поднял планку на новый уровень!\n\n🌟 В твоем Саду Феи расцвел ЗОЛОТОЙ цветок!\n\n🔥 Следующая цель: ${_formatTime(_targetSeconds + _upgradeBonusSeconds)}'
                   : 'Награда уже была получена ранее.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: granted ? const Color(0xFF00B894) : Colors.grey,
-              ),
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: granted ? const Color(0xFF00B894) : Colors.grey),
             ),
           ],
         ),
         actions: [
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00B894),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00B894), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
             onPressed: () {
               Navigator.pop(ctx);
               Navigator.pop(context);
@@ -514,20 +414,8 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
               child: Center(
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFE17055), Color(0xFFFDCB6E)],
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Text(
-                    '🏆 ЛЕГЕНДА',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+                  decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFE17055), Color(0xFFFDCB6E)]), borderRadius: BorderRadius.circular(10)),
+                  child: const Text('🏆 ЛЕГЕНДА', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
                 ),
               ),
             ),
@@ -558,51 +446,29 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
   }
 
   Widget _buildTimerCircle() {
-    final accent = _isCompleted
-        ? const Color(0xFF00B894)
-        : _isRunning
-        ? const Color(0xFFE17055)
-        : _isUpgradedLevel
-        ? const Color(0xFFE17055)
-        : Colors.deepPurple;
-
+    final accent = _isCompleted ? const Color(0xFF00B894) : _isRunning ? const Color(0xFFE17055) : _isUpgradedLevel ? const Color(0xFFE17055) : Colors.deepPurple;
     final secondsToShow = _isCompleted ? _targetSeconds : _totalSeconds;
 
     return Column(
       children: [
         SizedBox(
-          width: 240,
-          height: 240,
+          width: 240, height: 240,
           child: Stack(
             alignment: Alignment.center,
             children: [
               SizedBox(
-                width: 240,
-                height: 240,
+                width: 240, height: 240,
                 child: CircularProgressIndicator(
-                  value: _isCompleted ? 1.0 : _progress,
-                  strokeWidth: 14,
-                  backgroundColor: accent.withOpacity(0.15),
-                  valueColor: AlwaysStoppedAnimation(accent),
+                  value: _isCompleted ? 1.0 : _progress, strokeWidth: 14,
+                  backgroundColor: accent.withOpacity(0.15), valueColor: AlwaysStoppedAnimation(accent),
                 ),
               ),
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    _formatTime(secondsToShow),
-                    style: TextStyle(
-                      fontSize: 52,
-                      fontWeight: FontWeight.w800,
-                      color: accent,
-                      height: 1,
-                    ),
-                  ),
+                  Text(_formatTime(secondsToShow), style: TextStyle(fontSize: 52, fontWeight: FontWeight.w800, color: accent, height: 1)),
                   const SizedBox(height: 4),
-                  Text(
-                    'из ${_formatTime(_targetSeconds)}',
-                    style: TextStyle(fontSize: 14, color: accent.withOpacity(0.7)),
-                  ),
+                  Text('из ${_formatTime(_targetSeconds)}', style: TextStyle(fontSize: 14, color: accent.withOpacity(0.7))),
                 ],
               ),
             ],
@@ -610,69 +476,33 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
         ),
         const SizedBox(height: 12),
         if (_isRunning)
-          Text(
-            'Текущая попытка: ${_formatTime(_currentAttemptSeconds)}',
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFFE17055),
-            ),
-          ),
+          Text('Текущая попытка: ${_formatTime(_currentAttemptSeconds)}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFFE17055))),
       ],
     );
   }
 
   Widget _buildHint() {
     if (_isCompleted) {
-      return Text(
-        _todayAttempts > 0
-            ? 'Цель достигнута за ${_pluralAttempts(_todayAttempts)}! 🏆'
-            : 'Цель на день достигнута! 🏆',
-        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-        textAlign: TextAlign.center,
-      );
+      return Text(_todayAttempts > 0 ? 'Цель достигнута за ${_pluralAttempts(_todayAttempts)}! 🏆' : 'Цель на день достигнута! 🏆', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700), textAlign: TextAlign.center);
     }
     if (_isRunning) {
       return const Column(
         children: [
-          Text(
-            'Держи планку!',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Color(0xFFE17055)),
-            textAlign: TextAlign.center,
-          ),
+          Text('Держи планку!', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Color(0xFFE17055)), textAlign: TextAlign.center),
           SizedBox(height: 8),
-          Text(
-            'В случайный момент приложение провибрирует.\nНажми "Я держу!" за 5 секунд.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: Colors.grey, height: 1.4),
-          ),
+          Text('В случайный момент приложение провибрирует.\nНажми "Я держу!" за 5 секунд.', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.grey, height: 1.4)),
         ],
       );
     }
-    final attemptsSuffix = _todayAttempts > 0
-        ? ' за ${_pluralAttempts(_todayAttempts)}'
-        : '';
+    final attemptsSuffix = _todayAttempts > 0 ? ' за ${_pluralAttempts(_todayAttempts)}' : '';
 
     if (_isUpgradedLevel) {
       final needMore = _targetSeconds - _accumulatedSeconds;
       return Column(
         children: [
-          const Text(
-            '🔥 Режим легенды',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFFE17055),
-            ),
-          ),
+          const Text('🔥 Режим легенды', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFFE17055))),
           const SizedBox(height: 8),
-          Text(
-            'Сделай ${_formatTime(_upgradeBonusSeconds)} без перерыва за один заход, '
-                'или добери до цели подходами.\n'
-                'Осталось: ${_formatTime(needMore)}.',
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 14, color: Colors.grey, height: 1.4),
-          ),
+          Text('Сделай ${_formatTime(_upgradeBonusSeconds)} без перерыва за один заход, или добери до цели подходами.\nОсталось: ${_formatTime(needMore)}.', textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, color: Colors.grey, height: 1.4)),
         ],
       );
     }
@@ -680,19 +510,12 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
     return Column(
       children: [
         Text(
-          _accumulatedSeconds > 0
-              ? 'Продолжай! Уже набрано ${_formatTime(_accumulatedSeconds)} из ${_formatTime(_targetSeconds)}$attemptsSuffix.'
-              : 'Прими упор на локти и носки.\nМожно делать подходами — время суммируется за день.',
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 14, color: Colors.grey, height: 1.4),
+          _accumulatedSeconds > 0 ? 'Продолжай! Уже набрано ${_formatTime(_accumulatedSeconds)} из ${_formatTime(_targetSeconds)}$attemptsSuffix.' : 'Прими упор на локти и носки.\nМожно делать подходами — время суммируется за день.',
+          textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, color: Colors.grey, height: 1.4),
         ),
         if (_lastAttemptSeconds > 0) ...[
           const SizedBox(height: 8),
-          Text(
-            'Последняя попытка: ${_formatTime(_lastAttemptSeconds)} '
-                '(всего ${_formatTime(_lastAttemptTotal)})',
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
-          ),
+          Text('Последняя попытка: ${_formatTime(_lastAttemptSeconds)} (всего ${_formatTime(_lastAttemptTotal)})', style: const TextStyle(fontSize: 12, color: Colors.grey)),
         ],
       ],
     );
@@ -702,10 +525,7 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
     if (_isCompleted) {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 32),
-        decoration: BoxDecoration(
-          color: const Color(0xFF00B894).withOpacity(0.15),
-          borderRadius: BorderRadius.circular(20),
-        ),
+        decoration: BoxDecoration(color: const Color(0xFF00B894).withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
         child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -751,29 +571,11 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                '⏱ Проверка!',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 32,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
+              const Text('⏱ Проверка!', style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800)),
               const SizedBox(height: 16),
-              Text(
-                _checkCountdown.toString(),
-                style: const TextStyle(
-                  color: Color(0xFFE17055),
-                  fontSize: 96,
-                  fontWeight: FontWeight.w900,
-                  height: 1,
-                ),
-              ),
+              Text(_checkCountdown.toString(), style: const TextStyle(color: Color(0xFFE17055), fontSize: 96, fontWeight: FontWeight.w900, height: 1)),
               const SizedBox(height: 16),
-              const Text(
-                'Ты ещё держишь?',
-                style: TextStyle(color: Colors.white70, fontSize: 18),
-              ),
+              const Text('Ты ещё держишь?', style: TextStyle(color: Colors.white70, fontSize: 18)),
               const SizedBox(height: 40),
               ElevatedButton.icon(
                 onPressed: _onCheckConfirmed,

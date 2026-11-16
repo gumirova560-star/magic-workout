@@ -7,7 +7,6 @@ import '../../data/challenge_data.dart';
 import '../../services/challenge_service.dart';
 import '../../services/database_helper.dart';
 
-/// Одно упражнение «Утреннего взрыва».
 class CircuitExercise {
   final String name;
   final String emoji;
@@ -20,8 +19,6 @@ class CircuitExercise {
   });
 }
 
-/// Комплекс «Утренний взрыв».
-/// Хочешь поменять упражнения — правь только этот список.
 const List<CircuitExercise> kCircuitExercises = [
   CircuitExercise(name: 'Приседания', emoji: '🏋️', durationSeconds: 30),
   CircuitExercise(name: 'Отжимания', emoji: '💪', durationSeconds: 30),
@@ -63,7 +60,6 @@ class _CircuitChallengeScreenState extends State<CircuitChallengeScreen> {
     if (_completed >= _total) return;
 
     final exercise = kCircuitExercises[_completed];
-
     setState(() => _isRunning = true);
 
     final success = await showDialog<bool>(
@@ -73,12 +69,9 @@ class _CircuitChallengeScreenState extends State<CircuitChallengeScreen> {
     );
 
     if (!mounted) return;
-
     setState(() => _isRunning = false);
+    if (success != true) return;
 
-    if (success != true) return; // пользователь прервал
-
-    // Отмечаем упражнение выполненным
     final newCompleted = _completed + 1;
     final newIsCompleted = newCompleted >= _total;
 
@@ -98,20 +91,18 @@ class _CircuitChallengeScreenState extends State<CircuitChallengeScreen> {
       _isCompleted = newIsCompleted;
     });
 
-    // Если всё готово — начисляем энергию
     if (newIsCompleted) {
-      final config = kDailyChallenges.firstWhere((c) => c.id == widget.challenge.taskId);
+      // 👇 Убрали energyAmount
       final granted = await ChallengeService.tryAwardReward(
         profileId: widget.profileId,
         challengeId: widget.challenge.id!,
-        energyAmount: config.energyReward,
       );
       if (!mounted) return;
-      _showCompletionDialog(granted, config.energyReward);
+      _showCompletionDialog(granted);
     }
   }
 
-  void _showCompletionDialog(bool granted, int reward) {
+  void _showCompletionDialog(bool granted) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -120,7 +111,7 @@ class _CircuitChallengeScreenState extends State<CircuitChallengeScreen> {
         title: const Text('🎉 Утренний взрыв выполнен!', textAlign: TextAlign.center),
         content: Text(
           granted
-              ? 'Все $_total упражнений пройдены!\n\n+$reward ⚡️ Жизненной Энергии.\n\n🌿 Загляни в свой Сад Феи — там расцвел новый цветок! 🌸'
+              ? 'Все $_total упражнений пройдены!\n\n🌸 В твоем Саду Феи расцвел новый цветок! Загляни туда, чтобы полюбоваться.'
               : 'Все упражнения пройдены! (Награда уже была получена ранее)',
           textAlign: TextAlign.center,
         ),
@@ -150,13 +141,9 @@ class _CircuitChallengeScreenState extends State<CircuitChallengeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Прогресс
               Row(
                 children: [
-                  Text(
-                    '$_completed / $_total',
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-                  ),
+                  Text('$_completed / $_total', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
                   const SizedBox(width: 12),
                   Expanded(
                     child: ClipRRect(
@@ -165,28 +152,20 @@ class _CircuitChallengeScreenState extends State<CircuitChallengeScreen> {
                         value: progressPercent.clamp(0.0, 1.0),
                         minHeight: 12,
                         backgroundColor: Colors.deepPurple.withOpacity(0.15),
-                        valueColor: AlwaysStoppedAnimation(
-                          _isCompleted ? const Color(0xFF00B894) : Colors.deepPurple,
-                        ),
+                        valueColor: AlwaysStoppedAnimation(_isCompleted ? const Color(0xFF00B894) : Colors.deepPurple),
                       ),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 20),
-
-              // Список упражнений
               Expanded(
                 child: ListView.separated(
                   itemCount: _total,
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (context, index) {
-                    return _buildExerciseTile(index);
-                  },
+                  itemBuilder: (context, index) => _buildExerciseTile(index),
                 ),
               ),
-
-              // Кнопка / статус
               const SizedBox(height: 12),
               _buildActionButton(),
             ],
@@ -202,50 +181,27 @@ class _CircuitChallengeScreenState extends State<CircuitChallengeScreen> {
     final isCurrent = index == _completed && !_isCompleted;
     final isLocked = index > _completed;
 
-    Color borderColor;
-    Color bgColor;
-    Color textColor;
-    IconData? trailingIcon;
-
+    Color borderColor; Color bgColor; Color textColor; IconData? trailingIcon;
     if (isDone) {
-      borderColor = const Color(0xFF00B894);
-      bgColor = const Color(0xFF00B894).withOpacity(0.08);
-      textColor = const Color(0xFF00B894);
-      trailingIcon = Icons.check_circle_rounded;
+      borderColor = const Color(0xFF00B894); bgColor = const Color(0xFF00B894).withOpacity(0.08);
+      textColor = const Color(0xFF00B894); trailingIcon = Icons.check_circle_rounded;
     } else if (isCurrent) {
-      borderColor = Colors.deepPurple;
-      bgColor = Colors.deepPurple.withOpacity(0.08);
-      textColor = Colors.deepPurple;
-      trailingIcon = _isRunning ? null : Icons.play_circle_fill_rounded;
-    } else if (isLocked) {
-      borderColor = Colors.grey.shade300;
-      bgColor = Colors.grey.shade100;
-      textColor = Colors.grey.shade500;
-      trailingIcon = Icons.lock_rounded;
+      borderColor = Colors.deepPurple; bgColor = Colors.deepPurple.withOpacity(0.08);
+      textColor = Colors.deepPurple; trailingIcon = _isRunning ? null : Icons.play_circle_fill_rounded;
     } else {
-      borderColor = Colors.grey.shade300;
-      bgColor = Colors.grey.shade100;
-      textColor = Colors.grey.shade500;
-      trailingIcon = null;
+      borderColor = Colors.grey.shade300; bgColor = Colors.grey.shade100;
+      textColor = Colors.grey.shade500; trailingIcon = Icons.lock_rounded;
     }
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor, width: 2),
-      ),
+      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(16), border: Border.all(color: borderColor, width: 2)),
       child: Row(
         children: [
           Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: borderColor.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
+            width: 44, height: 44,
+            decoration: BoxDecoration(color: borderColor.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
             alignment: Alignment.center,
             child: Text(ex.emoji, style: const TextStyle(fontSize: 24)),
           ),
@@ -254,25 +210,13 @@ class _CircuitChallengeScreenState extends State<CircuitChallengeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  ex.name,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: textColor,
-                    decoration: isDone ? TextDecoration.lineThrough : null,
-                  ),
-                ),
+                Text(ex.name, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: textColor, decoration: isDone ? TextDecoration.lineThrough : null)),
                 const SizedBox(height: 2),
-                Text(
-                  '${ex.durationSeconds} сек',
-                  style: TextStyle(fontSize: 13, color: textColor.withOpacity(0.7)),
-                ),
+                Text('${ex.durationSeconds} сек', style: TextStyle(fontSize: 13, color: textColor.withOpacity(0.7))),
               ],
             ),
           ),
-          if (trailingIcon != null)
-            Icon(trailingIcon, color: textColor, size: 24),
+          if (trailingIcon != null) Icon(trailingIcon, color: textColor, size: 24),
         ],
       ),
     );
@@ -282,24 +226,14 @@ class _CircuitChallengeScreenState extends State<CircuitChallengeScreen> {
     if (_isCompleted) {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(
-          color: const Color(0xFF00B894).withOpacity(0.15),
-          borderRadius: BorderRadius.circular(20),
-        ),
+        decoration: BoxDecoration(color: const Color(0xFF00B894).withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
         alignment: Alignment.center,
         child: const Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.check_circle_rounded, color: Color(0xFF00B894)),
             SizedBox(width: 8),
-            Text(
-              'Выполнено',
-              style: TextStyle(
-                color: Color(0xFF00B894),
-                fontWeight: FontWeight.w700,
-                fontSize: 18,
-              ),
-            ),
+            Text('Выполнено', style: TextStyle(color: Color(0xFF00B894), fontWeight: FontWeight.w700, fontSize: 18)),
           ],
         ),
       );
@@ -312,9 +246,7 @@ class _CircuitChallengeScreenState extends State<CircuitChallengeScreen> {
       child: ElevatedButton.icon(
         onPressed: _isRunning ? null : _startExercise,
         icon: const Icon(Icons.play_arrow_rounded),
-        label: Text(
-          _isRunning ? 'Выполняется...' : 'Начать: ${nextEx.name}',
-        ),
+        label: Text(_isRunning ? 'Выполняется...' : 'Начать: ${nextEx.name}'),
         style: ElevatedButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 18),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -327,10 +259,8 @@ class _CircuitChallengeScreenState extends State<CircuitChallengeScreen> {
   }
 }
 
-/// Диалог с таймером одного упражнения (обратный отсчёт).
 class _ExerciseTimerDialog extends StatefulWidget {
   final CircuitExercise exercise;
-
   const _ExerciseTimerDialog({required this.exercise});
 
   @override
@@ -355,10 +285,7 @@ class _ExerciseTimerDialogState extends State<_ExerciseTimerDialog> {
       if (_remaining <= 0) {
         t.cancel();
         HapticFeedback.heavyImpact();
-        setState(() {
-          _remaining = 0;
-          _done = true;
-        });
+        setState(() { _remaining = 0; _done = true; });
       }
     });
   }
@@ -368,14 +295,6 @@ class _ExerciseTimerDialogState extends State<_ExerciseTimerDialog> {
     _ticker?.cancel();
     WakelockPlus.disable();
     super.dispose();
-  }
-
-  void _cancel() {
-    Navigator.pop(context, false);
-  }
-
-  void _finish() {
-    Navigator.pop(context, true);
   }
 
   @override
@@ -392,67 +311,40 @@ class _ExerciseTimerDialogState extends State<_ExerciseTimerDialog> {
           children: [
             Text(widget.exercise.emoji, style: const TextStyle(fontSize: 56)),
             const SizedBox(height: 8),
-            Text(
-              widget.exercise.name,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-              textAlign: TextAlign.center,
-            ),
+            Text(widget.exercise.name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800), textAlign: TextAlign.center),
             const SizedBox(height: 24),
             SizedBox(
-              width: 160,
-              height: 160,
+              width: 160, height: 160,
               child: Stack(
                 alignment: Alignment.center,
                 children: [
                   SizedBox(
-                    width: 160,
-                    height: 160,
+                    width: 160, height: 160,
                     child: CircularProgressIndicator(
-                      value: progress,
-                      strokeWidth: 10,
+                      value: progress, strokeWidth: 10,
                       backgroundColor: Colors.deepPurple.withOpacity(0.15),
-                      valueColor: AlwaysStoppedAnimation(
-                        _done ? const Color(0xFF00B894) : Colors.deepPurple,
-                      ),
+                      valueColor: AlwaysStoppedAnimation(_done ? const Color(0xFF00B894) : Colors.deepPurple),
                     ),
                   ),
                   Text(
                     _done ? '✓' : '$_remaining',
-                    style: TextStyle(
-                      fontSize: _done ? 60 : 56,
-                      fontWeight: FontWeight.w800,
-                      color: _done ? const Color(0xFF00B894) : Colors.deepPurple,
-                      height: 1,
-                    ),
+                    style: TextStyle(fontSize: _done ? 60 : 56, fontWeight: FontWeight.w800, color: _done ? const Color(0xFF00B894) : Colors.deepPurple, height: 1),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
             if (!_done)
-              TextButton(
-                onPressed: _cancel,
-                child: const Text(
-                  'Прервать',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              )
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Прервать', style: TextStyle(color: Colors.grey)))
             else
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _finish,
+                  onPressed: () => Navigator.pop(context, true),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00B894),
-                    foregroundColor: Colors.white,
+                    backgroundColor: const Color(0xFF00B894), foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    textStyle: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                   child: const Text('Готово, дальше!'),
                 ),

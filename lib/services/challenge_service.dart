@@ -22,7 +22,6 @@ class ChallengeService {
 
     final randomConfig = (List.from(kDailyChallenges)..shuffle()).first;
 
-    // Читаем сохранённую цель (для планки, которая растет до 7 минут)
     final prefs = await SharedPreferences.getInstance();
     final targetKey = 'challenge_target_${profileId}_${randomConfig.id}';
     final savedTarget = prefs.getInt(targetKey);
@@ -83,46 +82,47 @@ class ChallengeService {
     );
   }
 
+  // 👇 УЛУЧШЕННЫЙ МЕТОД: проверяет прогресс, а не только флаг isCompleted
   static Future<bool> tryAwardReward({
     required int profileId,
     required int challengeId,
-    required int energyAmount,
+    bool isLegendary = false,
   }) async {
     final db = await DatabaseHelper.instance.database;
 
     final maps = await db.query(
       'daily_challenges',
-      columns: ['rewardGranted', 'isCompleted'],
+      columns: ['rewardGranted', 'isCompleted', 'currentProgress', 'targetValue'],
       where: 'id = ?',
       whereArgs: [challengeId],
       limit: 1,
     );
     if (maps.isEmpty) return false;
+
     final row = maps.first;
     final alreadyGranted = (row['rewardGranted'] as int? ?? 0) == 1;
-    final isCompleted = (row['isCompleted'] as int? ?? 0) == 1;
+    final currentProgress = row['currentProgress'] as int? ?? 0;
+    final targetValue = row['targetValue'] as int? ?? 0;
 
-    if (!isCompleted || alreadyGranted) return false;
+    // 👇 Проверяем, что прогресс реально достиг цели
+    final actuallyCompleted = currentProgress >= targetValue;
 
-    final success = await EnergyService.addEnergy(
-      profileId: profileId,
-      delta: energyAmount,
-      reason: 'challenge_completed',
-      refId: challengeId,
+    if (alreadyGranted || !actuallyCompleted) return false;
+
+    // Обновляем флаги в базе
+    await db.update(
+      'daily_challenges',
+      {'isCompleted': 1, 'rewardGranted': 1},
+      where: 'id = ?',
+      whereArgs: [challengeId],
     );
 
-    if (success) {
-      await db.update(
-        'daily_challenges',
-        {'rewardGranted': 1},
-        where: 'id = ?',
-        whereArgs: [challengeId],
-      );
+    // Сажаем цветок
+    await GardenService.plantNextFlower(
+      profileId: profileId,
+      flowerType: isLegendary ? 'legendary' : 'normal',
+    );
 
-      // 👇 ВЫРАЩИВАЕМ ЦВЕТОК В САДУ (вот эта строчка связывает челлендж и сад)
-      await GardenService.plantNextFlower(profileId: profileId);
-    }
-
-    return success;
+    return true;
   }
 }

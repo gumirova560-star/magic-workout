@@ -43,8 +43,21 @@ int _currentWeekMinutes = 0;
 void initState() {
 super.initState();
 _loadData();
+_precacheGardenImages(); // 👈 ПРЕДЗАГРУЗКА КАРТИНОК САДА
 FairyReactionService().addProfileListener(_onProfileChanged);
 FairyReactionService().addWorkoutListener(_onWorkoutCompleted);
+}
+
+// 👇 МЕТОД ДЛЯ ПРЕДЗАГРУЗКИ
+void _precacheGardenImages() {
+WidgetsBinding.instance.addPostFrameCallback((_) {
+if (!mounted) return;
+precacheImage(const AssetImage('assets/flowers/grass_bg.png'), context);
+precacheImage(const AssetImage('assets/flowers/tree.png'), context);
+precacheImage(const AssetImage('assets/flowers/pond.png'), context);
+precacheImage(const AssetImage('assets/flowers/fountain.png'), context);
+precacheImage(const AssetImage('assets/flowers/pavilion.png'), context);
+});
 }
 
 void _onProfileChanged() { if (mounted) _loadData(); }
@@ -266,7 +279,7 @@ _showMessage('Ошибка: $e');
 }
 }
 
-// ═══ КОНЕЦ ЧАСТИ 1 / 3 ═══
+// ═══ КОНЕЦ ЧАСТИ 1 ═══
 Future<void> _openDay(WorkoutDay day) async {
 final isUnlocked = _isWeekUnlocked(day.weekNumber ?? 1);
 if (!isUnlocked) {
@@ -369,6 +382,7 @@ await _checkAndUnlockNextWeek();
 }
 }
 
+// 👇 ИСПРАВЛЕННЫЙ МЕТОД: ТЕПЕРЬ УЧИТЫВАЕТ ИНВЕНТАРЬ И УРОВЕНЬ
 Future<void> _generateForgottenZonesWorkout(WorkoutDay day, UserProfile profile) async {
 final existing = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
 for (final e in existing) {
@@ -378,16 +392,29 @@ if (e.id != null) await DatabaseHelper.instance.deleteWorkoutExercise(e.id!);
 final allExercises = await DatabaseHelper.instance.getExercises();
 final blockedZones = profile.limitations.map((e) => e.toLowerCase()).toList();
 
+// 👇 ФИЛЬТР: ПРОВЕРЯЕМ ПОДХОДИТ ЛИ УПРАЖНЕНИЕ
+bool isExerciseAllowed(Exercise e) {
+// Ограничения по здоровью
+if (e.contraindications.any((c) => blockedZones.contains(c.toLowerCase()))) return false;
+
+// Оборудование
+  if (!WorkoutGenerator.matchesEquipment(e, profile.equipment)) return false;
+
+// Уровень (новичкам не даем штангу и сложные элементы)
+if (profile.level == 'beginner') {
+final lowerName = e.name.toLowerCase();
+if (lowerName.contains('штанг') || lowerName.contains('на одной ноге') || lowerName.contains('в висе')) return false;
+if (e.difficulty == 'advanced') return false;
+}
+
+return true;
+}
+
 final bases = allExercises.where((e) {
 if (!isBaseExercise(e)) return false;
 final zone = getExerciseZone(e);
 if (blockedZones.contains(zone)) return false;
-for (final contra in e.contraindications) {
-final c = contra.toLowerCase().trim();
-for (final block in blockedZones) {
-if (c.contains(block) || block.contains(c)) return false;
-}
-}
+if (!isExerciseAllowed(e)) return false;
 return true;
 }).toList()..shuffle();
 
@@ -406,7 +433,7 @@ reps: '10-12',
 final newId = await DatabaseHelper.instance.addWorkoutExercise(we);
 for (int s = 1; s <= 3; s++) {
 await DatabaseHelper.instance.addWorkoutSet(
-WorkoutSet(workoutExerciseId: newId, order: s, completed: false)
+WorkoutSet(workoutExerciseId: newId, order: s, completed: false),
 );
 }
 }
@@ -427,6 +454,7 @@ final zoneExs = allExercises.where((e) {
 if (e.id == null) return false;
 if (usedIds.contains(e.id)) return false;
 if (isBaseExercise(e) || e.muscleGroups.contains('cardio')) return false;
+if (!isExerciseAllowed(e)) return false; // 👈 ПРИМЕНЯЕМ ФИЛЬТР И ЗДЕСЬ
 return e.muscleGroups.contains(zone);
 }).toList()..shuffle();
 
@@ -445,7 +473,7 @@ reps: '15',
 final newId = await DatabaseHelper.instance.addWorkoutExercise(we);
 for (int s = 1; s <= 3; s++) {
 await DatabaseHelper.instance.addWorkoutSet(
-WorkoutSet(workoutExerciseId: newId, order: s, completed: false)
+WorkoutSet(workoutExerciseId: newId, order: s, completed: false),
 );
 }
 added++;
@@ -533,11 +561,21 @@ actions: [
 // 👇 БЕЙДЖ ЭНЕРГИИ
 EnergyBadge(profileId: _activeProfile!.id!),
 
-// 👇 НОВАЯ КНОПКА САДА
+// 👇 КНОПКА САДА
 IconButton(
 tooltip: 'Сад Феи',
-icon: const Icon(Icons.local_florist_rounded, color: Colors.green),
-onPressed: () {
+icon: Image.asset(
+'assets/flowers/garden_icon.png',
+width: 32,
+height: 32,
+cacheWidth: 80, // 👈 Сжимаем иконку для скорости
+fit: BoxFit.contain,
+),
+onPressed: () async {
+// 👇 ПРЕДЗАГРУЗКА ФОНА, ЧТОБЫ САД ОТКРЫВАЛСЯ МГНОВЕННО
+await precacheImage(const AssetImage('assets/flowers/grass_bg.png'), context);
+if (!mounted) return;
+
 Navigator.push(
 context,
 MaterialPageRoute(
@@ -626,7 +664,7 @@ const SizedBox(height: 32),
 );
 }
 
-// ═══ КОНЕЦ ЧАСТИ 2 / 3 ═══
+// ═══ КОНЕЦ ЧАСТИ 2 ═══
   Widget _buildWeekChips(BuildContext context) {
     final theme = Theme.of(context);
     return SingleChildScrollView(
@@ -1058,5 +1096,5 @@ const SizedBox(height: 32),
     );
   }
 }
-// ═══ КОНЕЦ ЧАСТИ 3 / 3 ═══
+// ═══ КОНЕЦ ЧАСТИ 3 ═══
 // ═══ КОНЕЦ ФАЙЛА workout_screen.dart ═══

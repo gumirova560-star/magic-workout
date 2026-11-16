@@ -23,7 +23,6 @@ class _CumulativeChallengeScreenState extends State<CumulativeChallengeScreen> {
   late int _targetValue;
   bool _isCompleted = false;
 
-  // 👇 Пауза после нажатия
   Timer? _pauseTimer;
   int _pauseLeft = 0;
 
@@ -44,7 +43,6 @@ class _CumulativeChallengeScreenState extends State<CumulativeChallengeScreen> {
     super.dispose();
   }
 
-  // Восстанавливаем незакончившуюся паузу, если пользователь перезапустил приложение
   Future<void> _restorePause() async {
     final prefs = await SharedPreferences.getInstance();
     final lastMs = prefs.getInt(_pauseKey);
@@ -75,8 +73,6 @@ class _CumulativeChallengeScreenState extends State<CumulativeChallengeScreen> {
 
   Future<void> _addProgress(int amount) async {
     if (_isCompleted) return;
-
-    // 👇 Пауза: если ещё идёт — игнорируем нажатие
     if (_pauseLeft > 0) return;
 
     HapticFeedback.lightImpact();
@@ -88,10 +84,13 @@ class _CumulativeChallengeScreenState extends State<CumulativeChallengeScreen> {
       }
     });
 
+    // 👇 Сохраняем прогресс в базу
     await ChallengeService.updateProgress(widget.challenge.id!, _currentProgress);
 
     if (_isCompleted) {
-      await _awardEnergy();
+      // 👇 Небольшая задержка, чтобы база точно обновилась
+      await Future.delayed(const Duration(milliseconds: 100));
+      await _awardFlower();
     } else {
       await _startPause();
     }
@@ -106,20 +105,19 @@ class _CumulativeChallengeScreenState extends State<CumulativeChallengeScreen> {
     _startPauseTicker();
   }
 
-  Future<void> _awardEnergy() async {
-    final config = kDailyChallenges.firstWhere((c) => c.id == widget.challenge.taskId);
-
+  Future<void> _awardFlower() async {
+    // 👇 Явно передаём isLegendary: false (обычный цветок)
     final granted = await ChallengeService.tryAwardReward(
       profileId: widget.profileId,
       challengeId: widget.challenge.id!,
-      energyAmount: config.energyReward,
+      isLegendary: false,
     );
 
     if (!mounted) return;
-    _showCompletionDialog(granted, config.energyReward);
+    _showCompletionDialog(granted);
   }
 
-  void _showCompletionDialog(bool granted, int reward) {
+  void _showCompletionDialog(bool granted) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -128,7 +126,7 @@ class _CumulativeChallengeScreenState extends State<CumulativeChallengeScreen> {
         title: const Text('🎉 Челлендж выполнен!', textAlign: TextAlign.center),
         content: Text(
           granted
-              ? 'Ты заработал $reward ⚡️ Жизненной Энергии!\n\n🌿 Загляни в свой Сад Феи — благодаря твоей энергии там расцвел новый цветок! 🌸'
+              ? 'Ты отлично справился!\n\n🌸 В твоем Саду Феи расцвел новый цветок! Загляни туда, чтобы полюбоваться.'
               : 'Ты уже получал награду за этот челлендж. Но всё равно молодец!',
           textAlign: TextAlign.center,
         ),

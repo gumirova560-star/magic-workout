@@ -32,17 +32,12 @@ class _PhotoChallengeScreenState extends State<PhotoChallengeScreen> {
 
   Future<void> _pickImage() async {
     if (_isUploading) return;
-
     try {
-      final XFile? image = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 70, // Сжимаем, чтобы не занимало много места
-      );
+      final XFile? image = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
       if (image == null) return;
 
       setState(() => _isUploading = true);
 
-      // Сохраняем путь к картинке в БД и отмечаем как выполненное
       final db = await DatabaseHelper.instance.database;
       await db.update(
         'daily_challenges',
@@ -55,12 +50,10 @@ class _PhotoChallengeScreenState extends State<PhotoChallengeScreen> {
         whereArgs: [widget.challenge.id],
       );
 
-      // Начисляем энергию
-      final config = kDailyChallenges.firstWhere((c) => c.id == widget.challenge.taskId);
+      // 👇 Убрали energyAmount
       final granted = await ChallengeService.tryAwardReward(
         profileId: widget.profileId,
         challengeId: widget.challenge.id!,
-        energyAmount: config.energyReward,
       );
 
       if (!mounted) return;
@@ -70,17 +63,15 @@ class _PhotoChallengeScreenState extends State<PhotoChallengeScreen> {
         _isUploading = false;
       });
 
-      _showCompletionDialog(granted, config.energyReward);
+      _showCompletionDialog(granted);
     } catch (e) {
       if (!mounted) return;
       setState(() => _isUploading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка загрузки: $e'), backgroundColor: Colors.red),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка загрузки: $e'), backgroundColor: Colors.red));
     }
   }
 
-  void _showCompletionDialog(bool granted, int reward) {
+  void _showCompletionDialog(bool granted) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -89,7 +80,7 @@ class _PhotoChallengeScreenState extends State<PhotoChallengeScreen> {
         title: const Text('🎉 Отлично!', textAlign: TextAlign.center),
         content: Text(
           granted
-              ? 'Скриншот загружен!\nТы заработал $reward ⚡️ Жизненной Энергии.\n\n🌿 Загляни в свой Сад Феи — там расцвел новый цветок! 🌸'
+              ? 'Скриншот загружен!\n\n🌸 В твоем Саду Феи расцвел новый цветок! Загляни туда, чтобы полюбоваться.'
               : 'Скриншот загружен! (Награда уже была получена ранее)',
           textAlign: TextAlign.center,
         ),
@@ -118,51 +109,27 @@ class _PhotoChallengeScreenState extends State<PhotoChallengeScreen> {
           child: Column(
             children: [
               const Spacer(),
-              // Иконка шагов
               Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: Colors.deepPurple.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Center(
-                  child: Text('🚶‍♀️', style: TextStyle(fontSize: 60)),
-                ),
+                width: 120, height: 120,
+                decoration: BoxDecoration(color: Colors.deepPurple.withOpacity(0.1), shape: BoxShape.circle),
+                child: const Center(child: Text('🚶‍♀️', style: TextStyle(fontSize: 60))),
               ),
               const SizedBox(height: 24),
-              Text(
-                'Прогулка на ${widget.challenge.targetValue} шагов',
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-                textAlign: TextAlign.center,
-              ),
+              Text('Прогулка на ${widget.challenge.targetValue} шагов', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800), textAlign: TextAlign.center),
               const SizedBox(height: 12),
-              const Text(
-                'Пройди необходимое количество шагов, сделай скриншот с шагомера и прикрепи его сюда.',
-                style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.4),
-                textAlign: TextAlign.center,
-              ),
+              const Text('Пройди необходимое количество шагов, сделай скриншот с шагомера и прикрепи его сюда.', style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.4), textAlign: TextAlign.center),
               const SizedBox(height: 24),
 
-              // Превью картинки (если есть)
               if (_imagePath != null && !kIsWeb) ...[
                 ClipRRect(
                   borderRadius: BorderRadius.circular(16),
-                  child: Image.file(
-                    File(_imagePath!),
-                    height: 200,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
+                  child: Image.file(File(_imagePath!), height: 200, width: double.infinity, fit: BoxFit.cover),
                 ),
                 const SizedBox(height: 16),
               ] else if (_imagePath != null && kIsWeb) ...[
                 Container(
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
                   child: const Row(
                     children: [
                       Icon(Icons.check_circle, color: Colors.green),
@@ -176,15 +143,12 @@ class _PhotoChallengeScreenState extends State<PhotoChallengeScreen> {
 
               const Spacer(),
 
-              // Кнопка
               if (!_isCompleted)
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: _isUploading ? null : _pickImage,
-                    icon: _isUploading
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.upload_file_rounded),
+                    icon: _isUploading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.upload_file_rounded),
                     label: Text(_isUploading ? 'Загрузка...' : 'Прикрепить скриншот'),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 18),
@@ -198,10 +162,7 @@ class _PhotoChallengeScreenState extends State<PhotoChallengeScreen> {
               else
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 32),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00B894).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                  decoration: BoxDecoration(color: const Color(0xFF00B894).withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [

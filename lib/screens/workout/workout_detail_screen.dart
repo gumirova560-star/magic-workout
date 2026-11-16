@@ -274,7 +274,6 @@ key = '$prefix' + 'stretch_$cleanName';
 groupedExs.putIfAbsent(key, () => []).add(we);
 }
 
-// ═══ КОНЕЦ ЧАСТИ 4 (1/4 workout_detail_screen.dart) ═══
 final List<WorkoutExercise> uniqueExs = [];
 for (final entry in groupedExs.entries) {
 final list = entry.value;
@@ -503,6 +502,7 @@ _setsData.addAll(setsData);
 _setIds.addAll(setIds);
 }
 
+// ═══ КОНЕЦ ЧАСТИ 1 ═══
 int? _parseReps(String repsStr) {
 final match = RegExp(r'(\d+)').firstMatch(repsStr);
 if (match == null) return null;
@@ -542,7 +542,6 @@ _isRestTimerPaused = false;
 
 void _togglePauseRestTimer() => setState(() => _isRestTimerPaused = !_isRestTimerPaused);
 
-// ═══ КОНЕЦ ЧАСТИ 5 (2/4 workout_detail_screen.dart) ═══
 Future<void> _showWeekNotification() async {
 final week = _day?.weekNumber;
 if (week == null || week == 1 || _started || _completed) return;
@@ -723,27 +722,34 @@ String _groupLabel(String code) => getZoneLabel(code);
 String _circleKey(int blockNum, int circleNum) => '${blockNum}_$circleNum';
 bool _isCircleCollapsed(int blockNum, int circleNum) => _collapsedCircles.contains(_circleKey(blockNum, circleNum));
 
-bool _isCircleComplete(List<WorkoutExercise> blockItems, int circle) {
-bool hasSetsForCircle = false;
+// 👇 ИСПРАВЛЕННАЯ ЛОГИКА КРУГОВ (ЧТОБЫ ЗЕЛЕНЕЛО ДАЖЕ ПРИ 2-Х УПРАЖНЕНИЯХ)
+int _totalInCircle(List<WorkoutExercise> blockItems, int circle) {
+int count = 0;
 for (final item in blockItems) {
-final sets = _setsData[item.id!];
-if (sets == null) return false;
-if (circle >= sets.length) return false;
-hasSetsForCircle = true;
-if (!sets[circle].completed) return false;
+final sets = _setsData[item.id];
+if (sets != null && circle < sets.length) {
+count++;
 }
-return hasSetsForCircle;
+}
+return count;
+}
+
+bool _isCircleComplete(List<WorkoutExercise> blockItems, int circle) {
+final total = _totalInCircle(blockItems, circle);
+if (total == 0) return false;
+return _completedInCircle(blockItems, circle) == total;
 }
 
 int _completedInCircle(List<WorkoutExercise> blockItems, int circle) {
 int count = 0;
 for (final item in blockItems) {
-final sets = _setsData[item.id!];
+final sets = _setsData[item.id];
 if (sets == null || circle >= sets.length) continue;
 if (sets[circle].completed) count++;
 }
 return count;
 }
+// 👆 КОНЕЦ ИСПРАВЛЕННОЙ ЛОГИКИ
 
 void _toggleCircle(int blockNum, int circleNum) {
 final key = _circleKey(blockNum, circleNum);
@@ -913,869 +919,889 @@ FairyReactionService().trigger('workout_started', mood: FairyMood.wink);
 _showMessage('Тренировка началась! 💪');
 }
 
-// ═══ КОНЕЦ ЧАСТИ 6 (3/4 workout_detail_screen.dart) ═══
-  Future<void> _finishWorkout() async {
-    if (_workoutDayId == null) return;
+// ═══ КОНЕЦ ЧАСТИ 2 ═══
+Future<void> _finishWorkout() async {
+if (_workoutDayId == null) return;
 
-    final preUpdates = <Future>[];
-    for (final item in _items) {
-      if (item.isCoolDown || item.isWarmup || item.id == null) continue;
-      final sets = _setsData[item.id!];
-      if (sets == null) continue;
-      for (int i = 0; i < sets.length; i++) {
-        final ids = _setIds[item.id!];
-        if (ids != null && i < ids.length && ids[i] > 0) {
-          preUpdates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
-            id: ids[i], workoutExerciseId: item.id!, order: i + 1,
-            weight: sets[i].weight, reps: sets[i].reps, completed: sets[i].completed,
-          )));
-        }
-      }
+final preUpdates = <Future>[];
+for (final item in _items) {
+if (item.isCoolDown || item.isWarmup || item.id == null) continue;
+final sets = _setsData[item.id!];
+if (sets == null) continue;
+for (int i = 0; i < sets.length; i++) {
+final ids = _setIds[item.id!];
+if (ids != null && i < ids.length && ids[i] > 0) {
+preUpdates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
+id: ids[i], workoutExerciseId: item.id!, order: i + 1,
+weight: sets[i].weight, reps: sets[i].reps, completed: sets[i].completed,
+)));
+}
+}
+}
+if (preUpdates.isNotEmpty) await Future.wait(preUpdates);
+
+int completedSets = 0;
+int totalSets = 0;
+
+for (final item in _items) {
+if (item.isCoolDown || item.isWarmup || item.id == null) continue;
+final sets = _setsData[item.id!];
+if (sets == null) continue;
+for (final s in sets) {
+totalSets++;
+if (s.completed) completedSets++;
+}
+}
+
+if (completedSets < totalSets) {
+final confirm = await showDialog<bool>(
+context: context,
+builder: (ctx) => AlertDialog(
+shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+title: const Text('Тренировка не завершена'),
+content: Text('Вы выполнили $completedSets из $totalSets подходов.\n\nСохранить прогресс и вернуться? День останется в плане как «В процессе».'),
+actions: [
+TextButton(
+onPressed: () => Navigator.pop(ctx, false),
+child: const Text('Продолжить'),
+),
+ElevatedButton(
+onPressed: () => Navigator.pop(ctx, true),
+style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE17055)),
+child: const Text('Сохранить и выйти'),
+),
+],
+),
+);
+
+if (confirm != true) return;
+
+final updates = <Future>[];
+for (final item in _items) {
+if (item.isCoolDown || item.isWarmup || item.id == null) continue;
+final sets = _setsData[item.id!];
+if (sets == null) continue;
+for (int i = 0; i < sets.length; i++) {
+final ids = _setIds[item.id!];
+if (ids != null && i < ids.length && ids[i] > 0) {
+updates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
+id: ids[i], workoutExerciseId: item.id!, order: i + 1,
+weight: sets[i].weight, reps: sets[i].reps, completed: sets[i].completed,
+)));
+}
+}
+}
+if (updates.isNotEmpty) await Future.wait(updates);
+
+final day = await DatabaseHelper.instance.getWorkoutDayById(_workoutDayId!);
+if (day == null) return;
+final updated = day.copyWith(status: 'in_progress', startedAt: day.startedAt ?? DateTime.now());
+await DatabaseHelper.instance.updateWorkoutDay(updated);
+if (mounted) Navigator.pop(context, true);
+return;
+}
+
+String? note;
+final noteController = TextEditingController();
+final noteResult = await showDialog<bool>(
+context: context,
+builder: (ctx) => AlertDialog(
+title: const Text('Заметка к тренировке'),
+content: TextField(
+controller: noteController,
+autofocus: true,
+maxLines: 3,
+decoration: const InputDecoration(hintText: 'Как прошло?', border: OutlineInputBorder()),
+),
+actions: [
+TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Пропустить')),
+ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
+],
+),
+);
+if (noteResult == true) note = noteController.text.trim();
+
+final updates = <Future>[];
+for (final item in _items) {
+if (item.isCoolDown || item.isWarmup || item.id == null) continue;
+final sets = _setsData[item.id!];
+if (sets == null) continue;
+for (int i = 0; i < sets.length; i++) {
+final ids = _setIds[item.id!];
+if (ids != null && i < ids.length) {
+updates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: sets[i].weight, reps: sets[i].reps, completed: true)));
+}
+}
+}
+if (updates.isNotEmpty) await Future.wait(updates);
+
+bool isOverperformed = false;
+for (final item in _items) {
+if (item.isCoolDown || item.isWarmup || item.id == null) continue;
+final sets = _setsData[item.id!];
+if (sets == null) continue;
+final targetW = _targetWeights[item.id!];
+for (final s in sets) {
+if (s.completed && targetW != null && targetW > 0 && s.weight != null && s.weight! > targetW) isOverperformed = true;
+}
+}
+
+final day = await DatabaseHelper.instance.getWorkoutDayById(_workoutDayId!);
+if (day == null) return;
+final minutes = DateTime.now().difference(day.startedAt ?? DateTime.now()).inMinutes;
+
+final updated = day.copyWith(status: 'completed', completedAt: DateTime.now(), durationMinutes: minutes > 0 ? minutes : 1, notes: note);
+await DatabaseHelper.instance.updateWorkoutDay(updated);
+if (!mounted) return;
+
+// 👇 НАЧИСЛЯЕМ ЭНЕРГИЮ ЗА ТРЕНИРОВКУ (+20 ⚡️)
+await EnergyService.addEnergy(
+profileId: widget.profileId,
+delta: 20,
+reason: 'workout_completed',
+refId: _workoutDayId,
+);
+
+// 👇 ПОКАЗЫВАЕМ СООБЩЕНИЕ ОБ ЭНЕРГИИ
+if (mounted) {
+ScaffoldMessenger.of(context).showSnackBar(
+const SnackBar(
+content: Text('Тренировка завершена! Твоя физическая усталость конвертирована в +20 ⚡️ Жизненной Энергии. Загляни в Сад Феи 🌸'),
+backgroundColor: Color(0xFF00B894),
+duration: Duration(seconds: 4),
+),
+);
+}
+
+if (isOverperformed) FairyReactionService().trigger('workout_overperformed', mood: FairyMood.party);
+else FairyReactionService().trigger('workout_completed', mood: FairyMood.party);
+
+final unlocked = await AchievementService.checkAchievements(widget.profileId);
+if (unlocked.isNotEmpty && mounted) {
+for (final a in unlocked) {
+ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+content: Row(children: [
+Text(a.icon, style: const TextStyle(fontSize: 24)),
+const SizedBox(width: 12),
+Expanded(child: Text('Новое достижение: ${a.title}!', style: const TextStyle(fontWeight: FontWeight.w600)))
+]),
+backgroundColor: const Color(0xFF6C5CE7),
+duration: const Duration(seconds: 3),
+));
+}
+}
+
+bool isWeekComplete = false;
+bool isCycleComplete = false;
+
+if (updated.weekNumber != null) {
+final weekDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(profileId: widget.profileId, weekNumber: updated.weekNumber!, cycleNumber: updated.cycleNumber);
+final plannedDays = _profile?.daysPerWeek ?? 3;
+final completedCount = weekDays.where((d) => d.status == 'completed').length;
+final hasSkipped = weekDays.any((d) => d.status != 'completed');
+isWeekComplete = completedCount >= plannedDays && !hasSkipped;
+
+if (isWeekComplete && updated.cycleNumber != null) {
+bool allWeeksDone = true;
+for (int w = 1; w <= 4; w++) {
+final wDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(profileId: widget.profileId, weekNumber: w, cycleNumber: updated.cycleNumber);
+final wCompleted = wDays.where((d) => d.status == 'completed').length;
+final wHasSkipped = wDays.any((d) => d.status != 'completed');
+if (wCompleted < plannedDays || wHasSkipped) {
+allWeeksDone = false;
+break;
+}
+}
+isCycleComplete = allWeeksDone;
+}
+}
+
+await Future.delayed(const Duration(milliseconds: 300));
+if (!mounted) return;
+
+await Navigator.pushReplacement(
+context,
+MaterialPageRoute(
+builder: (_) => WorkoutCompleteScreen(
+completedDay: updated,
+exercisesCount: _items.where((i) => !i.isCoolDown && !i.isWarmup).length,
+isWeekComplete: isWeekComplete,
+isCycleComplete: isCycleComplete,
+userName: _profile?.name ?? 'друг',
+),
+),
+);
+
+if (mounted) Navigator.pop(context, true);
+}
+
+Future<void> _saveAsTemplate() async {
+if (_day == null || _day!.id == null) return;
+if (_items.isEmpty) {
+_showMessage('Нечего сохранять — нет упражнений');
+return;
+}
+final nameController = TextEditingController(text: _day!.name);
+final confirm = await showDialog<bool>(
+context: context,
+builder: (ctx) => AlertDialog(
+shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+title: const Row(children: [Icon(Icons.bookmark_add_rounded), SizedBox(width: 8), Expanded(child: Text('Сохранить как шаблон', style: TextStyle(fontSize: 18)))]),
+content: Column(
+mainAxisSize: MainAxisSize.min,
+crossAxisAlignment: CrossAxisAlignment.start,
+children: [
+const Text('Создаст шаблон с этими упражнениями. Разминка в шаблон не попадёт.', style: TextStyle(fontSize: 13)),
+const SizedBox(height: 16),
+TextField(controller: nameController, autofocus: true, decoration: const InputDecoration(labelText: 'Название шаблона', prefixIcon: Icon(Icons.fitness_center_rounded), hintText: 'Например: Моя силовая A')),
+],
+),
+actions: [
+TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
+],
+),
+);
+if (confirm != true) return;
+final templateName = nameController.text.trim().isEmpty ? _day!.name : nameController.text.trim();
+try {
+await DatabaseHelper.instance.createTemplateFromWorkoutDay(profileId: widget.profileId, workoutDayId: _day!.id!, templateName: templateName, type: _day!.type, estimatedMinutes: _day!.durationMinutes ?? 45);
+if (!mounted) return;
+ScaffoldMessenger.of(context).hideCurrentSnackBar();
+ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✅ Шаблон «$templateName» сохранён'), duration: const Duration(seconds: 3)));
+} catch (e) {
+if (!mounted) return;
+_showMessage('Ошибка: $e');
+}
+}
+
+Future<void> _openExerciseMenu(WorkoutExercise item, Exercise exercise) async {
+if (_isViewMode) return;
+final result = await showModalBottomSheet<String>(
+context: context,
+shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+builder: (ctx) => _buildExerciseMenu(ctx, exercise),
+);
+if (result == null) return;
+switch (result) {
+case 'replace': await _replaceExercise(item, exercise); break;
+case 'edit': await _editExerciseParams(item); break;
+case 'delete': await _deleteExercise(item); break;
+}
+}
+
+Widget _buildExerciseMenu(BuildContext ctx, Exercise exercise) {
+final theme = Theme.of(ctx);
+return Padding(
+padding: const EdgeInsets.all(20),
+child: Column(
+mainAxisSize: MainAxisSize.min,
+crossAxisAlignment: CrossAxisAlignment.stretch,
+children: [
+Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.onSurface.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
+const SizedBox(height: 16),
+Text(exercise.name, style: theme.textTheme.headlineMedium, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+const SizedBox(height: 20),
+_menuTile(ctx, icon: Icons.swap_horiz_rounded, title: 'Заменить упражнение', color: theme.colorScheme.primary, onTap: () => Navigator.pop(ctx, 'replace')),
+_menuTile(ctx, icon: Icons.tune_rounded, title: 'Изменить подходы и повторения', color: const Color(0xFF00B894), onTap: () => Navigator.pop(ctx, 'edit')),
+_menuTile(ctx, icon: Icons.delete_outline_rounded, title: 'Удалить из тренировки', color: theme.colorScheme.error, onTap: () => Navigator.pop(ctx, 'delete')),
+],
+),
+);
+}
+
+Widget _menuTile(BuildContext ctx, {required IconData icon, required String title, required Color color, required VoidCallback onTap}) {
+return Padding(
+padding: const EdgeInsets.only(bottom: 8),
+child: Material(
+color: Colors.transparent,
+child: ListTile(
+shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: Theme.of(ctx).colorScheme.onSurface.withOpacity(0.1))),
+leading: Icon(icon, color: color),
+title: Text(title),
+onTap: onTap,
+),
+),
+);
+}
+
+Future<void> _replaceExercise(WorkoutExercise item, Exercise original) async {
+final reason = await showModalBottomSheet<String>(context: context, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))), builder: (ctx) => _buildReasonSheet(ctx));
+if (reason == null) return;
+final result = await Navigator.push<Map<String, dynamic>>(context, MaterialPageRoute(builder: (_) => ReplaceExerciseScreen(original: original, reasonCode: reason)));
+if (result == null) return;
+
+_applyReplacement(item, original, result);
+}
+
+Future<void> _quickReplaceExercise(WorkoutExercise item, Exercise original) async {
+final result = await Navigator.push<Map<String, dynamic>>(
+context,
+MaterialPageRoute(
+builder: (_) => ReplaceExerciseScreen(
+original: original,
+reasonCode: null,
+),
+),
+);
+if (result == null) return;
+
+_applyReplacement(item, original, result);
+}
+
+void _applyReplacement(WorkoutExercise item, Exercise original, Map<String, dynamic> result) async {
+final newExercise = result['newExercise'] as Exercise;
+final permanent = result['permanent'] as bool;
+final reasonCode = result['reason'] as String? ?? 'other';
+
+final isAlreadyInWorkout = _items.any((i) =>
+i.id != item.id &&
+(i.replacedByItemId ?? i.itemId) == newExercise.id
+);
+
+if (isAlreadyInWorkout) {
+_showMessage('Упражнение «${newExercise.name}» уже есть в этой тренировке!');
+return;
+}
+
+setState(() {
+_exerciseMap[newExercise.id!] = newExercise;
+final idx = _items.indexOf(item);
+if (idx >= 0) {
+_items[idx] = item.copyWith(itemId: newExercise.id!, replacedByItemId: newExercise.id, replacementReason: reasonCode, replacementPermanent: permanent);
+if (item.id != null) {
+final defaultReps = _parseReps(_items[idx].reps);
+_setsData[item.id!] = List.generate(_items[idx].sets, (_) => SetData(reps: defaultReps, completed: false));
+_setIds[item.id!] = List.generate(_items[idx].sets, (_) => 0);
+}
+}
+});
+if (_day?.weekNumber != null) await DatabaseHelper.instance.replaceExerciseInMonth(profileId: widget.profileId, oldItemId: original.id!, newItemId: newExercise.id!, reason: reasonCode, permanent: permanent);
+_showMessage('Заменено на «${newExercise.name}» во всем месяце');
+}
+
+Widget _buildReasonSheet(BuildContext ctx) {
+final theme = Theme.of(ctx);
+final reasons = [
+('no_equipment', 'Нет оборудования', Icons.block_rounded, theme.colorScheme.error),
+('too_hard', 'Слишком тяжело', Icons.trending_down_rounded, const Color(0xFFE17055)),
+('too_easy', 'Слишком легко', Icons.trending_up_rounded, const Color(0xFF00B894)),
+('dislike', 'Не нравится', Icons.thumb_down_rounded, const Color(0xFFFDCB6E)),
+('other', 'Другое (вручную)', Icons.search_rounded, theme.colorScheme.primary)
+];
+return Padding(
+padding: const EdgeInsets.all(20),
+child: Column(
+mainAxisSize: MainAxisSize.min,
+crossAxisAlignment: CrossAxisAlignment.stretch,
+children: [
+Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.onSurface.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
+const SizedBox(height: 16),
+Text('Почему заменить?', style: theme.textTheme.headlineMedium, textAlign: TextAlign.center),
+const SizedBox(height: 8),
+Text('Приложение подберёт замену с учётом причины', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6)), textAlign: TextAlign.center),
+const SizedBox(height: 20),
+...reasons.map((r) {
+final (code, label, icon, color) = r;
+return Padding(
+padding: const EdgeInsets.only(bottom: 8),
+child: Material(
+color: Colors.transparent,
+child: ListTile(
+shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: theme.colorScheme.onSurface.withOpacity(0.1))),
+leading: Icon(icon, color: color),
+title: Text(label),
+onTap: () => Navigator.pop(ctx, code),
+),
+),
+);
+}),
+],
+),
+);
+}
+
+Future<void> _editExerciseParams(WorkoutExercise item) async {
+final setsController = TextEditingController(text: '${item.sets}');
+final repsController = TextEditingController(text: item.reps);
+final restController = TextEditingController(text: '${item.restSeconds}');
+final isTimed = _isTimed(_exerciseMap[item.replacedByItemId ?? item.itemId]?.name ?? '');
+final result = await showDialog<bool>(
+context: context,
+builder: (ctx) => AlertDialog(
+title: const Text('Изменить параметры'),
+content: Column(
+mainAxisSize: MainAxisSize.min,
+children: [
+TextField(controller: setsController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Подходы', prefixIcon: Icon(Icons.repeat_rounded))),
+const SizedBox(height: 12),
+TextField(controller: repsController, decoration: InputDecoration(labelText: isTimed ? 'Время (например, 60 сек)' : 'Повторения (например, 10-12)', prefixIcon: const Icon(Icons.numbers_rounded))),
+const SizedBox(height: 12),
+TextField(controller: restController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Отдых (сек)', prefixIcon: Icon(Icons.timer_rounded))),
+],
+),
+actions: [
+TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
+],
+),
+);
+if (result != true) return;
+final newSets = int.tryParse(setsController.text) ?? item.sets;
+final newReps = repsController.text.trim().isEmpty ? item.reps : repsController.text.trim();
+final newRest = int.tryParse(restController.text) ?? item.restSeconds;
+final defaultReps = _parseReps(newReps);
+setState(() {
+final idx = _items.indexOf(item);
+if (idx >= 0) _items[idx] = item.copyWith(sets: newSets, reps: newReps, restSeconds: newRest);
+if (item.id != null) {
+_setsData[item.id!] = List.generate(newSets, (_) => SetData(reps: defaultReps));
+_setIds[item.id!] = List.generate(newSets, (_) => 0);
+}
+});
+_showMessage('Параметры обновлены');
+}
+
+Future<void> _addSetToExercise(WorkoutExercise item) async {
+if (item.id == null || !_started || _isViewMode) return;
+final sets = _setsData[item.id!];
+final ids = _setIds[item.id!];
+if (sets == null || ids == null) return;
+final newOrder = sets.length + 1;
+final defaultReps = _parseReps(item.reps);
+final newSetId = await DatabaseHelper.instance.addWorkoutSet(WorkoutSet(workoutExerciseId: item.id!, order: newOrder, reps: defaultReps, completed: false));
+if (!mounted) return;
+setState(() {
+sets.add(SetData(reps: defaultReps, completed: false));
+ids.add(newSetId);
+});
+}
+
+Future<void> _deleteSetFromExercise(WorkoutExercise item, int index) async {
+if (item.id == null || _isViewMode) return;
+final sets = _setsData[item.id!];
+final ids = _setIds[item.id!];
+if (sets == null || ids == null || index < 0 || index >= sets.length) return;
+if (sets.length <= 1) {
+_showMessage('Нельзя удалить последний подход');
+return;
+}
+final setId = ids[index];
+if (setId > 0) await DatabaseHelper.instance.deleteWorkoutSet(setId);
+if (!mounted) return;
+setState(() {
+sets.removeAt(index);
+ids.removeAt(index);
+});
+_showMessage('Подход удалён');
+}
+
+Future<void> _deleteExercise(WorkoutExercise item) async {
+final confirmed = await showDialog<bool>(
+context: context,
+builder: (ctx) => AlertDialog(
+title: const Text('Удалить упражнение?'),
+content: const Text('Упражнение будет удалено из этой тренировки.'),
+actions: [
+TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Удалить', style: TextStyle(color: Colors.red)))
+],
+),
+);
+if (confirmed != true) return;
+setState(() {
+_items.remove(item);
+_setsData.remove(item.id);
+_setIds.remove(item.id);
+});
+_showMessage('Упражнение удалено');
+}
+
+Future<void> _startStretchTimer(WorkoutExercise item, Stretch st) async {
+if (_isViewMode || !_started || item.id == null) return;
+final result = await showDialog<bool>(
+context: context,
+barrierDismissible: false,
+builder: (ctx) => _StretchTimerDialog(name: st.name, totalSeconds: st.durationSeconds, bothSides: st.bothSides),
+);
+if (result != true || !mounted) return;
+final ids = _setIds[item.id!];
+if (ids != null && ids.isNotEmpty) {
+if (ids.first == 0) {
+final newId = await DatabaseHelper.instance.addWorkoutSet(WorkoutSet(workoutExerciseId: item.id!, order: 1, completed: true));
+if (mounted) setState(() => ids[0] = newId);
+} else {
+await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(id: ids.first, workoutExerciseId: item.id!, order: 1, completed: true));
+}
+}
+setState(() => _setsData[item.id!] = [SetData(completed: true)]);
+_showMessage('Заминка выполнена ✓');
+}
+
+@override
+Widget build(BuildContext context) {
+return Scaffold(
+appBar: AppBar(
+title: Text(_title),
+actions: [
+IconButton(icon: const Icon(Icons.timer_rounded), tooltip: 'Время отдыха', onPressed: _started ? _showRestTimePicker : null),
+if (_started) IconButton(tooltip: _hasBlocks ? 'Убрать блоки' : 'Сформировать блоки', onPressed: _isViewMode || _day?.type == 'challenge' ? null : _toggleBlocks, icon: Icon(_hasBlocks ? Icons.grid_off_rounded : Icons.grid_view_rounded, color: _hasBlocks ? Theme.of(context).colorScheme.primary : null)),
+if (_isInProgressMode) TextButton.icon(onPressed: _finishWorkout, icon: const Icon(Icons.check_rounded), label: const Text('Завершить')),
+],
+),
+body: _loading
+? const Center(child: CircularProgressIndicator())
+: Column(children: [
+if (_isRestTimerRunning) _buildTopRestTimer(context),
+Expanded(child: _buildContent(context))
+]),
+);
+}
+
+Widget _buildTopRestTimer(BuildContext context) {
+final theme = Theme.of(context);
+final progress = _restTotalTime > 0 ? _restTimeLeft / _restTotalTime : 0.0;
+final minutes = (_restTimeLeft / 60).floor();
+final seconds = _restTimeLeft % 60;
+final timeStr = '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+return Container(
+padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+decoration: BoxDecoration(
+color: _isRestTimerPaused ? const Color(0xFFFDCB6E) : theme.colorScheme.primary,
+boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 4))],
+),
+child: Column(children: [
+Row(children: [
+Icon(_isRestTimerPaused ? Icons.pause_circle_filled_rounded : Icons.timer_rounded, color: Colors.white, size: 28),
+const SizedBox(width: 12),
+Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+Text(_isRestTimerPaused ? 'Пауза' : 'Отдых', style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+Text(timeStr, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800))
+]),
+const Spacer(),
+IconButton(icon: Icon(_isRestTimerPaused ? Icons.play_arrow_rounded : Icons.pause_rounded, color: Colors.white), onPressed: _togglePauseRestTimer),
+TextButton(onPressed: _stopRestTimer, style: TextButton.styleFrom(backgroundColor: Colors.white.withOpacity(0.2), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), child: const Text('Пропустить', style: TextStyle(fontWeight: FontWeight.w700))),
+]),
+const SizedBox(height: 10),
+ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: progress, minHeight: 4, backgroundColor: Colors.white.withOpacity(0.3), valueColor: const AlwaysStoppedAnimation<Color>(Colors.white))),
+]),
+);
+}
+
+Widget _buildContent(BuildContext context) {
+return CustomScrollView(
+keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+slivers: [
+if (_isViewMode) SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 0), child: Column(children: [
+_buildCompletedBanner(context),
+const SizedBox(height: 12),
+SizedBox(width: double.infinity, child: ElevatedButton.icon(onPressed: _saveAsTemplate, icon: const Icon(Icons.bookmark_add_rounded), label: const Text('Сохранить как шаблон'), style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)))))
+]))),
+SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(16), child: _buildInfoCard(context))),
+if (_isNewMode) SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Row(children: [
+Expanded(child: OutlinedButton.icon(onPressed: _blocksReady ? null : () => _createBlocks(), icon: const Icon(Icons.grid_view_rounded, size: 18), label: Text(_blocksReady ? 'Блоки созданы' : 'Создать блоки', style: const TextStyle(fontSize: 13)), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))))),
+const SizedBox(width: 8),
+Expanded(child: OutlinedButton.icon(onPressed: _blocksReady ? _resetBlocks : null, icon: const Icon(Icons.refresh_rounded, size: 18), label: const Text('Сбросить', style: TextStyle(fontSize: 13)), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))))
+]))),
+if (_isNewMode) SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.only(top: 12, left: 16, right: 16), child: SizedBox(width: double.infinity, child: ElevatedButton.icon(onPressed: _startWorkout, icon: const Icon(Icons.play_arrow_rounded), label: const Text('Начать тренировку'))))),
+if (_hasBlocks) ..._buildCircuitsSlivers(context) else ..._buildUnblockedList(context),
+const SliverToBoxAdapter(child: SizedBox(height: 32)),
+],
+);
+}
+
+Widget _buildCoolDownHeader(BuildContext context) {
+return Container(
+margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+padding: const EdgeInsets.all(16),
+decoration: BoxDecoration(
+color: const Color(0xFF00B894).withOpacity(0.1),
+borderRadius: BorderRadius.circular(16),
+border: Border.all(color: const Color(0xFF00B894).withOpacity(0.3)),
+),
+child: Row(
+crossAxisAlignment: CrossAxisAlignment.start,
+children: [
+const Text('🧘‍♀️', style: TextStyle(fontSize: 24)),
+const SizedBox(width: 12),
+Expanded(
+child: Column(
+crossAxisAlignment: CrossAxisAlignment.start,
+children: [
+const Text(
+'Заминка и восстановление',
+style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF00B894)),
+),
+const SizedBox(height: 4),
+Text(
+'После тренировки не забудь раскатать мышцы на ролике (МФР). А прямо сейчас — сделай растяжку ниже, чтобы снять напряжение и закрепить результат!',
+style: TextStyle(
+fontSize: 13,
+color: const Color(0xFF00B894).withOpacity(0.9),
+height: 1.3,
+),
+),
+],
+),
+),
+],
+),
+);
+}
+
+List<Widget> _buildUnblockedList(BuildContext context) {
+final warmupCardio = <WorkoutExercise>[];
+final warmupStretches = <WorkoutExercise>[];
+final coolDowns = <WorkoutExercise>[];
+final mainItems = <WorkoutExercise>[];
+
+// 1. Разделяем на разминку, заминку и основные
+for (final i in _items) {
+if (i.isWarmup) {
+if (i.itemType == 'exercise') warmupCardio.add(i);
+else warmupStretches.add(i);
+continue;
+}
+if (i.isCoolDown) { coolDowns.add(i); continue; }
+mainItems.add(i);
+}
+
+final List<Widget> slivers = [];
+
+// 2. Рендерим кардио-разминку и разминку
+if (warmupCardio.isNotEmpty) {
+slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0), child: Text('🔥 Кардио-разминка', style: Theme.of(context).textTheme.headlineMedium))));
+slivers.add(SliverPadding(
+padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) {
+final ex = _exerciseMap[warmupCardio[idx].itemId];
+if (ex == null) return const SizedBox.shrink();
+return _buildExerciseCardWidget(context, warmupCardio[idx], ex);
+}, childCount: warmupCardio.length)),
+));
+}
+if (warmupStretches.isNotEmpty) {
+slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0), child: _buildWarmupCard(context, warmupStretches))));
+}
+
+// 3. Рендерим основные упражнения строго по порядку, вставляя заголовки
+String? lastCategory;
+int strengthIdx = 1;
+
+for (final item in mainItems) {
+final isBonus = item.order == 150;
+final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
+if (ex == null) continue;
+
+final isCardio = _isCardio(ex);
+final currentCategory = isBonus ? 'bonus' : (isCardio ? 'cardio' : 'strength');
+
+// Вставляем заголовок, если категория изменилась
+if (currentCategory != lastCategory) {
+if (currentCategory == 'bonus') {
+slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), child: Row(children: [const Text('💡', style: TextStyle(fontSize: 18)), const SizedBox(width: 8), const Text('На забытые зоны', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFFFFB800)))]))));
+} else if (currentCategory == 'cardio') {
+slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFE17055).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Кардио / Добивка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFFE17055))))]))));
+}
+lastCategory = currentCategory;
+}
+
+// Добавляем само упражнение
+slivers.add(SliverToBoxAdapter(
+child: Padding(
+padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+child: _buildExerciseCardWidget(
+context,
+item,
+ex,
+index: currentCategory == 'strength' ? strengthIdx++ : null
+),
+),
+));
+}
+
+// 4. Рендерим заминку
+if (coolDowns.isNotEmpty) {
+slivers.add(SliverToBoxAdapter(child: _buildCoolDownHeader(context)));
+slivers.add(SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 0), sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) => _buildStretchCard(context, coolDowns[idx]), childCount: coolDowns.length))));
+}
+
+return slivers;
+}
+
+Widget _buildWarmupCard(BuildContext context, List<WorkoutExercise> warmups) {
+final theme = Theme.of(context);
+final done = warmups.where((w) => _setsData[w.id!]?.first.completed == true).length;
+final total = warmups.length;
+final allDone = done == total && total > 0;
+final accent = const Color(0xFFFFB800);
+
+return Card(
+margin: EdgeInsets.zero,
+color: accent.withOpacity(0.08),
+shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: accent.withOpacity(0.3))),
+child: InkWell(
+borderRadius: BorderRadius.circular(16),
+onTap: () => _openWarmupScreen(warmups),
+child: Padding(
+padding: const EdgeInsets.all(14),
+child: Row(
+children: [
+Container(width: 44, height: 44, decoration: BoxDecoration(gradient: LinearGradient(colors: [accent, accent.withOpacity(0.7)]), borderRadius: BorderRadius.circular(12)), child: Icon(allDone ? Icons.check_rounded : Icons.local_fire_department_rounded, color: Colors.white, size: 24)),
+const SizedBox(width: 12),
+Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+Text('Разминка (Суставная)', style: theme.textTheme.headlineMedium),
+const SizedBox(height: 2),
+Text('Махи и вращения · 3 мин', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6))),
+])),
+Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: accent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: Text('$done/$total', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: accent))),
+const SizedBox(width: 6),
+Icon(Icons.chevron_right_rounded, color: theme.colorScheme.onSurface.withOpacity(0.4)),
+],
+),
+),
+),
+);
+}
+
+List<Widget> _buildCircuitsSlivers(BuildContext context) {
+final slivers = <Widget>[];
+final Map<int, List<WorkoutExercise>> blocks = {};
+final List<WorkoutExercise> warmupCardio = [];
+final List<WorkoutExercise> warmupStretches = [];
+final List<WorkoutExercise> coolDowns = [];
+final List<WorkoutExercise> bonus = [];
+final List<WorkoutExercise> cardios = [];
+
+for (int i = 0; i < _items.length; i++) {
+final item = _items[i];
+if (item.isWarmup) {
+if (item.itemType == 'exercise') warmupCardio.add(item);
+else warmupStretches.add(item);
+continue;
+}
+if (item.isCoolDown) { coolDowns.add(item); continue; }
+if (item.order == 150) { bonus.add(item); continue; }
+
+final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
+if (ex != null && _isCardio(ex)) {
+cardios.add(item);
+} else {
+final blockNum = _pendingBlocks[i] ?? 99;
+blocks.putIfAbsent(blockNum, () => []);
+blocks[blockNum]!.add(item);
+}
+}
+
+if (warmupCardio.isNotEmpty) {
+slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Text('🔥 Кардио-разминка', style: Theme.of(context).textTheme.headlineMedium))));
+slivers.add(SliverPadding(
+padding: const EdgeInsets.symmetric(horizontal: 16),
+sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) {
+final ex = _exerciseMap[warmupCardio[idx].itemId];
+if (ex == null) return const SizedBox.shrink();
+return _buildExerciseCardWidget(context, warmupCardio[idx], ex);
+}, childCount: warmupCardio.length)),
+));
+}
+if (warmupStretches.isNotEmpty) {
+slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0), child: _buildWarmupCard(context, warmupStretches))));
+}
+
+final bool isWeightLoss = _profile?.goal == 'lose_weight' || (_profile?.goal.contains('weight') ?? false) || (_profile?.goal.contains('lose') ?? false);
+final bool shouldInterleave = isWeightLoss && cardios.isNotEmpty;
+final sortedBlockNums = blocks.keys.toList()..sort();
+int cardioIndex = 0;
+
+void addBlockToSlivers(int blockNum) {
+  final blockItems = blocks[blockNum]!;
+
+  // 👇 ТЕПЕРЬ ПРОГРАММА САМА СЧИТАЕТ, СКОЛЬКО КРУГОВ РИСОВАТЬ
+  int maxCircles = 0;
+  for (final item in blockItems) {
+    final sets = _setsData[item.id];
+    if (sets != null && sets.length > maxCircles) {
+      maxCircles = sets.length;
     }
-    if (preUpdates.isNotEmpty) await Future.wait(preUpdates);
-
-    int completedSets = 0;
-    int totalSets = 0;
-
-    for (final item in _items) {
-      if (item.isCoolDown || item.isWarmup || item.id == null) continue;
-      final sets = _setsData[item.id!];
-      if (sets == null) continue;
-      for (final s in sets) {
-        totalSets++;
-        if (s.completed) completedSets++;
-      }
-    }
-
-    if (completedSets < totalSets) {
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Тренировка не завершена'),
-          content: Text('Вы выполнили $completedSets из $totalSets подходов.\n\nСохранить прогресс и вернуться? День останется в плане как «В процессе».'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Продолжить'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE17055)),
-              child: const Text('Сохранить и выйти'),
-            ),
-          ],
-        ),
-      );
-
-      if (confirm != true) return;
-
-      final updates = <Future>[];
-      for (final item in _items) {
-        if (item.isCoolDown || item.isWarmup || item.id == null) continue;
-        final sets = _setsData[item.id!];
-        if (sets == null) continue;
-        for (int i = 0; i < sets.length; i++) {
-          final ids = _setIds[item.id!];
-          if (ids != null && i < ids.length && ids[i] > 0) {
-            updates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
-              id: ids[i], workoutExerciseId: item.id!, order: i + 1,
-              weight: sets[i].weight, reps: sets[i].reps, completed: sets[i].completed,
-            )));
-          }
-        }
-      }
-      if (updates.isNotEmpty) await Future.wait(updates);
-
-      final day = await DatabaseHelper.instance.getWorkoutDayById(_workoutDayId!);
-      if (day == null) return;
-      final updated = day.copyWith(status: 'in_progress', startedAt: day.startedAt ?? DateTime.now());
-      await DatabaseHelper.instance.updateWorkoutDay(updated);
-      if (mounted) Navigator.pop(context, true);
-      return;
-    }
-
-    String? note;
-    final noteController = TextEditingController();
-    final noteResult = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Заметка к тренировке'),
-        content: TextField(
-          controller: noteController,
-          autofocus: true,
-          maxLines: 3,
-          decoration: const InputDecoration(hintText: 'Как прошло?', border: OutlineInputBorder()),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Пропустить')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
-        ],
-      ),
-    );
-    if (noteResult == true) note = noteController.text.trim();
-
-    final updates = <Future>[];
-    for (final item in _items) {
-      if (item.isCoolDown || item.isWarmup || item.id == null) continue;
-      final sets = _setsData[item.id!];
-      if (sets == null) continue;
-      for (int i = 0; i < sets.length; i++) {
-        final ids = _setIds[item.id!];
-        if (ids != null && i < ids.length) {
-          updates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: sets[i].weight, reps: sets[i].reps, completed: true)));
-        }
-      }
-    }
-    if (updates.isNotEmpty) await Future.wait(updates);
-
-    bool isOverperformed = false;
-    for (final item in _items) {
-      if (item.isCoolDown || item.isWarmup || item.id == null) continue;
-      final sets = _setsData[item.id!];
-      if (sets == null) continue;
-      final targetW = _targetWeights[item.id!];
-      for (final s in sets) {
-        if (s.completed && targetW != null && targetW > 0 && s.weight != null && s.weight! > targetW) isOverperformed = true;
-      }
-    }
-
-    final day = await DatabaseHelper.instance.getWorkoutDayById(_workoutDayId!);
-    if (day == null) return;
-    final minutes = DateTime.now().difference(day.startedAt ?? DateTime.now()).inMinutes;
-
-    final updated = day.copyWith(status: 'completed', completedAt: DateTime.now(), durationMinutes: minutes > 0 ? minutes : 1, notes: note);
-    await DatabaseHelper.instance.updateWorkoutDay(updated);
-    if (!mounted) return;
-    // 👇 НАЧИСЛЯЕМ ЭНЕРГИЮ ЗА ТРЕНИРОВКУ (+15 ⚡️)
-    await EnergyService.addEnergy(
-      profileId: widget.profileId,
-      delta: 15,
-      reason: 'workout_completed',
-      refId: _workoutDayId, // защита от дублей (за эту тренировку дадут только раз)
-    );
-    // 👆 КОНЕЦ НАЧИСЛЕНИЯ
-
-    if (isOverperformed) FairyReactionService().trigger('workout_overperformed', mood: FairyMood.party);
-    else FairyReactionService().trigger('workout_completed', mood: FairyMood.party);
-
-    final unlocked = await AchievementService.checkAchievements(widget.profileId);
-    if (unlocked.isNotEmpty && mounted) {
-      for (final a in unlocked) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Row(children: [
-            Text(a.icon, style: const TextStyle(fontSize: 24)),
-            const SizedBox(width: 12),
-            Expanded(child: Text('Новое достижение: ${a.title}!', style: const TextStyle(fontWeight: FontWeight.w600)))
-          ]),
-          backgroundColor: const Color(0xFF6C5CE7),
-          duration: const Duration(seconds: 3),
-        ));
-      }
-    }
-
-    bool isWeekComplete = false;
-    bool isCycleComplete = false;
-
-    if (updated.weekNumber != null) {
-      final weekDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(profileId: widget.profileId, weekNumber: updated.weekNumber!, cycleNumber: updated.cycleNumber);
-      final plannedDays = _profile?.daysPerWeek ?? 3;
-      final completedCount = weekDays.where((d) => d.status == 'completed').length;
-      final hasSkipped = weekDays.any((d) => d.status != 'completed');
-      isWeekComplete = completedCount >= plannedDays && !hasSkipped;
-
-      if (isWeekComplete && updated.cycleNumber != null) {
-        bool allWeeksDone = true;
-        for (int w = 1; w <= 4; w++) {
-          final wDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(profileId: widget.profileId, weekNumber: w, cycleNumber: updated.cycleNumber);
-          final wCompleted = wDays.where((d) => d.status == 'completed').length;
-          final wHasSkipped = wDays.any((d) => d.status != 'completed');
-          if (wCompleted < plannedDays || wHasSkipped) {
-            allWeeksDone = false;
-            break;
-          }
-        }
-        isCycleComplete = allWeeksDone;
-      }
-    }
-
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (!mounted) return;
-
-    await Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => WorkoutCompleteScreen(
-          completedDay: updated,
-          exercisesCount: _items.where((i) => !i.isCoolDown && !i.isWarmup).length,
-          isWeekComplete: isWeekComplete,
-          isCycleComplete: isCycleComplete,
-          userName: _profile?.name ?? 'друг',
-        ),
-      ),
-    );
-
-    if (mounted) Navigator.pop(context, true);
   }
+  if (maxCircles == 0) maxCircles = 1; // Защита на случай пустого блока
 
-  Future<void> _saveAsTemplate() async {
-    if (_day == null || _day!.id == null) return;
-    if (_items.isEmpty) {
-      _showMessage('Нечего сохранять — нет упражнений');
-      return;
-    }
-    final nameController = TextEditingController(text: _day!.name);
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(children: [Icon(Icons.bookmark_add_rounded), SizedBox(width: 8), Expanded(child: Text('Сохранить как шаблон', style: TextStyle(fontSize: 18)))]),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Создаст шаблон с этими упражнениями. Разминка в шаблон не попадёт.', style: TextStyle(fontSize: 13)),
-            const SizedBox(height: 16),
-            TextField(controller: nameController, autofocus: true, decoration: const InputDecoration(labelText: 'Название шаблона', prefixIcon: Icon(Icons.fitness_center_rounded), hintText: 'Например: Моя силовая A')),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
-        ],
-      ),
-    );
-    if (confirm != true) return;
-    final templateName = nameController.text.trim().isEmpty ? _day!.name : nameController.text.trim();
-    try {
-      await DatabaseHelper.instance.createTemplateFromWorkoutDay(profileId: widget.profileId, workoutDayId: _day!.id!, templateName: templateName, type: _day!.type, estimatedMinutes: _day!.durationMinutes ?? 45);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✅ Шаблон «$templateName» сохранён'), duration: const Duration(seconds: 3)));
-    } catch (e) {
-      if (!mounted) return;
-      _showMessage('Ошибка: $e');
-    }
-  }
+for (int circle = 0; circle < maxCircles; circle++) {
+final circleNum = circle + 1;
+final isComplete = _isCircleComplete(blockItems, circle) && _started;
+final completed = _completedInCircle(blockItems, circle);
 
-  Future<void> _openExerciseMenu(WorkoutExercise item, Exercise exercise) async {
-    if (_isViewMode) return;
-    final result = await showModalBottomSheet<String>(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => _buildExerciseMenu(ctx, exercise),
-    );
-    if (result == null) return;
-    switch (result) {
-      case 'replace': await _replaceExercise(item, exercise); break;
-      case 'edit': await _editExerciseParams(item); break;
-      case 'delete': await _deleteExercise(item); break;
-    }
-  }
+// 👇 ИСПОЛЬЗУЕМ НОВЫЙ МЕТОД ДЛЯ ПРАВИЛЬНОГО ПОДСЧЕТА
+final total = _totalInCircle(blockItems, circle);
 
-  Widget _buildExerciseMenu(BuildContext ctx, Exercise exercise) {
-    final theme = Theme.of(ctx);
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.onSurface.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
-          const SizedBox(height: 16),
-          Text(exercise.name, style: theme.textTheme.headlineMedium, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 20),
-          _menuTile(ctx, icon: Icons.swap_horiz_rounded, title: 'Заменить упражнение', color: theme.colorScheme.primary, onTap: () => Navigator.pop(ctx, 'replace')),
-          _menuTile(ctx, icon: Icons.tune_rounded, title: 'Изменить подходы и повторения', color: const Color(0xFF00B894), onTap: () => Navigator.pop(ctx, 'edit')),
-          _menuTile(ctx, icon: Icons.delete_outline_rounded, title: 'Удалить из тренировки', color: theme.colorScheme.error, onTap: () => Navigator.pop(ctx, 'delete')),
-        ],
-      ),
-    );
-  }
+final isCollapsed = _isCircleCollapsed(blockNum, circleNum);
+slivers.add(SliverToBoxAdapter(child: CircleHeader(blockNum: blockNum, circleNum: circleNum, circleIndex: circle, blockItems: blockItems, completed: completed, total: total, isComplete: isComplete, isCollapsed: isCollapsed, onToggle: () => _toggleCircle(blockNum, circleNum), started: _started, isViewMode: _isViewMode, onMarkCircleCompleted: (b, c) => _markCircleCompleted(blockItems: blockItems, blockNum: b, circleIndex: c))));
+if (!isCollapsed) {
+slivers.add(SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 8), sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) {
+final ex = _exerciseMap[blockItems[idx].replacedByItemId ?? blockItems[idx].itemId];
+if (ex == null) return const SizedBox.shrink();
+return _buildExerciseCardWidget(context, blockItems[idx], ex, circleIndex: circle);
+}, childCount: blockItems.length))));
+}
+}
+if (_started && !_isViewMode) {
+slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 24), child: OutlinedButton.icon(onPressed: () => _addCircle(blockItems: blockItems, blockNum: blockNum), icon: const Icon(Icons.add_circle_outline_rounded), label: Text('Добавить круг в Блок $blockNum'), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), side: const BorderSide(color: Color(0xFF6C5CE7), width: 2), foregroundColor: const Color(0xFF6C5CE7))))));
+}
+}
 
-  Widget _menuTile(BuildContext ctx, {required IconData icon, required String title, required Color color, required VoidCallback onTap}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: Colors.transparent,
-        child: ListTile(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: Theme.of(ctx).colorScheme.onSurface.withOpacity(0.1))),
-          leading: Icon(icon, color: color),
-          title: Text(title),
-          onTap: onTap,
-        ),
-      ),
-    );
-  }
+void addCardioToSlivers(WorkoutExercise item) {
+final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
+if (ex != null) slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), child: _buildExerciseCardWidget(context, item, ex))));
+}
 
-  Future<void> _replaceExercise(WorkoutExercise item, Exercise original) async {
-    final reason = await showModalBottomSheet<String>(context: context, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))), builder: (ctx) => _buildReasonSheet(ctx));
-    if (reason == null) return;
-    final result = await Navigator.push<Map<String, dynamic>>(context, MaterialPageRoute(builder: (_) => ReplaceExerciseScreen(original: original, reasonCode: reason)));
-    if (result == null) return;
+if (shouldInterleave) {
+for (int i = 0; i < sortedBlockNums.length; i++) {
+addBlockToSlivers(sortedBlockNums[i]);
+// Вставляем кардио ТОЛЬКО между блоками (не после последнего)
+if (i < sortedBlockNums.length - 1 && cardioIndex < cardios.length) {
+slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFE17055).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Кардио / Добивка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFFE17055))))]))));
+addCardioToSlivers(cardios[cardioIndex++]);
+}
+}
+} else {
+for (final blockNum in sortedBlockNums) {
+addBlockToSlivers(blockNum);
+}
+}
 
-    _applyReplacement(item, original, result);
-  }
+if (bonus.isNotEmpty) {
+slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), child: Row(children: [const Text('💡', style: TextStyle(fontSize: 18)), const SizedBox(width: 8), const Text('На забытые зоны', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFFFFB800)))]))));
+slivers.add(SliverPadding(
+padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) {
+final ex = _exerciseMap[bonus[idx].itemId];
+if (ex == null) return const SizedBox.shrink();
+return _buildExerciseCardWidget(context, bonus[idx], ex);
+}, childCount: bonus.length)),
+));
+}
 
-  Future<void> _quickReplaceExercise(WorkoutExercise item, Exercise original) async {
-    final result = await Navigator.push<Map<String, dynamic>>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ReplaceExerciseScreen(
-          original: original,
-          reasonCode: null,
-        ),
-      ),
-    );
-    if (result == null) return;
+if (cardioIndex < cardios.length) {
+slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFE17055).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Кардио / Добивка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFFE17055))))]))));
+while (cardioIndex < cardios.length) {
+addCardioToSlivers(cardios[cardioIndex++]);
+}
+} else if (!shouldInterleave && cardios.isNotEmpty) {
+slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFE17055).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Кардио / Добивка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFFE17055))))]))));
+for (final item in cardios) {
+addCardioToSlivers(item);
+}
+}
 
-    _applyReplacement(item, original, result);
-  }
+if (coolDowns.isNotEmpty) {
+slivers.add(SliverToBoxAdapter(child: _buildCoolDownHeader(context)));
+slivers.add(SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 0), sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) => _buildStretchCard(context, coolDowns[idx]), childCount: coolDowns.length))));
+}
 
-  void _applyReplacement(WorkoutExercise item, Exercise original, Map<String, dynamic> result) async {
-    final newExercise = result['newExercise'] as Exercise;
-    final permanent = result['permanent'] as bool;
-    final reasonCode = result['reason'] as String? ?? 'other';
+return slivers;
+}
 
-    final isAlreadyInWorkout = _items.any((i) =>
-    i.id != item.id &&
-        (i.replacedByItemId ?? i.itemId) == newExercise.id
-    );
-
-    if (isAlreadyInWorkout) {
-      _showMessage('Упражнение «${newExercise.name}» уже есть в этой тренировке!');
-      return;
-    }
-
-    setState(() {
-      _exerciseMap[newExercise.id!] = newExercise;
-      final idx = _items.indexOf(item);
-      if (idx >= 0) {
-        _items[idx] = item.copyWith(itemId: newExercise.id!, replacedByItemId: newExercise.id, replacementReason: reasonCode, replacementPermanent: permanent);
-        if (item.id != null) {
-          final defaultReps = _parseReps(_items[idx].reps);
-          _setsData[item.id!] = List.generate(_items[idx].sets, (_) => SetData(reps: defaultReps, completed: false));
-          _setIds[item.id!] = List.generate(_items[idx].sets, (_) => 0);
-        }
-      }
-    });
-    if (_day?.weekNumber != null) await DatabaseHelper.instance.replaceExerciseInMonth(profileId: widget.profileId, oldItemId: original.id!, newItemId: newExercise.id!, reason: reasonCode, permanent: permanent);
-    _showMessage('Заменено на «${newExercise.name}» во всем месяце');
-  }
-
-  Widget _buildReasonSheet(BuildContext ctx) {
-    final theme = Theme.of(ctx);
-    final reasons = [
-      ('no_equipment', 'Нет оборудования', Icons.block_rounded, theme.colorScheme.error),
-      ('too_hard', 'Слишком тяжело', Icons.trending_down_rounded, const Color(0xFFE17055)),
-      ('too_easy', 'Слишком легко', Icons.trending_up_rounded, const Color(0xFF00B894)),
-      ('dislike', 'Не нравится', Icons.thumb_down_rounded, const Color(0xFFFDCB6E)),
-      ('other', 'Другое (вручную)', Icons.search_rounded, theme.colorScheme.primary)
-    ];
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.onSurface.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
-          const SizedBox(height: 16),
-          Text('Почему заменить?', style: theme.textTheme.headlineMedium, textAlign: TextAlign.center),
-          const SizedBox(height: 8),
-          Text('Приложение подберёт замену с учётом причины', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6)), textAlign: TextAlign.center),
-          const SizedBox(height: 20),
-          ...reasons.map((r) {
-            final (code, label, icon, color) = r;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Material(
-                color: Colors.transparent,
-                child: ListTile(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: theme.colorScheme.onSurface.withOpacity(0.1))),
-                  leading: Icon(icon, color: color),
-                  title: Text(label),
-                  onTap: () => Navigator.pop(ctx, code),
-                ),
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _editExerciseParams(WorkoutExercise item) async {
-    final setsController = TextEditingController(text: '${item.sets}');
-    final repsController = TextEditingController(text: item.reps);
-    final restController = TextEditingController(text: '${item.restSeconds}');
-    final isTimed = _isTimed(_exerciseMap[item.replacedByItemId ?? item.itemId]?.name ?? '');
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Изменить параметры'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: setsController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Подходы', prefixIcon: Icon(Icons.repeat_rounded))),
-            const SizedBox(height: 12),
-            TextField(controller: repsController, decoration: InputDecoration(labelText: isTimed ? 'Время (например, 60 сек)' : 'Повторения (например, 10-12)', prefixIcon: const Icon(Icons.numbers_rounded))),
-            const SizedBox(height: 12),
-            TextField(controller: restController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Отдых (сек)', prefixIcon: Icon(Icons.timer_rounded))),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
-        ],
-      ),
-    );
-    if (result != true) return;
-    final newSets = int.tryParse(setsController.text) ?? item.sets;
-    final newReps = repsController.text.trim().isEmpty ? item.reps : repsController.text.trim();
-    final newRest = int.tryParse(restController.text) ?? item.restSeconds;
-    final defaultReps = _parseReps(newReps);
-    setState(() {
-      final idx = _items.indexOf(item);
-      if (idx >= 0) _items[idx] = item.copyWith(sets: newSets, reps: newReps, restSeconds: newRest);
-      if (item.id != null) {
-        _setsData[item.id!] = List.generate(newSets, (_) => SetData(reps: defaultReps));
-        _setIds[item.id!] = List.generate(newSets, (_) => 0);
-      }
-    });
-    _showMessage('Параметры обновлены');
-  }
-
-  Future<void> _addSetToExercise(WorkoutExercise item) async {
-    if (item.id == null || !_started || _isViewMode) return;
-    final sets = _setsData[item.id!];
-    final ids = _setIds[item.id!];
-    if (sets == null || ids == null) return;
-    final newOrder = sets.length + 1;
-    final defaultReps = _parseReps(item.reps);
-    final newSetId = await DatabaseHelper.instance.addWorkoutSet(WorkoutSet(workoutExerciseId: item.id!, order: newOrder, reps: defaultReps, completed: false));
-    if (!mounted) return;
-    setState(() {
-      sets.add(SetData(reps: defaultReps, completed: false));
-      ids.add(newSetId);
-    });
-  }
-
-  Future<void> _deleteSetFromExercise(WorkoutExercise item, int index) async {
-    if (item.id == null || _isViewMode) return;
-    final sets = _setsData[item.id!];
-    final ids = _setIds[item.id!];
-    if (sets == null || ids == null || index < 0 || index >= sets.length) return;
-    if (sets.length <= 1) {
-      _showMessage('Нельзя удалить последний подход');
-      return;
-    }
-    final setId = ids[index];
-    if (setId > 0) await DatabaseHelper.instance.deleteWorkoutSet(setId);
-    if (!mounted) return;
-    setState(() {
-      sets.removeAt(index);
-      ids.removeAt(index);
-    });
-    _showMessage('Подход удалён');
-  }
-
-  Future<void> _deleteExercise(WorkoutExercise item) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Удалить упражнение?'),
-        content: const Text('Упражнение будет удалено из этой тренировки.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Удалить', style: TextStyle(color: Colors.red)))
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    setState(() {
-      _items.remove(item);
-      _setsData.remove(item.id);
-      _setIds.remove(item.id);
-    });
-    _showMessage('Упражнение удалено');
-  }
-
-  Future<void> _startStretchTimer(WorkoutExercise item, Stretch st) async {
-    if (_isViewMode || !_started || item.id == null) return;
-    final result = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => _StretchTimerDialog(name: st.name, totalSeconds: st.durationSeconds, bothSides: st.bothSides),
-    );
-    if (result != true || !mounted) return;
-    final ids = _setIds[item.id!];
-    if (ids != null && ids.isNotEmpty) {
-      if (ids.first == 0) {
-        final newId = await DatabaseHelper.instance.addWorkoutSet(WorkoutSet(workoutExerciseId: item.id!, order: 1, completed: true));
-        if (mounted) setState(() => ids[0] = newId);
-      } else {
-        await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(id: ids.first, workoutExerciseId: item.id!, order: 1, completed: true));
-      }
-    }
-    setState(() => _setsData[item.id!] = [SetData(completed: true)]);
-    _showMessage('Заминка выполнена ✓');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_title),
-        actions: [
-          IconButton(icon: const Icon(Icons.timer_rounded), tooltip: 'Время отдыха', onPressed: _started ? _showRestTimePicker : null),
-          if (_started) IconButton(tooltip: _hasBlocks ? 'Убрать блоки' : 'Сформировать блоки', onPressed: _isViewMode || _day?.type == 'challenge' ? null : _toggleBlocks, icon: Icon(_hasBlocks ? Icons.grid_off_rounded : Icons.grid_view_rounded, color: _hasBlocks ? Theme.of(context).colorScheme.primary : null)),
-          if (_isInProgressMode) TextButton.icon(onPressed: _finishWorkout, icon: const Icon(Icons.check_rounded), label: const Text('Завершить')),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(children: [
-        if (_isRestTimerRunning) _buildTopRestTimer(context),
-        Expanded(child: _buildContent(context))
-      ]),
-    );
-  }
-
-  Widget _buildTopRestTimer(BuildContext context) {
-    final theme = Theme.of(context);
-    final progress = _restTotalTime > 0 ? _restTimeLeft / _restTotalTime : 0.0;
-    final minutes = (_restTimeLeft / 60).floor();
-    final seconds = _restTimeLeft % 60;
-    final timeStr = '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: _isRestTimerPaused ? const Color(0xFFFDCB6E) : theme.colorScheme.primary,
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 4))],
-      ),
-      child: Column(children: [
-        Row(children: [
-          Icon(_isRestTimerPaused ? Icons.pause_circle_filled_rounded : Icons.timer_rounded, color: Colors.white, size: 28),
-          const SizedBox(width: 12),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(_isRestTimerPaused ? 'Пауза' : 'Отдых', style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
-            Text(timeStr, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800))
-          ]),
-          const Spacer(),
-          IconButton(icon: Icon(_isRestTimerPaused ? Icons.play_arrow_rounded : Icons.pause_rounded, color: Colors.white), onPressed: _togglePauseRestTimer),
-          TextButton(onPressed: _stopRestTimer, style: TextButton.styleFrom(backgroundColor: Colors.white.withOpacity(0.2), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), child: const Text('Пропустить', style: TextStyle(fontWeight: FontWeight.w700))),
-        ]),
-        const SizedBox(height: 10),
-        ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: progress, minHeight: 4, backgroundColor: Colors.white.withOpacity(0.3), valueColor: const AlwaysStoppedAnimation<Color>(Colors.white))),
-      ]),
-    );
-  }
-
-  Widget _buildContent(BuildContext context) {
-    return CustomScrollView(
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      slivers: [
-        if (_isViewMode) SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 0), child: Column(children: [
-          _buildCompletedBanner(context),
-          const SizedBox(height: 12),
-          SizedBox(width: double.infinity, child: ElevatedButton.icon(onPressed: _saveAsTemplate, icon: const Icon(Icons.bookmark_add_rounded), label: const Text('Сохранить как шаблон'), style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)))))
-        ]))),
-        SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(16), child: _buildInfoCard(context))),
-        if (_isNewMode) SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Row(children: [
-          Expanded(child: OutlinedButton.icon(onPressed: _blocksReady ? null : () => _createBlocks(), icon: const Icon(Icons.grid_view_rounded, size: 18), label: Text(_blocksReady ? 'Блоки созданы' : 'Создать блоки', style: const TextStyle(fontSize: 13)), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))))),
-          const SizedBox(width: 8),
-          Expanded(child: OutlinedButton.icon(onPressed: _blocksReady ? _resetBlocks : null, icon: const Icon(Icons.refresh_rounded, size: 18), label: const Text('Сбросить', style: TextStyle(fontSize: 13)), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))))
-        ]))),
-        if (_isNewMode) SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.only(top: 12, left: 16, right: 16), child: SizedBox(width: double.infinity, child: ElevatedButton.icon(onPressed: _startWorkout, icon: const Icon(Icons.play_arrow_rounded), label: const Text('Начать тренировку'))))),
-        if (_hasBlocks) ..._buildCircuitsSlivers(context) else ..._buildUnblockedList(context),
-        const SliverToBoxAdapter(child: SizedBox(height: 32)),
-      ],
-    );
-  }
-
-  Widget _buildCoolDownHeader(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF00B894).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF00B894).withOpacity(0.3)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('🧘‍♀️', style: TextStyle(fontSize: 24)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Заминка и восстановление',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF00B894)),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'После тренировки не забудь раскатать мышцы на ролике (МФР). А прямо сейчас — сделай растяжку ниже, чтобы снять напряжение и закрепить результат!',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: const Color(0xFF00B894).withOpacity(0.9),
-                    height: 1.3,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<Widget> _buildUnblockedList(BuildContext context) {
-    final warmupCardio = <WorkoutExercise>[];
-    final warmupStretches = <WorkoutExercise>[];
-    final coolDowns = <WorkoutExercise>[];
-    final mainItems = <WorkoutExercise>[];
-
-    // 1. Разделяем на разминку, заминку и основные
-    for (final i in _items) {
-      if (i.isWarmup) {
-        if (i.itemType == 'exercise') warmupCardio.add(i);
-        else warmupStretches.add(i);
-        continue;
-      }
-      if (i.isCoolDown) { coolDowns.add(i); continue; }
-      mainItems.add(i);
-    }
-
-    final List<Widget> slivers = [];
-
-    // 2. Рендерим кардио-разминку и разминку
-    if (warmupCardio.isNotEmpty) {
-      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0), child: Text('🔥 Кардио-разминка', style: Theme.of(context).textTheme.headlineMedium))));
-      slivers.add(SliverPadding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-        sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) {
-          final ex = _exerciseMap[warmupCardio[idx].itemId];
-          if (ex == null) return const SizedBox.shrink();
-          return _buildExerciseCardWidget(context, warmupCardio[idx], ex);
-        }, childCount: warmupCardio.length)),
-      ));
-    }
-    if (warmupStretches.isNotEmpty) {
-      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0), child: _buildWarmupCard(context, warmupStretches))));
-    }
-
-    // 3. Рендерим основные упражнения строго по порядку, вставляя заголовки
-    String? lastCategory;
-    int strengthIdx = 1;
-
-    for (final item in mainItems) {
-      final isBonus = item.order == 150;
-      final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
-      if (ex == null) continue;
-
-      final isCardio = _isCardio(ex);
-      final currentCategory = isBonus ? 'bonus' : (isCardio ? 'cardio' : 'strength');
-
-      // Вставляем заголовок, если категория изменилась
-      if (currentCategory != lastCategory) {
-        if (currentCategory == 'bonus') {
-          slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), child: Row(children: [const Text('💡', style: TextStyle(fontSize: 18)), const SizedBox(width: 8), const Text('На забытые зоны', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFFFFB800)))]))));
-        } else if (currentCategory == 'cardio') {
-          slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFE17055).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Кардио / Добивка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFFE17055))))]))));
-        }
-        lastCategory = currentCategory;
-      }
-
-      // Добавляем само упражнение
-      slivers.add(SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: _buildExerciseCardWidget(
-              context,
-              item,
-              ex,
-              index: currentCategory == 'strength' ? strengthIdx++ : null
-          ),
-        ),
-      ));
-    }
-
-    // 4. Рендерим заминку
-    if (coolDowns.isNotEmpty) {
-      slivers.add(SliverToBoxAdapter(child: _buildCoolDownHeader(context)));
-      slivers.add(SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 0), sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) => _buildStretchCard(context, coolDowns[idx]), childCount: coolDowns.length))));
-    }
-
-    return slivers;
-  }
-
-  Widget _buildWarmupCard(BuildContext context, List<WorkoutExercise> warmups) {
-    final theme = Theme.of(context);
-    final done = warmups.where((w) => _setsData[w.id!]?.first.completed == true).length;
-    final total = warmups.length;
-    final allDone = done == total && total > 0;
-    final accent = const Color(0xFFFFB800);
-
-    return Card(
-      margin: EdgeInsets.zero,
-      color: accent.withOpacity(0.08),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: accent.withOpacity(0.3))),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => _openWarmupScreen(warmups),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(width: 44, height: 44, decoration: BoxDecoration(gradient: LinearGradient(colors: [accent, accent.withOpacity(0.7)]), borderRadius: BorderRadius.circular(12)), child: Icon(allDone ? Icons.check_rounded : Icons.local_fire_department_rounded, color: Colors.white, size: 24)),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Разминка (Суставная)', style: theme.textTheme.headlineMedium),
-                const SizedBox(height: 2),
-                Text('Махи и вращения · 3 мин', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6))),
-              ])),
-              Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: accent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: Text('$done/$total', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: accent))),
-              const SizedBox(width: 6),
-              Icon(Icons.chevron_right_rounded, color: theme.colorScheme.onSurface.withOpacity(0.4)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  List<Widget> _buildCircuitsSlivers(BuildContext context) {
-    final slivers = <Widget>[];
-    final Map<int, List<WorkoutExercise>> blocks = {};
-    final List<WorkoutExercise> warmupCardio = [];
-    final List<WorkoutExercise> warmupStretches = [];
-    final List<WorkoutExercise> coolDowns = [];
-    final List<WorkoutExercise> bonus = [];
-    final List<WorkoutExercise> cardios = [];
-
-    for (int i = 0; i < _items.length; i++) {
-      final item = _items[i];
-      if (item.isWarmup) {
-        if (item.itemType == 'exercise') warmupCardio.add(item);
-        else warmupStretches.add(item);
-        continue;
-      }
-      if (item.isCoolDown) { coolDowns.add(item); continue; }
-      if (item.order == 150) { bonus.add(item); continue; }
-
-      final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
-      if (ex != null && _isCardio(ex)) {
-        cardios.add(item);
-      } else {
-        final blockNum = _pendingBlocks[i] ?? 99;
-        blocks.putIfAbsent(blockNum, () => []);
-        blocks[blockNum]!.add(item);
-      }
-    }
-
-    if (warmupCardio.isNotEmpty) {
-      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Text('🔥 Кардио-разминка', style: Theme.of(context).textTheme.headlineMedium))));
-      slivers.add(SliverPadding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) {
-          final ex = _exerciseMap[warmupCardio[idx].itemId];
-          if (ex == null) return const SizedBox.shrink();
-          return _buildExerciseCardWidget(context, warmupCardio[idx], ex);
-        }, childCount: warmupCardio.length)),
-      ));
-    }
-    if (warmupStretches.isNotEmpty) {
-      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0), child: _buildWarmupCard(context, warmupStretches))));
-    }
-
-    final bool isWeightLoss = _profile?.goal == 'lose_weight' || (_profile?.goal.contains('weight') ?? false) || (_profile?.goal.contains('lose') ?? false);
-    final bool shouldInterleave = isWeightLoss && cardios.isNotEmpty;
-    final sortedBlockNums = blocks.keys.toList()..sort();
-    int cardioIndex = 0;
-
-    void addBlockToSlivers(int blockNum) {
-      final blockItems = blocks[blockNum]!;
-      int maxCircles = 3;
-      for (final item in blockItems) {
-        final sets = _setsData[item.id];
-        if (sets != null && sets.length > maxCircles) maxCircles = sets.length;
-      }
-
-      for (int circle = 0; circle < maxCircles; circle++) {
-        final circleNum = circle + 1;
-        final isComplete = _isCircleComplete(blockItems, circle) && _started;
-        final completed = _completedInCircle(blockItems, circle);
-        final total = blockItems.length;
-        final isCollapsed = _isCircleCollapsed(blockNum, circleNum);
-        slivers.add(SliverToBoxAdapter(child: CircleHeader(blockNum: blockNum, circleNum: circleNum, circleIndex: circle, blockItems: blockItems, completed: completed, total: total, isComplete: isComplete, isCollapsed: isCollapsed, onToggle: () => _toggleCircle(blockNum, circleNum), started: _started, isViewMode: _isViewMode, onMarkCircleCompleted: (b, c) => _markCircleCompleted(blockItems: blockItems, blockNum: b, circleIndex: c))));
-        if (!isCollapsed) {
-          slivers.add(SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 8), sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) {
-            final ex = _exerciseMap[blockItems[idx].replacedByItemId ?? blockItems[idx].itemId];
-            if (ex == null) return const SizedBox.shrink();
-            return _buildExerciseCardWidget(context, blockItems[idx], ex, circleIndex: circle);
-          }, childCount: blockItems.length))));
-        }
-      }
-      if (_started && !_isViewMode) {
-        slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 24), child: OutlinedButton.icon(onPressed: () => _addCircle(blockItems: blockItems, blockNum: blockNum), icon: const Icon(Icons.add_circle_outline_rounded), label: Text('Добавить круг в Блок $blockNum'), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), side: const BorderSide(color: Color(0xFF6C5CE7), width: 2), foregroundColor: const Color(0xFF6C5CE7))))));
-      }
-    }
-
-    void addCardioToSlivers(WorkoutExercise item) {
-      final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
-      if (ex != null) slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), child: _buildExerciseCardWidget(context, item, ex))));
-    }
-
-    if (shouldInterleave) {
-      for (int i = 0; i < sortedBlockNums.length; i++) {
-        addBlockToSlivers(sortedBlockNums[i]);
-        // Вставляем кардио ТОЛЬКО между блоками (не после последнего)
-        if (i < sortedBlockNums.length - 1 && cardioIndex < cardios.length) {
-          slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFE17055).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Кардио / Добивка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFFE17055))))]))));
-          addCardioToSlivers(cardios[cardioIndex++]);
-        }
-      }
-    } else {
-      for (final blockNum in sortedBlockNums) {
-        addBlockToSlivers(blockNum);
-      }
-    }
-
-    if (bonus.isNotEmpty) {
-      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), child: Row(children: [const Text('💡', style: TextStyle(fontSize: 18)), const SizedBox(width: 8), const Text('На забытые зоны', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFFFFB800)))]))));
-      slivers.add(SliverPadding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) {
-          final ex = _exerciseMap[bonus[idx].itemId];
-          if (ex == null) return const SizedBox.shrink();
-          return _buildExerciseCardWidget(context, bonus[idx], ex);
-        }, childCount: bonus.length)),
-      ));
-    }
-
-    if (cardioIndex < cardios.length) {
-      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFE17055).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Кардио / Добивка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFFE17055))))]))));
-      while (cardioIndex < cardios.length) {
-        addCardioToSlivers(cardios[cardioIndex++]);
-      }
-    } else if (!shouldInterleave && cardios.isNotEmpty) {
-      slivers.add(SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFE17055).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Text('Кардио / Добивка', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFFE17055))))]))));
-      for (final item in cardios) {
-        addCardioToSlivers(item);
-      }
-    }
-
-    if (coolDowns.isNotEmpty) {
-      slivers.add(SliverToBoxAdapter(child: _buildCoolDownHeader(context)));
-      slivers.add(SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 0), sliver: SliverList(delegate: SliverChildBuilderDelegate((context, idx) => _buildStretchCard(context, coolDowns[idx]), childCount: coolDowns.length))));
-    }
-
-    return slivers;
-  }
-
+// ═══ КОНЕЦ ЧАСТИ 3 ═══
   Widget _buildExerciseCardWidget(BuildContext context, WorkoutExercise item, Exercise ex, {int? circleIndex, int? index}) {
     final sets = _setsData[item.id!] ?? [];
     return ExerciseCard(
@@ -2111,5 +2137,6 @@ class _StretchTimerDialogState extends State<_StretchTimerDialog> {
     );
   }
 }
-// ═══ КОНЕЦ ЧАСТИ 7 (4/4 workout_detail_screen.dart) ═══
+// ═══ КОНЕЦ ЧАСТИ 4 ═══
 // ═══ КОНЕЦ ФАЙЛА workout_detail_screen.dart ═══
+

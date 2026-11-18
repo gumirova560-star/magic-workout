@@ -178,8 +178,11 @@ await FairyReactionService().setActiveProfile(active.id, active.name, gender: ac
 
 if (shouldHold) {
 WidgetsBinding.instance.addPostFrameCallback((_) {
-if (mounted) _showProfileChangedBannerNow(active);
-else FairyReactionService().releaseScreenPhrases();
+if (mounted) {
+  _showProfileChangedBannerNow(active);
+} else {
+  FairyReactionService().releaseScreenPhrases();
+}
 });
 }
 } else {
@@ -292,11 +295,11 @@ final wantsChallenge = await showDialog<bool>(
 context: context,
 builder: (ctx) => AlertDialog(
 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-title: Row(
+title: const Row(
 children: [
-const Icon(Icons.local_fire_department_rounded, color: Color(0xFFFFB800), size: 32),
-const SizedBox(width: 12),
-const Expanded(child: Text('День Челленджа! 🔥')),
+Icon(Icons.local_fire_department_rounded, color: Color(0xFFFFB800), size: 32),
+SizedBox(width: 12),
+Expanded(child: Text('День Челленджа! 🔥')),
 ],
 ),
 content: const Text('Сегодня вместо обычной тренировки мы устроим челлендж! Испытай себя и узнай, что тебя ждет. Погнали?'),
@@ -688,7 +691,7 @@ const SizedBox(height: 32),
               onSelected: (selected) { if (selected) setState(() => _selectedWeek = week); },
               selectedColor: theme.colorScheme.primary,
               labelStyle: TextStyle(color: isSelected ? Colors.white : theme.colorScheme.onSurface, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, fontSize: 13),
-              backgroundColor: isUnlocked ? theme.colorScheme.surface : theme.colorScheme.surface.withOpacity(0.5),
+              backgroundColor: isUnlocked ? theme.colorScheme.surface : theme.colorScheme.surface.withValues(alpha: 0.5),
             ),
           );
         }),
@@ -747,24 +750,24 @@ const SizedBox(height: 32),
                           Flexible(child: Text(day.name, style: theme.textTheme.headlineMedium, maxLines: 2, overflow: TextOverflow.ellipsis)),
                           if (isCompleted) ...[
                             const SizedBox(width: 8),
-                            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: accentColor.withOpacity(0.15), borderRadius: BorderRadius.circular(6)), child: Text('✓ Сделано', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: accentColor))),
+                            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: accentColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)), child: Text('✓ Сделано', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: accentColor))),
                           ],
                           if (!isCompleted && isInProgress) ...[
                             const SizedBox(width: 8),
-                            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: accentColor.withOpacity(0.15), borderRadius: BorderRadius.circular(6)), child: Text('⏳ В процессе', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: accentColor))),
+                            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: accentColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)), child: Text('⏳ В процессе', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: accentColor))),
                           ],
                           if (!isCompleted && !isInProgress && !isUnlocked) ...[
                             const SizedBox(width: 8),
-                            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: Colors.grey.withOpacity(0.15), borderRadius: BorderRadius.circular(6)), child: const Text('🔒 Закрыто', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.grey))),
+                            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)), child: const Text('🔒 Закрыто', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.grey))),
                           ],
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text('${day.type == 'challenge' ? 'Челлендж' : day.type == 'strength' ? 'Силовая' : 'Йога'} · ${day.durationMinutes ?? 45} мин', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6))),
+                      Text('${day.type == 'challenge' ? 'Челлендж' : day.type == 'strength' ? 'Силовая' : 'Йога'} · ${day.durationMinutes ?? 45} мин', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
                     ],
                   ),
                 ),
-                Icon(isCompleted ? Icons.check_circle_rounded : isUnlocked ? Icons.chevron_right_rounded : Icons.lock_rounded, color: isCompleted ? accentColor : isUnlocked ? theme.colorScheme.onSurface.withOpacity(0.4) : Colors.grey),
+                Icon(isCompleted ? Icons.check_circle_rounded : isUnlocked ? Icons.chevron_right_rounded : Icons.lock_rounded, color: isCompleted ? accentColor : isUnlocked ? theme.colorScheme.onSurface.withValues(alpha: 0.4) : Colors.grey),
               ],
             ),
           ),
@@ -786,19 +789,19 @@ const SizedBox(height: 32),
         const SizedBox(height: 6),
         Row(
           children: [
-            Text(dateStr, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6))),
+            Text(dateStr, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
             if (_streak > 0) ...[
               const SizedBox(width: 12),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFFDCB6E), Color(0xFFE17055)]), borderRadius: BorderRadius.circular(10), boxShadow: [BoxShadow(color: const Color(0xFFFDCB6E).withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 3))]),
+                decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFFDCB6E), Color(0xFFE17055)]), borderRadius: BorderRadius.circular(10), boxShadow: [BoxShadow(color: const Color(0xFFFDCB6E).withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 3))]),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [const Text('🔥', style: TextStyle(fontSize: 14)), const SizedBox(width: 4), Text('$_streak ${_streakWord(_streak)} подряд', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))]),
               ),
             ],
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(color: theme.colorScheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(color: theme.colorScheme.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
               child: Row(children: [Icon(Icons.fitness_center, size: 16, color: theme.colorScheme.primary), const SizedBox(width: 6), Text('${_monthDays.length}', style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700, color: theme.colorScheme.primary))]),
             ),
           ],
@@ -827,13 +830,13 @@ const SizedBox(height: 32),
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: theme.colorScheme.surface, borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(0.3), width: 1.5)),
+      decoration: BoxDecoration(color: theme.colorScheme.surface, borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: color, size: 24)),
+              Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: color, size: 24)),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -841,7 +844,7 @@ const SizedBox(height: 32),
                   children: [
                     Text(title, style: theme.textTheme.headlineMedium),
                     const SizedBox(height: 4),
-                    Text('Сделано: ${summary.completedCount} · Пропущено: ${summary.missedCount}${summary.totalMinutes > 0 ? " · ${summary.totalMinutes} мин" : ""}', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.7))),
+                    Text('Сделано: ${summary.completedCount} · Пропущено: ${summary.missedCount}${summary.totalMinutes > 0 ? " · ${summary.totalMinutes} мин" : ""}', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.7))),
                   ],
                 ),
               ),
@@ -851,8 +854,8 @@ const SizedBox(height: 32),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(12)),
-              child: Row(children: [Icon(Icons.tips_and_updates_rounded, size: 16, color: color), const SizedBox(width: 8), Expanded(child: Text(recommendation, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.85), fontWeight: FontWeight.w600)))]),
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12)),
+              child: Row(children: [Icon(Icons.tips_and_updates_rounded, size: 16, color: color), const SizedBox(width: 8), Expanded(child: Text(recommendation, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.85), fontWeight: FontWeight.w600)))]),
             ),
           ],
         ],
@@ -910,7 +913,7 @@ const SizedBox(height: 32),
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: gradient.colors.first.withOpacity(isDisabled ? 0.15 : 0.3),
+                color: gradient.colors.first.withValues(alpha: isDisabled ? 0.15 : 0.3),
                 blurRadius: isDisabled ? 8 : 16,
                 offset: const Offset(0, 8),
               ),
@@ -938,14 +941,14 @@ const SizedBox(height: 32),
         gradient: const LinearGradient(colors: [Color(0xFF00B894), Color(0xFF55EFC4)]),
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
-          BoxShadow(color: const Color(0xFF00B894).withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 8)),
+          BoxShadow(color: const Color(0xFF00B894).withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 8)),
         ],
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(10)),
             child: const Icon(Icons.emoji_events_rounded, color: Colors.white, size: 22),
           ),
           const SizedBox(width: 12),
@@ -984,18 +987,18 @@ const SizedBox(height: 32),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: theme.colorScheme.primary.withOpacity(0.2), width: 2),
+        border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.2), width: 2),
       ),
       child: Column(
         children: [
-          Icon(Icons.auto_awesome_rounded, size: 48, color: theme.colorScheme.primary.withOpacity(0.5)),
+          Icon(Icons.auto_awesome_rounded, size: 48, color: theme.colorScheme.primary.withValues(alpha: 0.5)),
           const SizedBox(height: 12),
           Text('Плана пока нет', style: theme.textTheme.headlineMedium),
           const SizedBox(height: 8),
           Text(
             'Нажмите «Создать план» — приложение подберёт тренировки на месяц под ваш профиль',
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6)),
+            style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
           ),
           const SizedBox(height: 20),
           SizedBox(
@@ -1055,13 +1058,13 @@ const SizedBox(height: 32),
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
             child: Icon(icon, color: color, size: 20),
           ),
           const SizedBox(height: 12),
           Text(value, style: theme.textTheme.headlineMedium?.copyWith(color: theme.colorScheme.onSurface, fontSize: 22, fontWeight: FontWeight.w700)),
           const SizedBox(height: 2),
-          Text(label, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6))),
+          Text(label, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
         ],
       ),
     );
@@ -1080,14 +1083,14 @@ const SizedBox(height: 32),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.person_add_rounded, size: 80, color: theme.colorScheme.primary.withOpacity(0.5)),
+              Icon(Icons.person_add_rounded, size: 80, color: theme.colorScheme.primary.withValues(alpha: 0.5)),
               const SizedBox(height: 24),
               Text('Нет профиля', style: theme.textTheme.displaySmall),
               const SizedBox(height: 8),
               Text(
                 'Создайте профиль в Настройках, чтобы начать тренировки',
                 textAlign: TextAlign.center,
-                style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6)),
+                style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
               ),
             ],
           ),

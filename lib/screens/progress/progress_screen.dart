@@ -326,7 +326,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFFFB800).withOpacity(0.3),
+                color: const Color(0xFFFFB800).withValues(alpha: 0.3),
                 blurRadius: 12,
                 offset: const Offset(0, 6),
               ),
@@ -389,7 +389,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF6C5CE7).withOpacity(0.3),
+                color: const Color(0xFF6C5CE7).withValues(alpha: 0.3),
                 blurRadius: 12,
                 offset: const Offset(0, 6),
               ),
@@ -500,7 +500,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
           Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
+              color: color.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, color: color, size: 16),
@@ -519,7 +519,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
             Text(
               label,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.6),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 fontSize: 10,
               ),
             ),
@@ -580,7 +580,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
           Icon(
             Icons.insights_rounded,
             size: 48,
-            color: theme.colorScheme.primary.withOpacity(0.4),
+            color: theme.colorScheme.primary.withValues(alpha: 0.4),
           ),
           const SizedBox(height: 12),
           Text('Прогресса пока нет',
@@ -590,7 +590,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
             'Завершите тренировки с весами — появятся графики',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.6),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
         ],
@@ -610,7 +610,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
               Icon(
                 Icons.person_add_rounded,
                 size: 80,
-                color: theme.colorScheme.primary.withOpacity(0.5),
+                color: theme.colorScheme.primary.withValues(alpha: 0.5),
               ),
               const SizedBox(height: 24),
               Text('Нет профиля',
@@ -620,7 +620,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                 'Создайте профиль во вкладке «Профиль»',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: theme.colorScheme.onSurface.withOpacity(0.6),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
             ],

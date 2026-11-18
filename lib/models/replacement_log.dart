@@ -76,7 +76,7 @@ class ReplacementLog {
       reason: reason ?? this.reason,
       notes: notes ?? this.notes,
       permanent: permanent ?? this.permanent,
-      createdAt: this.createdAt,
+      createdAt: createdAt,
     );
   }
 

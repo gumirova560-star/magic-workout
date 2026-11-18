@@ -4,6 +4,8 @@ import '../../models/workout_day.dart';
 import '../../models/exercise.dart';
 import '../../models/user_profile.dart';
 import '../../services/database_helper.dart';
+import '../../services/energy_service.dart';    // 👈 ДОБАВЛЕНО
+import '../../services/garden_service.dart';   // 👈 ДОБАВЛЕНО
 import '../../data/base_exercises.dart';
 import 'workout_complete_screen.dart';
 
@@ -72,6 +74,26 @@ class _ChallengePlankScreenState extends State<ChallengePlankScreen> {
 
     final updated = widget.day.copyWith(status: 'completed', completedAt: DateTime.now(), durationMinutes: 5);
     await DatabaseHelper.instance.updateWorkoutDay(updated);
+
+    // ══════════════════════════════════════════════════════════════════
+    // 👇 НАГРАДА ЗА ЧЕЛЛЕНДЖ: 60⚡ + золотой лотос
+    // UNIQUE(profileId, reason, refId) не даст выдать повторно
+    // ══════════════════════════════════════════════════════════════════
+    final awarded = await EnergyService.addEnergy(
+      profileId: widget.profileId,
+      delta: 60,
+      reason: 'challenge_day_reward',
+      refId: widget.day.id,
+    );
+    if (awarded) {
+      await GardenService.plantNextFlower(
+        profileId: widget.profileId,
+        flowerType: 'legendary',
+      );
+    }
+    // ══════════════════════════════════════════════════════════════════
+    // 👆 КОНЕЦ БЛОКА НАГРАДЫ
+    // ══════════════════════════════════════════════════════════════════
 
     if (!mounted) return;
     Navigator.pushReplacement(
@@ -219,7 +241,7 @@ class _ChallengePlankScreenState extends State<ChallengePlankScreen> {
                     CircularProgressIndicator(
                         value: progress,
                         strokeWidth: 16,
-                        backgroundColor: Colors.grey.withOpacity(0.2),
+                        backgroundColor: Colors.grey.withValues(alpha: 0.2),
                         valueColor: const AlwaysStoppedAnimation(Color(0xFF00B894))
                     ),
                     Text(timeStr, style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold)),
@@ -251,3 +273,4 @@ class _ChallengePlankScreenState extends State<ChallengePlankScreen> {
     );
   }
 }
+// ⏸ КОНЕЦ ФАЙЛА challenge_plank_screen.dart

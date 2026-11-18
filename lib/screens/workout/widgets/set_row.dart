@@ -170,12 +170,12 @@ class _SetRowState extends State<SetRow> {
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: _completed ? theme.colorScheme.primary.withOpacity(0.1) : theme.colorScheme.surface,
+          color: _completed ? theme.colorScheme.primary.withValues(alpha: 0.1) : theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: _completed
-                ? theme.colorScheme.primary.withOpacity(0.4)
-                : theme.colorScheme.onSurface.withOpacity(0.08),
+                ? theme.colorScheme.primary.withValues(alpha: 0.4)
+                : theme.colorScheme.onSurface.withValues(alpha: 0.08),
           ),
         ),
         child: Row(
@@ -187,14 +187,14 @@ class _SetRowState extends State<SetRow> {
               decoration: BoxDecoration(
                 color: _completed
                     ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurface.withOpacity(0.08),
+                    : theme.colorScheme.onSurface.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
                 '${widget.setNumber}',
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
-                  color: _completed ? Colors.white : theme.colorScheme.onSurface.withOpacity(0.6),
+                  color: _completed ? Colors.white : theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
             ),
@@ -238,7 +238,7 @@ class _SetRowState extends State<SetRow> {
                         hintText: repsHint,
                         suffixText: repsSuffix,
                         suffixStyle: TextStyle(
-                          color: theme.colorScheme.onSurface.withOpacity(0.5),
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
@@ -266,7 +266,7 @@ class _SetRowState extends State<SetRow> {
                   border: Border.all(
                     color: _completed
                         ? theme.colorScheme.primary
-                        : theme.colorScheme.onSurface.withOpacity(0.2),
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.2),
                     width: 2,
                   ),
                 ),

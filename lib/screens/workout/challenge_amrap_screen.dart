@@ -4,6 +4,8 @@ import '../../models/workout_day.dart';
 import '../../models/exercise.dart';
 import '../../models/user_profile.dart';
 import '../../services/database_helper.dart';
+import '../../services/energy_service.dart';    // 👈 ДОБАВЛЕНО
+import '../../services/garden_service.dart';   // 👈 ДОБАВЛЕНО
 import '../../data/base_exercises.dart';
 import 'workout_complete_screen.dart';
 
@@ -110,6 +112,26 @@ class _ChallengeAmrapScreenState extends State<ChallengeAmrapScreen> {
 
     final updated = widget.day.copyWith(status: 'completed', completedAt: DateTime.now(), durationMinutes: 10);
     await DatabaseHelper.instance.updateWorkoutDay(updated);
+
+    // ══════════════════════════════════════════════════════════════════
+    // 👇 НАГРАДА ЗА ЧЕЛЛЕНДЖ: 60⚡ + золотой лотос
+    // UNIQUE(profileId, reason, refId) не даст выдать повторно
+    // ══════════════════════════════════════════════════════════════════
+    final awarded = await EnergyService.addEnergy(
+      profileId: widget.profileId,
+      delta: 60,
+      reason: 'challenge_day_reward',
+      refId: widget.day.id,
+    );
+    if (awarded) {
+      await GardenService.plantNextFlower(
+        profileId: widget.profileId,
+        flowerType: 'legendary',
+      );
+    }
+    // ══════════════════════════════════════════════════════════════════
+    // 👆 КОНЕЦ БЛОКА НАГРАДЫ
+    // ══════════════════════════════════════════════════════════════════
 
     if (!mounted) return;
     Navigator.pushReplacement(
@@ -248,7 +270,7 @@ class _ChallengeAmrapScreenState extends State<ChallengeAmrapScreen> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 20),
-            color: const Color(0xFFE17055).withOpacity(0.1),
+            color: const Color(0xFFE17055).withValues(alpha: 0.1),
             child: Column(
               children: [
                 Text(timeStr, style: const TextStyle(fontSize: 48, fontWeight: FontWeight.w900, color: Color(0xFFE17055))),
@@ -301,7 +323,7 @@ class _ChallengeAmrapScreenState extends State<ChallengeAmrapScreen> {
             const SizedBox(height: 24),
             Text('AMRAP 10 минут', style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
-            Text('Сделай как можно больше кругов по 10 повторений каждого упражнения.', textAlign: TextAlign.center),
+            const Text('Сделай как можно больше кругов по 10 повторений каждого упражнения.', textAlign: TextAlign.center),
             const SizedBox(height: 40),
             SizedBox(
               width: double.infinity,
@@ -317,3 +339,4 @@ class _ChallengeAmrapScreenState extends State<ChallengeAmrapScreen> {
     );
   }
 }
+// ⏸ КОНЕЦ ФАЙЛА challenge_amrap_screen.dart

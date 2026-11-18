@@ -152,7 +152,7 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: Colors.amber.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.amber.withOpacity(0.3))),
+              decoration: BoxDecoration(color: Colors.amber.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.amber.withValues(alpha: 0.3))),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Icon(Icons.notes_rounded, color: Colors.amber, size: 20), const SizedBox(width: 12),
                 Expanded(child: Text(widget.workout.notes!, style: theme.textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic))),
@@ -197,9 +197,9 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
           const SizedBox(height: 8),
           Row(children: [
             _infoItem(context, Icons.timer_rounded, widget.workout.durationMinutes != null ? '${widget.workout.durationMinutes}' : '—', 'минут'),
-            Container(width: 1, height: 40, color: Colors.white.withOpacity(0.2)),
+            Container(width: 1, height: 40, color: Colors.white.withValues(alpha: 0.2)),
             _infoItem(context, Icons.fitness_center, '$completedSets', 'подходов'),
-            Container(width: 1, height: 40, color: Colors.white.withOpacity(0.2)),
+            Container(width: 1, height: 40, color: Colors.white.withValues(alpha: 0.2)),
             _infoItem(context, Icons.percent_rounded, totalSets > 0 ? '${(completedSets * 100 / totalSets).round()}' : '0', '%'),
           ]),
         ],
@@ -234,8 +234,9 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
     if (targetTime.isEmpty) targetTime = isTimed ? '60' : '15';
 
     String repsSuffix = ' повт.';
-    if (isCardio) repsSuffix = ' мин';
-    else if (isTimed) repsSuffix = ' сек';
+    if (isCardio) {
+      repsSuffix = ' мин';
+    } else if (isTimed) repsSuffix = ' сек';
 
     List<WorkoutSet> displaySets = _setsMap[we.id!] ?? [];
     if (displaySets.isEmpty) displaySets = List.generate(we.sets, (i) => WorkoutSet(workoutExerciseId: we.id!, order: i + 1, completed: false));
@@ -249,7 +250,7 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              Container(width: 40, height: 40, decoration: BoxDecoration(color: theme.colorScheme.primary.withOpacity(0.15), borderRadius: BorderRadius.circular(12)), child: Icon(isCardio ? Icons.directions_run_rounded : Icons.fitness_center, color: theme.colorScheme.primary, size: 20)),
+              Container(width: 40, height: 40, decoration: BoxDecoration(color: theme.colorScheme.primary.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)), child: Icon(isCardio ? Icons.directions_run_rounded : Icons.fitness_center, color: theme.colorScheme.primary, size: 20)),
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(ex.name, style: theme.textTheme.headlineMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
@@ -260,13 +261,13 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
                       if (isBase)
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(color: const Color(0xFF6C5CE7).withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                          decoration: BoxDecoration(color: const Color(0xFF6C5CE7).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
                           child: Text('БАЗА - ${zoneLabel.toUpperCase()}', style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF6C5CE7))),
                         )
                       else ...[
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(color: const Color(0xFF00B894).withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                          decoration: BoxDecoration(color: const Color(0xFF00B894).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
                           child: const Text('ИЗОЛЯЦИЯ', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF00B894))),
                         ),
                         const SizedBox(width: 4),
@@ -275,7 +276,7 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
                             ex.muscleGroups.map((g) => getZoneLabel(g)).join(' + ').toUpperCase(),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
                           ),
                         ),
                       ],
@@ -283,14 +284,14 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
                   ),
                 ],
                 const SizedBox(height: 2),
-                Text('Выполнено $completed из ${displaySets.length}', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6))),
+                Text('Выполнено $completed из ${displaySets.length}', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
               ])),
             ]),
             const SizedBox(height: 12),
             ...displaySets.map((s) => Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Row(children: [
-                Container(width: 28, height: 28, alignment: Alignment.center, decoration: BoxDecoration(color: s.completed ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.08), borderRadius: BorderRadius.circular(8)), child: Text('${s.order}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: s.completed ? Colors.white : theme.colorScheme.onSurface.withOpacity(0.5)))),
+                Container(width: 28, height: 28, alignment: Alignment.center, decoration: BoxDecoration(color: s.completed ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)), child: Text('${s.order}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: s.completed ? Colors.white : theme.colorScheme.onSurface.withValues(alpha: 0.5)))),
                 const SizedBox(width: 10),
                 if (!isTimeBased) ...[
                   Text(s.weight != null ? '${s.weight!.toStringAsFixed(s.weight! % 1 == 0 ? 0 : 1)} кг' : '— кг', style: theme.textTheme.bodyMedium),
@@ -303,7 +304,7 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
                   style: theme.textTheme.bodyMedium,
                 ),
                 const Spacer(),
-                Icon(s.completed ? Icons.check_circle_rounded : Icons.circle_outlined, color: s.completed ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.2), size: 20),
+                Icon(s.completed ? Icons.check_circle_rounded : Icons.circle_outlined, color: s.completed ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.2), size: 20),
               ]),
             )),
           ],
@@ -321,12 +322,12 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(children: [
-          Container(width: 40, height: 40, decoration: BoxDecoration(color: const Color(0xFF00B894).withOpacity(0.15), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.self_improvement, color: Color(0xFF00B894), size: 20)),
+          Container(width: 40, height: 40, decoration: BoxDecoration(color: const Color(0xFF00B894).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.self_improvement, color: Color(0xFF00B894), size: 20)),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(st.name, style: theme.textTheme.headlineMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 2),
-            Text(st.durationLabel, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6))),
+            Text(st.durationLabel, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
           ])),
         ]),
       ),

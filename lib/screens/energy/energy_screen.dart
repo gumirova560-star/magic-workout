@@ -87,7 +87,7 @@ class _EnergyScreenState extends State<EnergyScreen> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.amber.withOpacity(0.3),
+            color: Colors.amber.withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -168,7 +168,7 @@ class _EnergyScreenState extends State<EnergyScreen> {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: (isPositive ? Colors.green : Colors.red).withOpacity(0.1),
+              color: (isPositive ? Colors.green : Colors.red).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             alignment: Alignment.center,

@@ -109,7 +109,7 @@ class _FullScreenTimerState extends State<FullScreenTimer> {
                       child: CircularProgressIndicator(
                         value: progress,
                         strokeWidth: 12,
-                        backgroundColor: Colors.white.withOpacity(0.1),
+                        backgroundColor: Colors.white.withValues(alpha: 0.1),
                         color: _isFinished
                             ? const Color(0xFF00B894)
                             : (_remaining <= 3 ? const Color(0xFFE17055) : const Color(0xFF6C5CE7)),
@@ -126,7 +126,7 @@ class _FullScreenTimerState extends State<FullScreenTimer> {
                         iconSize: 80,
                         color: const Color(0xFF00B894),
                         style: IconButton.styleFrom(
-                          backgroundColor: const Color(0xFF00B894).withOpacity(0.1),
+                          backgroundColor: const Color(0xFF00B894).withValues(alpha: 0.1),
                           padding: const EdgeInsets.all(20),
                         ),
                       )

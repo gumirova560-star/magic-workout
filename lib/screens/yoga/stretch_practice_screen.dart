@@ -170,7 +170,7 @@ class _StretchPracticeScreenState extends State<StretchPracticeScreen> {
                   child: LinearProgressIndicator(
                     value: (_currentIndex + 1) / widget.stretches.length,
                     backgroundColor:
-                        theme.colorScheme.primary.withOpacity(0.15),
+                        theme.colorScheme.primary.withValues(alpha: 0.15),
                     color: theme.colorScheme.primary,
                     minHeight: 6,
                     borderRadius: BorderRadius.circular(4),
@@ -197,7 +197,7 @@ class _StretchPracticeScreenState extends State<StretchPracticeScreen> {
                     value: progress,
                     strokeWidth: 10,
                     backgroundColor:
-                        theme.colorScheme.primary.withOpacity(0.15),
+                        theme.colorScheme.primary.withValues(alpha: 0.15),
                     color: circleColor,
                     strokeCap: StrokeCap.round,
                   ),
@@ -210,7 +210,7 @@ class _StretchPracticeScreenState extends State<StretchPracticeScreen> {
                           ? Icons.self_improvement_rounded
                           : Icons.accessibility_new_rounded,
                       size: 40,
-                      color: circleColor.withOpacity(0.6),
+                      color: circleColor.withValues(alpha: 0.6),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -251,7 +251,7 @@ class _StretchPracticeScreenState extends State<StretchPracticeScreen> {
           Text(
             '${stretch.durationLabel}${stretch.bothSides ? " · 2 стороны" : ""}',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.6),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
 
@@ -261,7 +261,7 @@ class _StretchPracticeScreenState extends State<StretchPracticeScreen> {
               padding: const EdgeInsets.symmetric(
                   horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withOpacity(0.1),
+                color: theme.colorScheme.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
@@ -286,7 +286,7 @@ class _StretchPracticeScreenState extends State<StretchPracticeScreen> {
                 icon: const Icon(Icons.skip_previous_rounded, size: 36),
                 color: _currentIndex > 0
                     ? theme.colorScheme.onSurface
-                    : theme.colorScheme.onSurface.withOpacity(0.2),
+                    : theme.colorScheme.onSurface.withValues(alpha: 0.2),
               ),
 
               // ═══ Play/Pause ═══
@@ -309,7 +309,7 @@ class _StretchPracticeScreenState extends State<StretchPracticeScreen> {
                         color: (_paused
                                 ? const Color(0xFFFDCB6E)
                                 : const Color(0xFF00B894))
-                            .withOpacity(0.3),
+                            .withValues(alpha: 0.3),
                         blurRadius: 20,
                         offset: const Offset(0, 8),
                       ),
@@ -364,7 +364,7 @@ class _StretchPracticeScreenState extends State<StretchPracticeScreen> {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF00B894).withOpacity(0.3),
+                    color: const Color(0xFF00B894).withValues(alpha: 0.3),
                     blurRadius: 24,
                     offset: const Offset(0, 12),
                   ),
@@ -386,7 +386,7 @@ class _StretchPracticeScreenState extends State<StretchPracticeScreen> {
             Text(
               'Отличная работа 🧘',
               style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.6),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
             const SizedBox(height: 32),

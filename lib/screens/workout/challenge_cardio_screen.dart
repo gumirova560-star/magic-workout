@@ -4,6 +4,8 @@ import '../../models/workout_day.dart';
 import '../../models/exercise.dart';
 import '../../models/user_profile.dart';
 import '../../services/database_helper.dart';
+import '../../services/energy_service.dart';    // 👈 ДОБАВЛЕНО
+import '../../services/garden_service.dart';   // 👈 ДОБАВЛЕНО
 import '../../data/base_exercises.dart';
 import 'workout_complete_screen.dart';
 
@@ -26,7 +28,7 @@ class _ChallengeCardioScreenState extends State<ChallengeCardioScreen> {
 
   int _currentExIndex = 0;
   int _currentRound = 1;
-  int _totalRounds = 2;
+  final int _totalRounds = 2;
 
   int _secondsLeft = 40;
   bool _isResting = false;
@@ -144,6 +146,26 @@ class _ChallengeCardioScreenState extends State<ChallengeCardioScreen> {
 
     final updated = widget.day.copyWith(status: 'completed', completedAt: DateTime.now(), durationMinutes: 8);
     await DatabaseHelper.instance.updateWorkoutDay(updated);
+
+    // ══════════════════════════════════════════════════════════════════
+    // 👇 НАГРАДА ЗА ЧЕЛЛЕНДЖ: 60⚡ + золотой лотос
+    // UNIQUE(profileId, reason, refId) не даст выдать повторно
+    // ══════════════════════════════════════════════════════════════════
+    final awarded = await EnergyService.addEnergy(
+      profileId: widget.profileId,
+      delta: 60,
+      reason: 'challenge_day_reward',
+      refId: widget.day.id,
+    );
+    if (awarded) {
+      await GardenService.plantNextFlower(
+        profileId: widget.profileId,
+        flowerType: 'legendary',
+      );
+    }
+    // ══════════════════════════════════════════════════════════════════
+    // 👆 КОНЕЦ БЛОКА НАГРАДЫ
+    // ══════════════════════════════════════════════════════════════════
 
     if (!mounted) return;
     Navigator.pushReplacement(
@@ -301,7 +323,7 @@ class _ChallengeCardioScreenState extends State<ChallengeCardioScreen> {
                 decoration: BoxDecoration(
                   color: theme.colorScheme.surface,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: theme.colorScheme.primary.withOpacity(0.2)),
+                  border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.2)),
                 ),
                 child: Column(
                   children: _cardioExercises.map((ex) => Padding(
@@ -334,7 +356,7 @@ class _ChallengeCardioScreenState extends State<ChallengeCardioScreen> {
           Expanded(
             child: Center(
               child: SizedBox(
-                width: 300, // 👈 УВЕЛИЧИЛИ КРУГ
+                width: 300,
                 height: 300,
                 child: Stack(
                   alignment: Alignment.center,
@@ -344,8 +366,8 @@ class _ChallengeCardioScreenState extends State<ChallengeCardioScreen> {
                       height: 300,
                       child: CircularProgressIndicator(
                         value: progress,
-                        strokeWidth: 14, // 👈 УМЕНЬШИЛИ ТОЛЩИНУ
-                        backgroundColor: Colors.grey.withOpacity(0.2),
+                        strokeWidth: 14,
+                        backgroundColor: Colors.grey.withValues(alpha: 0.2),
                         valueColor: AlwaysStoppedAnimation(_isResting ? const Color(0xFF00B894) : const Color(0xFFE17055)),
                       ),
                     ),
@@ -353,7 +375,7 @@ class _ChallengeCardioScreenState extends State<ChallengeCardioScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(_isResting ? 'ОТДЫХ' : 'РАБОТА', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _isResting ? const Color(0xFF00B894) : const Color(0xFFE17055))),
-                        Text('$_secondsLeft', style: const TextStyle(fontSize: 64, fontWeight: FontWeight.w900)), // 👈 УМЕНЬШИЛИ ШРИФТ
+                        Text('$_secondsLeft', style: const TextStyle(fontSize: 64, fontWeight: FontWeight.w900)),
                       ],
                     ),
                   ],
@@ -397,3 +419,4 @@ class _ChallengeCardioScreenState extends State<ChallengeCardioScreen> {
     );
   }
 }
+// ⏸ КОНЕЦ ФАЙЛА challenge_cardio_screen.dart

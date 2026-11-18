@@ -58,7 +58,7 @@ class _EnergyBadgeState extends State<EnergyBadge> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.amber.withOpacity(0.18),
+            color: Colors.amber.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Row(

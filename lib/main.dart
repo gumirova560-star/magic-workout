@@ -3,7 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_strategy/url_strategy.dart';
 
-// 👇 НОВЫЕ ИМПОРТЫ ДЛЯ FIREBASE
+// ИМПОРТЫ ДЛЯ FIREBASE
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
@@ -20,7 +20,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   setPathUrlStrategy();
 
-  // 👇 ИНИЦИАЛИЗАЦИЯ FIREBASE
+  // ИНИЦИАЛИЗАЦИЯ FIREBASE
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -49,7 +49,7 @@ class _MyAppState extends State<MyApp> {
     super.initState();
     _init();
 
-    // Слушаем события смены профиля, чтобы вовремя переключить экран
+    // Слушаем события смены профиля, чтобы вовремя переключать экраны
     FairyReactionService().addProfileListener(_checkState);
   }
 
@@ -61,10 +61,10 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _init() async {
     final mode = await ThemeService.loadThemeMode();
+
     final prefs = await SharedPreferences.getInstance();
     final done = prefs.getBool('fairy_onboarding_done') ?? false;
 
-    // Проверяем, есть ли профиль
     final profiles = await DatabaseHelper.instance.getProfiles();
     final hasProfile = profiles.isNotEmpty;
 
@@ -88,7 +88,7 @@ class _MyAppState extends State<MyApp> {
 
   void _finishOnboarding() {
     setState(() => _showOnboarding = false);
-    _checkState(); // Проверяем профиль после онбординга
+    _checkState(); // проверяем профиль после онбординга
   }
 
   @override
@@ -104,9 +104,11 @@ class _MyAppState extends State<MyApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: const [Locale('ru', 'RU'), Locale('en', 'US')],
+      supportedLocales: const [
+        Locale('ru', 'RU'),
+        Locale('en', 'US'),
+      ],
       locale: const Locale('ru', 'RU'),
-      // 👇 ЕДИНЫЙ ДОМ (HOME) С ПЛАВНЫМ ПЕРЕКЛЮЧЕНИЕМ
       home: AnimatedSwitcher(
         duration: const Duration(milliseconds: 400),
         child: _buildHome(),
@@ -115,6 +117,8 @@ class _MyAppState extends State<MyApp> {
   }
 
   Widget _buildHome() {
+    // Пока идёт инициализация — показываем загрузку,
+    // чтобы MainScreen не монтировался со «случайными» дефолтами.
     if (_loading) {
       return const Scaffold(
         key: ValueKey('loading'),
@@ -122,6 +126,7 @@ class _MyAppState extends State<MyApp> {
       );
     }
 
+    // Порядок проверки важен: онбординг старше требования профиля
     if (_showOnboarding) {
       return OnboardingScreen(
         key: const ValueKey('onboarding'),
@@ -130,12 +135,7 @@ class _MyAppState extends State<MyApp> {
     }
 
     if (_needsProfile) {
-      return Scaffold(
-        key: const ValueKey('profile_edit'),
-        body: ProfileEditScreen(
-          key: UniqueKey(),
-        ),
-      );
+      return const ProfileEditScreen(key: ValueKey('profile_edit'));
     }
 
     return const MainScreen(key: ValueKey('main_screen'));

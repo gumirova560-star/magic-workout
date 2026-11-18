@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/rendering.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:cross_file/cross_file.dart';
 import '../widgets/share_card.dart';
 
 import 'web_downloader_stub.dart' if (dart.library.html) 'web_downloader.dart' as web_downloader;
@@ -77,8 +76,8 @@ class ShareService {
                         Navigator.pop(ctx);
                       }
                     },
-                    icon: Icon(kIsWeb ? Icons.download_rounded : Icons.share_rounded, size: 18),
-                    label: Text(kIsWeb ? 'Скачать' : 'Опубликовать'),
+                    icon: const Icon(kIsWeb ? Icons.download_rounded : Icons.share_rounded, size: 18),
+                    label: const Text(kIsWeb ? 'Скачать' : 'Опубликовать'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF6C5CE7),
                       foregroundColor: Colors.white,

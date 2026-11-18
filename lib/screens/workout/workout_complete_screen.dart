@@ -98,11 +98,13 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
       if (totalEx > 0) exercises = totalEx;
     }
 
-    if (mounted) setState(() {
+    if (mounted) {
+      setState(() {
       _streak = streak;
       _totalWorkoutsInPeriod = workouts;
       _totalExercisesInPeriod = exercises;
     });
+    }
   }
 
   String get _title {
@@ -140,7 +142,7 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [theme.colorScheme.primary.withOpacity(0.1), theme.colorScheme.surface],
+            colors: [theme.colorScheme.primary.withValues(alpha: 0.1), theme.colorScheme.surface],
           ),
         ),
         child: SafeArea(
@@ -169,7 +171,7 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
                 Text(
                   _subheadline,
                   textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.7), height: 1.4),
+                  style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.7), height: 1.4),
                 ).animate().slideY(begin: 0.2).fadeIn(delay: 300.ms),
 
                 const SizedBox(height: 32),
@@ -270,7 +272,7 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      side: BorderSide(color: theme.colorScheme.primary.withOpacity(0.3)),
+                      side: BorderSide(color: theme.colorScheme.primary.withValues(alpha: 0.3)),
                       foregroundColor: theme.colorScheme.primary,
                       textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                     ),
@@ -288,7 +290,7 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
   Widget _buildStatChip(ThemeData theme, IconData icon, String text) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(color: theme.colorScheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: theme.colorScheme.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

@@ -206,7 +206,7 @@ class _StretchListScreenState extends State<StretchListScreen> {
                       height: 44,
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [color, color.withOpacity(0.6)],
+                          colors: [color, color.withValues(alpha: 0.6)],
                         ),
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -263,7 +263,7 @@ class _StretchListScreenState extends State<StretchListScreen> {
                             _groupLabel(stretch.muscleGroup),
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurface
-                                  .withOpacity(0.6),
+                                  .withValues(alpha: 0.6),
                             ),
                           ),
                         ],
@@ -276,7 +276,7 @@ class _StretchListScreenState extends State<StretchListScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: color.withOpacity(0.15),
+                            color: color.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -293,7 +293,7 @@ class _StretchListScreenState extends State<StretchListScreen> {
                           '${stretch.durationSeconds} сек',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color:
-                                theme.colorScheme.onSurface.withOpacity(0.6),
+                                theme.colorScheme.onSurface.withValues(alpha: 0.6),
                           ),
                         ),
                       ],

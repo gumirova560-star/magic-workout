@@ -111,7 +111,7 @@ class _PhotoChallengeScreenState extends State<PhotoChallengeScreen> {
               const Spacer(),
               Container(
                 width: 120, height: 120,
-                decoration: BoxDecoration(color: Colors.deepPurple.withOpacity(0.1), shape: BoxShape.circle),
+                decoration: BoxDecoration(color: Colors.deepPurple.withValues(alpha: 0.1), shape: BoxShape.circle),
                 child: const Center(child: Text('🚶‍♀️', style: TextStyle(fontSize: 60))),
               ),
               const SizedBox(height: 24),
@@ -129,7 +129,7 @@ class _PhotoChallengeScreenState extends State<PhotoChallengeScreen> {
               ] else if (_imagePath != null && kIsWeb) ...[
                 Container(
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
                   child: const Row(
                     children: [
                       Icon(Icons.check_circle, color: Colors.green),
@@ -162,7 +162,7 @@ class _PhotoChallengeScreenState extends State<PhotoChallengeScreen> {
               else
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 32),
-                  decoration: BoxDecoration(color: const Color(0xFF00B894).withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
+                  decoration: BoxDecoration(color: const Color(0xFF00B894).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [

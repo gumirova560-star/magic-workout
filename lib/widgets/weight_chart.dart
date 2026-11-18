@@ -58,7 +58,7 @@ class WeightChart extends StatelessWidget {
           Text(
             'Максимальный вес за тренировку',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.6),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
           const SizedBox(height: 20),
@@ -71,7 +71,7 @@ class WeightChart extends StatelessWidget {
                   drawVerticalLine: false,
                   horizontalInterval: range < 5 ? 1 : null,
                   getDrawingHorizontalLine: (value) => FlLine(
-                    color: theme.colorScheme.onSurface.withOpacity(0.08),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
                     strokeWidth: 1,
                   ),
                 ),
@@ -85,7 +85,7 @@ class WeightChart extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 11,
                           color: theme.colorScheme.onSurface
-                              .withOpacity(0.6),
+                              .withValues(alpha: 0.6),
                         ),
                       ),
                     ),
@@ -111,7 +111,7 @@ class WeightChart extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 10,
                               color: theme.colorScheme.onSurface
-                                  .withOpacity(0.6),
+                                  .withValues(alpha: 0.6),
                             ),
                           ),
                         );
@@ -133,18 +133,18 @@ class WeightChart extends StatelessWidget {
                       show: true,
                       getDotPainter: (spot, percent, bar, index) =>
                           FlDotCirclePainter(
-                        radius: 4,
-                        color: theme.colorScheme.primary,
-                        strokeWidth: 2,
-                        strokeColor: theme.colorScheme.surface,
-                      ),
+                            radius: 4,
+                            color: theme.colorScheme.primary,
+                            strokeWidth: 2,
+                            strokeColor: theme.colorScheme.surface,
+                          ),
                     ),
                     belowBarData: BarAreaData(
                       show: true,
                       gradient: LinearGradient(
                         colors: [
-                          theme.colorScheme.primary.withOpacity(0.3),
-                          theme.colorScheme.primary.withOpacity(0.0),
+                          theme.colorScheme.primary.withValues(alpha: 0.3),
+                          theme.colorScheme.primary.withValues(alpha: 0.0),
                         ],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
@@ -173,7 +173,7 @@ class WeightChart extends StatelessWidget {
           Icon(
             Icons.show_chart_rounded,
             size: 48,
-            color: theme.colorScheme.primary.withOpacity(0.4),
+            color: theme.colorScheme.primary.withValues(alpha: 0.4),
           ),
           const SizedBox(height: 12),
           Text('Нет данных',
@@ -183,7 +183,7 @@ class WeightChart extends StatelessWidget {
             'Завершите тренировки с весами — появится график',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.6),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
         ],

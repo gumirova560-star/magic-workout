@@ -25,9 +25,9 @@ class ProgressionService {
       switch (goal) {
         case 'strength':
           if (lastReps >= targetReps && lastReps < 8) {
-            return 'Ты сделал $lastReps повт. по ${lastWeight}кг. Отличная работа! Попробуй добавить 2.5 кг.';
+            return 'Ты сделал $lastReps повт. по $lastWeightкг. Отличная работа! Попробуй добавить 2.5 кг.';
           } else if (lastReps >= 8) {
-            return 'Ты сделал $lastReps повт. по ${lastWeight}кг. Пора добавить 5 кг!';
+            return 'Ты сделал $lastReps повт. по $lastWeightкг. Пора добавить 5 кг!';
           }
           return 'Сфокусируйся на технике и силе. Вес: $lastWeight кг.';
         case 'gain_mass':
@@ -35,11 +35,11 @@ class ProgressionService {
         case 'lose_weight':
         default:
           if (lastReps >= 12) {
-            return 'В прошлый раз ты сделал $lastReps повт. по ${lastWeight}кг. Отличный результат!';
+            return 'В прошлый раз ты сделал $lastReps повт. по $lastWeightкг. Отличный результат!';
           } else if (lastReps < 8) {
             return 'Ты сделал $lastReps повт. Вес тяжеловат. Оставь $lastWeight кг или добавь 1 повторение.';
           }
-          return 'Отличная работа: $lastReps повт. по ${lastWeight}кг.';
+          return 'Отличная работа: $lastReps повт. по $lastWeightкг.';
       }
     }
 

@@ -113,7 +113,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
+              color: color.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: color, size: 20),
@@ -132,7 +132,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
               Text(
                 subtitle,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withOpacity(0.6),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
             ],
@@ -160,7 +160,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.15),
+                    color: color.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Center(
@@ -185,7 +185,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                       Text(
                         'Использовано: ${trend.timesUsed} раз',
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.6),
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                         ),
                       ),
                     ],
@@ -204,12 +204,12 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                     label: 'Прошлая неделя',
                     value: trend.avgValuePrevWeek,
                     unit: trend.unit,
-                    color: theme.colorScheme.onSurface.withOpacity(0.5),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                   ),
                 ),
                 Icon(
                   Icons.arrow_forward_rounded,
-                  color: theme.colorScheme.onSurface.withOpacity(0.3),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
                   size: 18,
                 ),
                 Expanded(
@@ -231,7 +231,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.08),
+                color: color.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
@@ -265,7 +265,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
         Text(
           label,
           style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurface.withOpacity(0.5),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
             fontSize: 11,
           ),
         ),
@@ -307,7 +307,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
               errorBuilder: (_, __, ___) => Icon(
                 Icons.insights_rounded,
                 size: 80,
-                color: theme.colorScheme.primary.withOpacity(0.4),
+                color: theme.colorScheme.primary.withValues(alpha: 0.4),
               ),
             ),
             const SizedBox(height: 24),
@@ -321,7 +321,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
               'Ждем завершения 3-й недели текущего цикла, чтобы сравнить результаты с 1-й неделей и показать твой прогресс.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.6),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 height: 1.5,
               ),
             ),

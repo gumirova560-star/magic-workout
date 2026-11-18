@@ -149,7 +149,7 @@ class _WarmupScreenState extends State<WarmupScreen> {
                   Container(
                     width: 26, height: 26,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFB800).withOpacity(0.15),
+                      color: const Color(0xFFFFB800).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Center(
@@ -164,7 +164,7 @@ class _WarmupScreenState extends State<WarmupScreen> {
                         Text(st.name, style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
                         Text(
                           '${st.durationLabel}${st.bothSides ? " × 2 стороны" : ""}',
-                          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6)),
+                          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
                         ),
                       ],
                     ),
@@ -194,11 +194,11 @@ class _WarmupScreenState extends State<WarmupScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(colors: [
-          const Color(0xFFFFB800).withOpacity(0.15),
-          const Color(0xFFFDCB6E).withOpacity(0.15),
+          const Color(0xFFFFB800).withValues(alpha: 0.15),
+          const Color(0xFFFDCB6E).withValues(alpha: 0.15),
         ]),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFFFB800).withOpacity(0.3)),
+        border: Border.all(color: const Color(0xFFFFB800).withValues(alpha: 0.3)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -246,7 +246,7 @@ class _WarmupScreenState extends State<WarmupScreen> {
               child: CircularProgressIndicator(
                 value: progress,
                 strokeWidth: 12,
-                backgroundColor: color.withOpacity(0.15),
+                backgroundColor: color.withValues(alpha: 0.15),
                 valueColor: AlwaysStoppedAnimation(color),
               ),
             ),

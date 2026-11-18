@@ -54,7 +54,7 @@ class CircleHeader extends StatelessWidget {
           gradient: LinearGradient(colors: gradientColors),
           borderRadius: BorderRadius.circular(10),
           boxShadow: [
-            BoxShadow(color: gradientColors.first.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4)),
+            BoxShadow(color: gradientColors.first.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 4)),
           ],
         ),
         child: Material(
@@ -90,7 +90,7 @@ class CircleHeader extends StatelessWidget {
                     icon: const Icon(Icons.done_all_rounded, size: 14, color: Colors.white),
                     label: const Text('Весь круг', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
                     style: TextButton.styleFrom(
-                      backgroundColor: Colors.white.withOpacity(0.2),
+                      backgroundColor: Colors.white.withValues(alpha: 0.2),
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
                       minimumSize: const Size(0, 28),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

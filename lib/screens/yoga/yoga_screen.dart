@@ -95,7 +95,7 @@ class _YogaScreenState extends State<YogaScreen> {
                       Text(
                         '${_sessions.length} практик для разных целей',
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.6),
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -126,7 +126,7 @@ class _YogaScreenState extends State<YogaScreen> {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF6C5CE7).withOpacity(0.3),
+              color: const Color(0xFF6C5CE7).withValues(alpha: 0.3),
               blurRadius: 16,
               offset: const Offset(0, 8),
             ),
@@ -138,7 +138,7 @@ class _YogaScreenState extends State<YogaScreen> {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: const Icon(
@@ -193,7 +193,7 @@ class _YogaScreenState extends State<YogaScreen> {
                 height: 52,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [color, color.withOpacity(0.6)],
+                    colors: [color, color.withValues(alpha: 0.6)],
                   ),
                   borderRadius: BorderRadius.circular(16),
                 ),
@@ -218,7 +218,7 @@ class _YogaScreenState extends State<YogaScreen> {
                     Text(
                       session.description,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withOpacity(0.6),
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -243,7 +243,7 @@ class _YogaScreenState extends State<YogaScreen> {
               ),
               Icon(
                 Icons.chevron_right_rounded,
-                color: theme.colorScheme.onSurface.withOpacity(0.4),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
               ),
             ],
           ),

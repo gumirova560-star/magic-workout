@@ -232,7 +232,7 @@ class _ReplaceExerciseScreenState extends State<ReplaceExerciseScreen> {
                 Expanded(
                   child: Text(
                     'Искать во всех группах мышц',
-                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.7)),
+                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
                   ),
                 ),
                 Switch(
@@ -265,7 +265,7 @@ class _ReplaceExerciseScreenState extends State<ReplaceExerciseScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Text(
                     _showAllMuscles ? 'Все упражнения' : 'Подходящие упражнения',
-                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.5), fontWeight: FontWeight.w600)
+                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.5), fontWeight: FontWeight.w600)
                 ),
               ),
               const Expanded(child: Divider()),
@@ -305,9 +305,9 @@ class _ReplaceExerciseScreenState extends State<ReplaceExerciseScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: theme.colorScheme.error.withOpacity(0.1),
+        color: theme.colorScheme.error.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.colorScheme.error.withOpacity(0.3)),
+        border: Border.all(color: theme.colorScheme.error.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -317,7 +317,7 @@ class _ReplaceExerciseScreenState extends State<ReplaceExerciseScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Меняем:', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6))),
+                Text('Меняем:', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
                 Text(widget.original.name, style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
               ],
             ),
@@ -345,7 +345,7 @@ class _ReplaceExerciseScreenState extends State<ReplaceExerciseScreen> {
                 height: 44,
                 decoration: BoxDecoration(
                   gradient: isRecommended ? const LinearGradient(colors: [Color(0xFF6C5CE7), Color(0xFFA29BFE)]) : null,
-                  color: isRecommended ? null : theme.colorScheme.primary.withOpacity(0.15),
+                  color: isRecommended ? null : theme.colorScheme.primary.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(isRecommended ? Icons.auto_awesome_rounded : Icons.fitness_center, color: isRecommended ? Colors.white : theme.colorScheme.primary, size: 22),
@@ -357,12 +357,12 @@ class _ReplaceExerciseScreenState extends State<ReplaceExerciseScreen> {
                   children: [
                     Text(exercise.name, style: theme.textTheme.headlineMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 2),
-                    Text(groups, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(groups, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6)), maxLines: 1, overflow: TextOverflow.ellipsis),
                     if (isRecommended) ...[
                       const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(color: theme.colorScheme.primary.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                        decoration: BoxDecoration(color: theme.colorScheme.primary.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
                         child: Text('Аналог', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: theme.colorScheme.primary)),
                       ),
                     ],
@@ -381,7 +381,7 @@ class _ReplaceExerciseScreenState extends State<ReplaceExerciseScreen> {
                 tooltip: 'Детали упражнения',
               ),
 
-              Icon(Icons.chevron_right_rounded, color: theme.colorScheme.onSurface.withOpacity(0.4)),
+              Icon(Icons.chevron_right_rounded, color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
             ],
           ),
         ),

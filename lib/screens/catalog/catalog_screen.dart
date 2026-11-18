@@ -25,36 +25,43 @@ class _CatalogScreenState extends State<CatalogScreen> {
   }
 
   Future<void> _loadExercises() async {
+    if (!mounted) return;
     setState(() => _loading = true);
+
     final exercises = await DatabaseHelper.instance.getExercises();
+
+    if (!mounted) return;
+
     setState(() {
       _allExercises = exercises;
-      _applyFilters();
+      _applyFiltersWithoutSetState();
       _loading = false;
     });
   }
 
   void _applyFilters() {
-    setState(() {
-      _filteredExercises = _allExercises.where((ex) {
-        final matchesSearch = ex.name
-            .toLowerCase()
-            .contains(_searchQuery.toLowerCase().trim());
-        if (!matchesSearch) return false;
+    setState(_applyFiltersWithoutSetState);
+  }
 
-        if (_selectedMuscle != 'all' &&
-            !ex.muscleGroups.contains(_selectedMuscle)) {
-          return false;
-        }
+  void _applyFiltersWithoutSetState() {
+    _filteredExercises = _allExercises.where((ex) {
+      final matchesSearch = ex.name
+          .toLowerCase()
+          .contains(_searchQuery.toLowerCase().trim());
+      if (!matchesSearch) return false;
 
-        if (_selectedEquipment != 'all' &&
-            !ex.equipment.contains(_selectedEquipment)) {
-          return false;
-        }
+      if (_selectedMuscle != 'all' &&
+          !ex.muscleGroups.contains(_selectedMuscle)) {
+        return false;
+      }
 
-        return true;
-      }).toList();
-    });
+      if (_selectedEquipment != 'all' &&
+          !ex.equipment.contains(_selectedEquipment)) {
+        return false;
+      }
+
+      return true;
+    }).toList();
   }
 
   @override
@@ -68,88 +75,88 @@ class _CatalogScreenState extends State<CatalogScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'Найти упражнение...',
+                prefixIcon: const Icon(Icons.search_rounded),
+                filled: true,
+                fillColor: theme.colorScheme.surface,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+              ),
+              onChanged: (val) {
+                _searchQuery = val;
+                _applyFilters();
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText: 'Найти упражнение...',
-                      prefixIcon: const Icon(Icons.search_rounded),
-                      filled: true,
-                      fillColor: theme.colorScheme.surface,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                    ),
-                    onChanged: (val) {
-                      _searchQuery = val;
-                      _applyFilters();
-                    },
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _showMusclePicker(context),
-                          icon: const Icon(Icons.fitness_center, size: 18),
-                          label: Text(
-                            _selectedMuscle == 'all'
-                                ? 'Все мышцы'
-                                : _muscleLabel(_selectedMuscle),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _showEquipmentPicker(context),
-                          icon: const Icon(Icons.construction_rounded, size: 18),
-                          label: Text(
-                            _selectedEquipment == 'all'
-                                ? 'Оборудование'
-                                : _equipmentLabel(_selectedEquipment),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
                 Expanded(
-                  child: _filteredExercises.isEmpty
-                      ? _buildEmptyState(theme)
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                          itemCount: _filteredExercises.length,
-                          itemBuilder: (context, i) {
-                            final ex = _filteredExercises[i];
-                            return _buildExerciseCard(context, ex);
-                          },
-                        ),
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showMusclePicker(context),
+                    icon: const Icon(Icons.fitness_center, size: 18),
+                    label: Text(
+                      _selectedMuscle == 'all'
+                          ? 'Все мышцы'
+                          : _muscleLabel(_selectedMuscle),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showEquipmentPicker(context),
+                    icon: const Icon(Icons.construction_rounded, size: 18),
+                    label: Text(
+                      _selectedEquipment == 'all'
+                          ? 'Оборудование'
+                          : _equipmentLabel(_selectedEquipment),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: _filteredExercises.isEmpty
+                ? _buildEmptyState(theme)
+                : ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+              itemCount: _filteredExercises.length,
+              itemBuilder: (context, i) {
+                final ex = _filteredExercises[i];
+                return _buildExerciseCard(context, ex);
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -169,7 +176,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
             final isSelected = _selectedMuscle == m;
             return ListTile(
               title: Text(m == 'all' ? 'Все мышцы' : _muscleLabel(m)),
-              trailing: isSelected ? const Icon(Icons.check_rounded, color: Colors.green) : null,
+              trailing:
+              isSelected ? const Icon(Icons.check_rounded, color: Colors.green) : null,
               onTap: () {
                 _selectedMuscle = m;
                 _applyFilters();
@@ -198,7 +206,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
             final isSelected = _selectedEquipment == e;
             return ListTile(
               title: Text(e == 'all' ? 'Всё оборудование' : _equipmentLabel(e)),
-              trailing: isSelected ? const Icon(Icons.check_rounded, color: Colors.green) : null,
+              trailing:
+              isSelected ? const Icon(Icons.check_rounded, color: Colors.green) : null,
               onTap: () {
                 _selectedEquipment = e;
                 _applyFilters();
@@ -253,7 +262,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 height: 44,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [color, color.withOpacity(0.6)],
+                    colors: [color, color.withValues(alpha: 0.6)],
                   ),
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -282,7 +291,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     Text(
                       ex.muscleGroups.map(_muscleLabel).join(' · '),
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withOpacity(0.6),
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -292,7 +301,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
               ),
               Icon(
                 Icons.chevron_right_rounded,
-                color: theme.colorScheme.onSurface.withOpacity(0.4),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
               ),
             ],
           ),
@@ -309,13 +318,13 @@ class _CatalogScreenState extends State<CatalogScreen> {
           Icon(
             Icons.search_off_rounded,
             size: 64,
-            color: theme.colorScheme.onSurface.withOpacity(0.2),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
           ),
           const SizedBox(height: 16),
           Text(
             'Ничего не найдено',
             style: theme.textTheme.headlineMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.5),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
             ),
           ),
         ],

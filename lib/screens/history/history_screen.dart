@@ -1,10 +1,7 @@
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:excel/excel.dart' hide Border; // 👈 Скрываем Border
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:cross_file/cross_file.dart';
 
 import '../../models/user_profile.dart';
 import '../../models/workout_day.dart';
@@ -73,8 +70,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
     setState(() {
       _filter = filter;
       List<WorkoutDay> filtered;
-      if (filter == 'all') filtered = _allHistory;
-      else if (filter == 'completed') filtered = _allHistory.where((w) => w.status == 'completed').toList();
+      if (filter == 'all') {
+        filtered = _allHistory;
+      } else if (filter == 'completed') filtered = _allHistory.where((w) => w.status == 'completed').toList();
       else filtered = _allHistory.where((w) => w.status == 'in_progress').toList();
 
       final Map<String, Map<int, List<WorkoutDay>>> grouped = {};
@@ -163,7 +161,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       margin: const EdgeInsets.only(bottom: 20),
       clipBehavior: Clip.antiAlias,
       elevation: 4,
-      shadowColor: const Color(0xFF6C5CE7).withOpacity(0.4),
+      shadowColor: const Color(0xFF6C5CE7).withValues(alpha: 0.4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
         decoration: const BoxDecoration(
@@ -180,7 +178,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             collapsedIconColor: Colors.white,
             leading: Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle),
               child: const Icon(Icons.fitness_center, color: Colors.white, size: 20),
             ),
             title: Text(
@@ -194,6 +192,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             initiallyExpanded: false,
             shape: const Border(),
             collapsedShape: const Border(),
+            childrenPadding: const EdgeInsets.only(bottom: 12),
             children: weeks.entries.map((wEntry) {
               final weekNum = wEntry.key;
               final days = wEntry.value;
@@ -205,7 +204,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 child: ExpansionTile(
                   title: Text('Неделя $weekNum', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF6C5CE7))),
-                  subtitle: Text('${days.length} тренировок', style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.6), fontSize: 12)),
+                  subtitle: Text('${days.length} тренировок', style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 12)),
                   initiallyExpanded: false,
                   shape: const Border(),
                   collapsedShape: const Border(),
@@ -215,7 +214,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ),
               );
             }).toList(),
-            childrenPadding: const EdgeInsets.only(bottom: 12),
           ),
         ),
       ),
@@ -233,7 +231,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       labelStyle: TextStyle(color: isActive ? Colors.white : theme.colorScheme.onSurface, fontWeight: FontWeight.w600),
       selectedColor: theme.colorScheme.primary,
       backgroundColor: theme.colorScheme.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: isActive ? Colors.transparent : theme.colorScheme.onSurface.withOpacity(0.2))),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: isActive ? Colors.transparent : theme.colorScheme.onSurface.withValues(alpha: 0.2))),
       showCheckmark: false,
     );
   }
@@ -249,15 +247,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryDetailScreen(workout: workout))),
       leading: Container(
         width: 36, height: 36,
-        decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
         child: Icon(icon, color: color, size: 18),
       ),
       title: Text(workout.name, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
       subtitle: Text(
         '${workout.date.day}.${workout.date.month}.${workout.date.year} · $statusText',
-        style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6)),
+        style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
       ),
-      trailing: Icon(Icons.chevron_right_rounded, color: theme.colorScheme.onSurface.withOpacity(0.4)),
+      trailing: Icon(Icons.chevron_right_rounded, color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
     );
   }
 
@@ -317,11 +315,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.history_rounded, size: 80, color: theme.colorScheme.primary.withOpacity(0.3)),
+            Icon(Icons.history_rounded, size: 80, color: theme.colorScheme.primary.withValues(alpha: 0.3)),
             const SizedBox(height: 24),
             Text('Пока нет тренировок', style: theme.textTheme.headlineMedium),
             const SizedBox(height: 8),
-            Text('Завершите первую тренировку,\nчтобы она появилась здесь.', textAlign: TextAlign.center, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6))),
+            Text('Завершите первую тренировку,\nчтобы она появилась здесь.', textAlign: TextAlign.center, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
           ],
         ),
       ),
@@ -337,11 +335,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.person_add_rounded, size: 80, color: theme.colorScheme.primary.withOpacity(0.5)),
+              Icon(Icons.person_add_rounded, size: 80, color: theme.colorScheme.primary.withValues(alpha: 0.5)),
               const SizedBox(height: 24),
               Text('Нет профиля', style: theme.textTheme.displaySmall),
               const SizedBox(height: 8),
-              Text('Создайте профиль во вкладке «Профиль»', textAlign: TextAlign.center, style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6))),
+              Text('Создайте профиль во вкладке «Профиль»', textAlign: TextAlign.center, style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
             ],
           ),
         ),

@@ -12,7 +12,6 @@ import '../models/stretch.dart';
 import '../models/yoga_session.dart';
 import '../models/workout_template.dart';
 import '../models/workout_day.dart';
-import '../models/replacement_log.dart';
 import '../models/transformation_photo.dart';
 
 class DatabaseHelper {
@@ -1053,6 +1052,17 @@ await db.delete('workout_days', where: 'profileId = ?', whereArgs: [profileId]);
   Future<void> close() async {
     final db = await instance.database;
     await db.close();
+  }
+
+  /// Сброс соединения — для изоляции тестов.
+  /// Тесты вызывают его перед каждым тестом, чтобы каждый начинался
+  /// с чистой базы, а не с той, что осталась от предыдущего.
+  Future<void> resetForTest() async {
+    final db = _database;
+    if (db != null) {
+      await db.close();
+      _database = null;
+    }
   }
 }
 // ═══ КОНЕЦ ЧАСТИ 3 ═══

@@ -221,7 +221,7 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
     final granted = await ChallengeService.tryAwardReward(
       profileId: widget.profileId,
       challengeId: widget.challenge.id!,
-      isLegendary: isUpgraded, // 👈 Передаем флаг легенды
+      isLegendary: isUpgraded,
     );
     if (!mounted) return;
     _showCompletionDialog(granted, isUpgraded: isUpgraded);
@@ -231,7 +231,7 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
     final granted = await ChallengeService.tryAwardReward(
       profileId: widget.profileId,
       challengeId: widget.challenge.id!,
-      isLegendary: true, // 👈 Всегда легенда
+      isLegendary: true,
     );
     if (!mounted) return;
     _showLegendDialog(granted);
@@ -323,8 +323,8 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
         content: Text(
           granted
               ? (isUpgraded
-              ? 'Ты набрал ${_formatTime(_targetSeconds)} планки за день!$attemptsLine$upgradedHint\n\n🌟 В твоем Саду Феи расцвел ЗОЛОТОЙ цветок! Загляни туда, чтобы полюбоваться.'
-              : 'Ты набрал ${_formatTime(_targetSeconds)} планки за день!$attemptsLine$upgradedHint\n\n🌸 В твоем Саду Феи расцвел новый цветок! Загляни туда, чтобы полюбоваться.')
+              ? 'Ты набрал ${_formatTime(_targetSeconds)} планки за день!$attemptsLine$upgradedHint\n\n🌟 В твоем Саду Феи расцвел ЗОЛОТОЙ цветок!\n⚡️ Начислено +15 энергии!'
+              : 'Ты набрал ${_formatTime(_targetSeconds)} планки за день!$attemptsLine$upgradedHint\n\n🌸 В твоем Саду Феи расцвел новый цветок!\n⚡️ Начислено +15 энергии!')
               : 'Ты уже получал награду за этот челлендж. Но всё равно молодец!',
           textAlign: TextAlign.center,
         ),
@@ -359,7 +359,7 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
             const SizedBox(height: 20),
             Text(
               granted
-                  ? 'Ты поднял планку на новый уровень!\n\n🌟 В твоем Саду Феи расцвел ЗОЛОТОЙ цветок!\n\n🔥 Следующая цель: ${_formatTime(_targetSeconds + _upgradeBonusSeconds)}'
+                  ? 'Ты поднял планку на новый уровень!\n\n🌟 В твоем Саду Феи расцвел ЗОЛОТОЙ цветок!\n⚡️ Начислено +15 энергии!\n\n🔥 Следующая цель: ${_formatTime(_targetSeconds + _upgradeBonusSeconds)}'
                   : 'Награда уже была получена ранее.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: granted ? const Color(0xFF00B894) : Colors.grey),
@@ -460,7 +460,7 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
                 width: 240, height: 240,
                 child: CircularProgressIndicator(
                   value: _isCompleted ? 1.0 : _progress, strokeWidth: 14,
-                  backgroundColor: accent.withOpacity(0.15), valueColor: AlwaysStoppedAnimation(accent),
+                  backgroundColor: accent.withValues(alpha: 0.15), valueColor: AlwaysStoppedAnimation(accent),
                 ),
               ),
               Column(
@@ -468,7 +468,7 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
                 children: [
                   Text(_formatTime(secondsToShow), style: TextStyle(fontSize: 52, fontWeight: FontWeight.w800, color: accent, height: 1)),
                   const SizedBox(height: 4),
-                  Text('из ${_formatTime(_targetSeconds)}', style: TextStyle(fontSize: 14, color: accent.withOpacity(0.7))),
+                  Text('из ${_formatTime(_targetSeconds)}', style: TextStyle(fontSize: 14, color: accent.withValues(alpha: 0.7))),
                 ],
               ),
             ],
@@ -525,7 +525,7 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
     if (_isCompleted) {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 32),
-        decoration: BoxDecoration(color: const Color(0xFF00B894).withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
+        decoration: BoxDecoration(color: const Color(0xFF00B894).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
         child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -566,7 +566,7 @@ class _TimerChallengeScreenState extends State<TimerChallengeScreen> with Widget
   Widget _buildCheckOverlay() {
     return Positioned.fill(
       child: Container(
-        color: Colors.black.withOpacity(0.85),
+        color: Colors.black.withValues(alpha: 0.85),
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,

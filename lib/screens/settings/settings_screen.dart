@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/database_helper.dart';
 import '../../services/theme_service.dart';
 import '../achievements/achievements_screen.dart';
@@ -117,7 +116,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                 leading: Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: theme.colorScheme.primary.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                  decoration: BoxDecoration(color: theme.colorScheme.primary.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
                   child: Icon(Icons.person_rounded, color: theme.colorScheme.primary, size: 20),
                 ),
                 title: const Text('Мой профиль'),
@@ -152,7 +151,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               ListTile(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFFFFB800).withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFB800), size: 20)),
+                leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFFFFB800).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFB800), size: 20)),
                 title: const Text('Мои достижения'),
                 subtitle: const Text('Посмотреть заработанные бейджи'),
                 trailing: const Icon(Icons.chevron_right_rounded),
@@ -170,7 +169,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               ListTile(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFFFDCB6E).withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.history_rounded, color: Color(0xFFFDCB6E), size: 20)),
+                leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFFFDCB6E).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.history_rounded, color: Color(0xFFFDCB6E), size: 20)),
                 title: const Text('Очистить историю'),
                 subtitle: const Text('Удалить завершённые тренировки'),
                 trailing: const Icon(Icons.chevron_right_rounded),
@@ -179,7 +178,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const Divider(height: 1),
               ListTile(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: theme.colorScheme.error.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: Icon(Icons.delete_forever_rounded, color: theme.colorScheme.error, size: 20)),
+                leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: theme.colorScheme.error.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)), child: Icon(Icons.delete_forever_rounded, color: theme.colorScheme.error, size: 20)),
                 title: const Text('Удалить профиль'),
                 subtitle: const Text('Удалить профиль и все данные'),
                 trailing: const Icon(Icons.chevron_right_rounded),
@@ -197,7 +196,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               ListTile(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: theme.colorScheme.primary.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: Icon(Icons.info_outline_rounded, color: theme.colorScheme.primary, size: 20)),
+                leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: theme.colorScheme.primary.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)), child: Icon(Icons.info_outline_rounded, color: theme.colorScheme.primary, size: 20)),
                 title: const Text('О приложении'),
                 subtitle: const Text('Версия 1.0.0'),
                 trailing: const Icon(Icons.chevron_right_rounded),
@@ -213,7 +212,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 Text('Magic Workout', style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700, color: theme.colorScheme.primary)),
                 const SizedBox(height: 4),
-                Text('Версия 1.0.0', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.5))),
+                Text('Версия 1.0.0', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
               ],
             ),
           ),
@@ -227,7 +226,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _sectionTitle(BuildContext context, String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8, left: 4),
-      child: Text(text.toUpperCase(), style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 1, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6))),
+      child: Text(text.toUpperCase(), style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 1, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
     );
   }
 

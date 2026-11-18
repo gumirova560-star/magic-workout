@@ -74,7 +74,7 @@ class _ExercisePickerScreenState extends State<ExercisePickerScreen> {
               onChanged: (v) => setState(() => _searchQuery = v),
               decoration: InputDecoration(
                 hintText: 'Поиск упражнения...',
-                hintStyle: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.4)),
+                hintStyle: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
                 prefixIcon: Icon(Icons.search_rounded, color: theme.colorScheme.primary),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
@@ -86,7 +86,7 @@ class _ExercisePickerScreenState extends State<ExercisePickerScreen> {
                 )
                     : null,
                 filled: true,
-                fillColor: theme.colorScheme.primary.withOpacity(0.05),
+                fillColor: theme.colorScheme.primary.withValues(alpha: 0.05),
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
                     borderSide: BorderSide.none
@@ -101,7 +101,7 @@ class _ExercisePickerScreenState extends State<ExercisePickerScreen> {
                 ? Center(
               child: Text(
                   'Ничего не найдено',
-                  style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.5))
+                  style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.5))
               ),
             )
                 : ListView.builder(

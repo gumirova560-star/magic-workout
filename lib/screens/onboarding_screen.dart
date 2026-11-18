@@ -113,7 +113,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   decoration: BoxDecoration(
                     color: _currentPage == i
                         ? theme.colorScheme.primary
-                        : theme.colorScheme.primary.withOpacity(0.3),
+                        : theme.colorScheme.primary.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -151,37 +151,55 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   Widget _buildPage(BuildContext context, Map<String, String> page) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // ═══ Живая фея без круга ═══
-          SizedBox(
-            width: 220,
-            height: 220,
-            child: _buildLiveFairy(),
-          ),
-          const SizedBox(height: 32),
 
-          // Заголовок
-          Text(
-            page['title'] ?? '',
-            style: theme.textTheme.displaySmall,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Фея ужимается на маленьких экранах: не больше трети высоты,
+        // но не меньше 120 (иначе исчезнет совсем на крошечных окнах).
+        final fairySize = (constraints.maxHeight / 3).clamp(120.0, 220.0);
 
-          // Текст
-          Text(
-            page['text'] ?? '',
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.7),
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            // Минимум высоты родителя — чтобы на больших экранах
+            // контент остался по центру, как раньше.
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: IntrinsicHeight(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: fairySize,
+                      height: fairySize,
+                      child: _buildLiveFairy(),
+                    ),
+                    const SizedBox(height: 32),
+
+                    // Заголовок
+                    Text(
+                      page['title'] ?? '',
+                      style: theme.textTheme.displaySmall,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Текст
+                    Text(
+                      page['text'] ?? '',
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: theme.colorScheme.onSurface
+                            .withValues(alpha: 0.7),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
             ),
-            textAlign: TextAlign.center,
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

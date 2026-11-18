@@ -259,9 +259,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.3)),
+                border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -280,7 +280,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                   ),
                   if (_focusAutoFilled) ...[
                     const SizedBox(height: 6),
-                    Text('Зоны подобраны по типу фигуры «${_getBodyTypeLabel(_bodyType)}». Ты можешь их подтвердить или выбрать вручную.', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.primary.withOpacity(0.8))),
+                    Text('Зоны подобраны по типу фигуры «${_getBodyTypeLabel(_bodyType)}». Ты можешь их подтвердить или выбрать вручную.', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8))),
                     const SizedBox(height: 8),
                     Row(
                       children: [
@@ -445,13 +445,13 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isSelected ? theme.colorScheme.primary.withOpacity(0.12) : theme.colorScheme.surface,
-              border: Border.all(color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.1), width: isSelected ? 2 : 1),
+              color: isSelected ? theme.colorScheme.primary.withValues(alpha: 0.12) : theme.colorScheme.surface,
+              border: Border.all(color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.1), width: isSelected ? 2 : 1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
               children: [
-                Icon(isSelected ? Icons.check_circle : Icons.circle_outlined, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.4)),
+                Icon(isSelected ? Icons.check_circle : Icons.circle_outlined, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.4)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -459,7 +459,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                     children: [
                       Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface)),
                       const SizedBox(height: 2),
-                      Text(desc, style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface.withOpacity(0.6))),
+                      Text(desc, style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
                     ],
                   ),
                 ),
@@ -485,13 +485,13 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: isSelected ? theme.colorScheme.primary.withOpacity(0.15) : theme.colorScheme.surface,
-          border: Border.all(color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.15), width: isSelected ? 2 : 1),
+          color: isSelected ? theme.colorScheme.primary.withValues(alpha: 0.15) : theme.colorScheme.surface,
+          border: Border.all(color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.15), width: isSelected ? 2 : 1),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
           children: [
-            Icon(icon, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.6)),
+            Icon(icon, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.6)),
             const SizedBox(height: 4),
             Text(label, style: TextStyle(fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface)),
           ],
@@ -525,7 +525,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                   onChanged: onTextChanged,
                 ),
               ),
-              Text(unit, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6))),
+              Text(unit, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
             ],
           ),
           Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged),
@@ -564,13 +564,13 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: isSelected ? theme.colorScheme.primary.withOpacity(0.12) : theme.colorScheme.surface,
-              border: Border.all(color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.1), width: isSelected ? 2 : 1),
+              color: isSelected ? theme.colorScheme.primary.withValues(alpha: 0.12) : theme.colorScheme.surface,
+              border: Border.all(color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.1), width: isSelected ? 2 : 1),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Row(
               children: [
-                Icon(icon, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.6)),
+                Icon(icon, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.6)),
                 const SizedBox(width: 12),
                 Text(label, style: TextStyle(fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface)),
                 const Spacer(),

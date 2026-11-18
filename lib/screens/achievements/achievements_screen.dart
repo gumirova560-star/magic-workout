@@ -52,13 +52,13 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: isUnlocked
-                        ? theme.colorScheme.primary.withOpacity(0.1)
+                        ? theme.colorScheme.primary.withValues(alpha: 0.1)
                         : theme.colorScheme.surface,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: isUnlocked
-                          ? theme.colorScheme.primary.withOpacity(0.5)
-                          : theme.colorScheme.onSurface.withOpacity(0.1),
+                          ? theme.colorScheme.primary.withValues(alpha: 0.5)
+                          : theme.colorScheme.onSurface.withValues(alpha: 0.1),
                       width: 2,
                     ),
                   ),
@@ -69,7 +69,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                         ach.icon,
                         style: TextStyle(
                           fontSize: 48,
-                          color: isUnlocked ? null : Colors.grey.withOpacity(0.3),
+                          color: isUnlocked ? null : Colors.grey.withValues(alpha: 0.3),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -80,7 +80,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                           fontSize: 14,
                           color: isUnlocked
                               ? theme.colorScheme.onSurface
-                              : theme.colorScheme.onSurface.withOpacity(0.4),
+                              : theme.colorScheme.onSurface.withValues(alpha: 0.4),
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -89,7 +89,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodySmall?.copyWith(
                           fontSize: 10,
-                          color: theme.colorScheme.onSurface.withOpacity(0.5),
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                         ),
                       ),
                     ],

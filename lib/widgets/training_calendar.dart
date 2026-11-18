@@ -210,8 +210,8 @@ class _TrainingCalendarState extends State<TrainingCalendar> {
           const SizedBox(height: 12),
 
           // ═══ Дни недели ═══
-          Row(
-            children: const [
+          const Row(
+            children: [
               _WeekdayLabel('Пн'),
               _WeekdayLabel('Вт'),
               _WeekdayLabel('Ср'),
@@ -238,13 +238,13 @@ class _TrainingCalendarState extends State<TrainingCalendar> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _LegendDot(
-                color: const Color(0xFF00B894),
+              const _LegendDot(
+                color: Color(0xFF00B894),
                 label: 'Завершена',
               ),
               const SizedBox(width: 16),
-              _LegendDot(
-                color: const Color(0xFFFDCB6E),
+              const _LegendDot(
+                color: Color(0xFFFDCB6E),
                 label: 'В процессе',
               ),
               const SizedBox(width: 16),
@@ -282,7 +282,7 @@ class _TrainingCalendarState extends State<TrainingCalendar> {
       child: Container(
         decoration: BoxDecoration(
           color: isToday
-              ? theme.colorScheme.primary.withOpacity(0.1)
+              ? theme.colorScheme.primary.withValues(alpha: 0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: isToday
@@ -343,7 +343,7 @@ class _WeekdayLabel extends StatelessWidget {
           style: theme.textTheme.bodySmall?.copyWith(
             fontSize: 11,
             fontWeight: FontWeight.w700,
-            color: theme.colorScheme.onSurface.withOpacity(0.5),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
           ),
         ),
       ),
@@ -387,7 +387,7 @@ class _LegendDot extends StatelessWidget {
           label,
           style: theme.textTheme.bodySmall?.copyWith(
             fontSize: 10,
-            color: theme.colorScheme.onSurface.withOpacity(0.6),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
           ),
         ),
       ],

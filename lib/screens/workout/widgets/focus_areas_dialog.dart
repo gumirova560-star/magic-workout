@@ -86,7 +86,7 @@ class _FocusAreasDialogState extends State<FocusAreasDialog> {
             Text(
               'Выберите до ${widget.maxCount} зон, на которые сделать упор.',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.6),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
             const SizedBox(height: 16),
@@ -128,7 +128,7 @@ class _FocusAreasDialogState extends State<FocusAreasDialog> {
                               );
                             }
                           : (_) => _toggle(tag),
-                      selectedColor: theme.colorScheme.primary.withOpacity(0.2),
+                      selectedColor: theme.colorScheme.primary.withValues(alpha: 0.2),
                       checkmarkColor: theme.colorScheme.primary,
                       labelStyle: TextStyle(
                         color: isDisabled

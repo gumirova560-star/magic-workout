@@ -81,8 +81,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
                           colors: [Color(0xFF6C5CE7), Color(0xFFA29BFE)],
                         ),
                       ),
@@ -175,7 +175,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                   height: 32,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withOpacity(0.1),
+                    color: theme.colorScheme.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
@@ -200,7 +200,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                         '${stretch.durationLabel}${stretch.bothSides ? " · 2 стороны" : ""}',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurface
-                              .withOpacity(0.6),
+                              .withValues(alpha: 0.6),
                         ),
                       ),
                     ],
@@ -227,7 +227,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
               style: OutlinedButton.styleFrom(
                 foregroundColor: theme.colorScheme.primary,
                 side: BorderSide(
-                  color: theme.colorScheme.primary.withOpacity(0.3),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.3),
                 ),
                 padding: const EdgeInsets.symmetric(
                     horizontal: 12, vertical: 8),
@@ -244,7 +244,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.08),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
@@ -285,7 +285,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             Icon(
               Icons.self_improvement_rounded,
               size: 80,
-              color: theme.colorScheme.primary.withOpacity(0.4),
+              color: theme.colorScheme.primary.withValues(alpha: 0.4),
             ),
             const SizedBox(height: 16),
             Text('Сессия пуста',
@@ -295,7 +295,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
               'В этой практике ещё нет упражнений',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.6),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
           ],

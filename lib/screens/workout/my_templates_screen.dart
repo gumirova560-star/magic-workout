@@ -158,7 +158,7 @@ class _MyTemplatesScreenState extends State<MyTemplatesScreen> {
                   Icon(
                     Icons.bookmark_border_rounded,
                     size: 80,
-                    color: theme.colorScheme.primary.withOpacity(0.4),
+                    color: theme.colorScheme.primary.withValues(alpha: 0.4),
                   ),
                   const SizedBox(height: 20),
                   Text(
@@ -171,7 +171,7 @@ class _MyTemplatesScreenState extends State<MyTemplatesScreen> {
                     '«Сохранить как шаблон» — она появится здесь.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurface.withOpacity(0.6),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                     ),
                   ),
                 ],
@@ -210,7 +210,7 @@ class _MyTemplatesScreenState extends State<MyTemplatesScreen> {
           Text(
             '${_templates.length} ${_plural(_templates.length)}',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.6),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
         ],
@@ -274,7 +274,7 @@ class _MyTemplatesScreenState extends State<MyTemplatesScreen> {
                       '${template.typeLabel}',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color:
-                            theme.colorScheme.onSurface.withOpacity(0.6),
+                            theme.colorScheme.onSurface.withValues(alpha: 0.6),
                       ),
                     ),
                   ],
@@ -285,7 +285,7 @@ class _MyTemplatesScreenState extends State<MyTemplatesScreen> {
                 onPressed: () => _deleteTemplate(template),
                 icon: Icon(
                   Icons.delete_outline_rounded,
-                  color: theme.colorScheme.error.withOpacity(0.7),
+                  color: theme.colorScheme.error.withValues(alpha: 0.7),
                 ),
                 tooltip: 'Удалить шаблон',
               ),

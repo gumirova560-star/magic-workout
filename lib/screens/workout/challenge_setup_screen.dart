@@ -354,7 +354,7 @@ class _ChallengeSetupScreenState extends State<ChallengeSetupScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFB800).withOpacity(0.1),
+              color: const Color(0xFFFFB800).withValues(alpha: 0.1),
               border: const Border(bottom: BorderSide(color: Color(0xFFFFB800), width: 2)),
             ),
             child: Row(
@@ -381,7 +381,7 @@ class _ChallengeSetupScreenState extends State<ChallengeSetupScreen> {
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    side: BorderSide(color: theme.colorScheme.primary.withOpacity(0.3)),
+                    side: BorderSide(color: theme.colorScheme.primary.withValues(alpha: 0.3)),
                     foregroundColor: theme.colorScheme.primary,
                   ),
                 ),
@@ -426,7 +426,7 @@ class _ChallengeSetupScreenState extends State<ChallengeSetupScreen> {
                       }),
                     ],
                   );
-                }).toList(),
+                }),
               ],
             ),
           ),

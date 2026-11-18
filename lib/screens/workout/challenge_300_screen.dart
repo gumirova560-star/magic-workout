@@ -2,8 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/workout_day.dart';
 import '../../models/exercise.dart';
-import '../../models/user_profile.dart';
 import '../../services/database_helper.dart';
+import '../../services/energy_service.dart';    // 👈 ДОБАВЛЕНО
+import '../../services/garden_service.dart';   // 👈 ДОБАВЛЕНО
 import 'workout_complete_screen.dart';
 
 class Challenge300Screen extends StatefulWidget {
@@ -86,15 +87,32 @@ class _Challenge300ScreenState extends State<Challenge300Screen> {
 
     final profile = await DatabaseHelper.instance.getProfileById(widget.profileId);
 
-    // 👇 МЫ БОЛЬШЕ НЕ УДАЛЯЕМ И НЕ ГЕНЕРИРУЕМ ИЗОЛЯЦИИ.
-    // Они уже были сгенерированы в ChallengeSetupScreen и ждут своего часа.
-
     final updated = widget.day.copyWith(
       status: 'completed',
       completedAt: DateTime.now(),
       durationMinutes: _secondsElapsed > 0 ? (_secondsElapsed / 60).ceil() : 1,
     );
     await DatabaseHelper.instance.updateWorkoutDay(updated);
+
+    // ══════════════════════════════════════════════════════════════════
+    // 👇 НАГРАДА ЗА ЧЕЛЛЕНДЖ: 60⚡ + золотой лотос
+    // UNIQUE(profileId, reason, refId) не даст выдать повторно
+    // ══════════════════════════════════════════════════════════════════
+    final awarded = await EnergyService.addEnergy(
+      profileId: widget.profileId,
+      delta: 60,
+      reason: 'challenge_day_reward',
+      refId: widget.day.id,
+    );
+    if (awarded) {
+      await GardenService.plantNextFlower(
+        profileId: widget.profileId,
+        flowerType: 'legendary',
+      );
+    }
+    // ══════════════════════════════════════════════════════════════════
+    // 👆 КОНЕЦ БЛОКА НАГРАДЫ
+    // ══════════════════════════════════════════════════════════════════
 
     if (!mounted) return;
 
@@ -146,7 +164,7 @@ class _Challenge300ScreenState extends State<Challenge300Screen> {
             Text(
               'Тебе нужно выполнить ${widget.items.length} упражнения по 100 раз. Никаких подходов и весов — просто сделай это!',
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.7)),
+              style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
             ),
             const SizedBox(height: 40),
             SizedBox(
@@ -180,7 +198,7 @@ class _Challenge300ScreenState extends State<Challenge300Screen> {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: const Color(0xFFFFB800).withOpacity(0.1),
+            color: const Color(0xFFFFB800).withValues(alpha: 0.1),
             border: const Border(bottom: BorderSide(color: Color(0xFFFFB800), width: 2)),
           ),
           child: Center(
@@ -229,7 +247,7 @@ class _Challenge300ScreenState extends State<Challenge300Screen> {
                                 child: CircularProgressIndicator(
                                   value: progress,
                                   strokeWidth: 12,
-                                  backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+                                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
                                   valueColor: AlwaysStoppedAnimation(
                                     remaining == 0 ? const Color(0xFF00B894) : const Color(0xFFFFB800),
                                   ),
@@ -250,7 +268,7 @@ class _Challenge300ScreenState extends State<Challenge300Screen> {
                                     Text(
                                       'осталось $unit',
                                       style: theme.textTheme.bodySmall?.copyWith(
-                                        color: theme.colorScheme.onSurface.withOpacity(0.5),
+                                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
@@ -279,7 +297,7 @@ class _Challenge300ScreenState extends State<Challenge300Screen> {
                     ),
                   ),
                 );
-              }).toList(),
+              }),
               const SizedBox(height: 30),
             ],
           ),
@@ -302,3 +320,4 @@ class _Challenge300ScreenState extends State<Challenge300Screen> {
     );
   }
 }
+// ⏸ КОНЕЦ ФАЙЛА challenge_300_screen.dart

@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'database_helper.dart';
 import '../models/workout_day.dart';
 import '../models/exercise.dart';
@@ -209,8 +208,9 @@ class WeekAnalyzer {
         for (final s in await db.getWorkoutSets(we.id!)) { totalSets++; if (s.completed) doneSets++; }
       }
       if (totalSets == 0) continue;
-      if (doneSets == totalSets) fullyDone.add(day.templateId!);
-      else if (doneSets > 0) partial.add(day.templateId!);
+      if (doneSets == totalSets) {
+        fullyDone.add(day.templateId!);
+      } else if (doneSets > 0) partial.add(day.templateId!);
     }
     partial.removeAll(fullyDone);
     return (fullyDone: fullyDone, partial: partial);
@@ -296,8 +296,9 @@ class WeekAnalyzer {
       } else {
         final diff = avg3 - avg1;
         final threshold = hasWeight ? 1.0 : 1.5;
-        if (diff >= threshold) dir = TrendDirection.up;
-        else if (diff <= -threshold) dir = TrendDirection.down;
+        if (diff >= threshold) {
+          dir = TrendDirection.up;
+        } else if (diff <= -threshold) dir = TrendDirection.down;
         else dir = TrendDirection.stagnation;
       }
 

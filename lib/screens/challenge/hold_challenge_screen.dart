@@ -26,6 +26,7 @@ class _HoldChallengeScreenState extends State<HoldChallengeScreen> {
   bool _isLegendPhase = false;
   bool _isHolding = false;
   int _lastAttemptSeconds = 0;
+  int _legendStartSeconds = 0; // С какого времени начался легендарный заход
 
   final Stopwatch _stopwatch = Stopwatch();
   Timer? _ticker;
@@ -39,6 +40,7 @@ class _HoldChallengeScreenState extends State<HoldChallengeScreen> {
     final cfg = kDailyChallenges.firstWhere((c) => c.id == widget.challenge.taskId);
     if (_targetSeconds > cfg.baseTarget) {
       _isLegendPhase = true;
+      _legendStartSeconds = cfg.baseTarget;
     }
   }
 
@@ -59,7 +61,9 @@ class _HoldChallengeScreenState extends State<HoldChallengeScreen> {
   }
 
   int get _currentAttemptSeconds => _stopwatch.elapsed.inSeconds;
-  int get _displaySeconds => _currentAttemptSeconds;
+
+  // В легенде показываем 30..60, в базе 0..30
+  int get _displaySeconds => _isLegendPhase ? (_legendStartSeconds + _currentAttemptSeconds) : _currentAttemptSeconds;
   double get _progress => (_displaySeconds / _targetSeconds).clamp(0.0, 1.0);
 
   void _onPointerDown(PointerDownEvent _) {
@@ -73,7 +77,7 @@ class _HoldChallengeScreenState extends State<HoldChallengeScreen> {
     _ticker = Timer.periodic(const Duration(milliseconds: 100), (_) {
       if (!mounted) return;
       setState(() {});
-      if (_currentAttemptSeconds >= _targetSeconds) _completeChallenge();
+      if (_displaySeconds >= _targetSeconds) _completeChallenge();
     });
   }
 
@@ -85,10 +89,10 @@ class _HoldChallengeScreenState extends State<HoldChallengeScreen> {
     _stopwatch.stop();
     _ticker?.cancel();
 
-    final reached = _currentAttemptSeconds;
+    final reached = _displaySeconds;
     setState(() {
       _isHolding = false;
-      _lastAttemptSeconds = reached;
+      _lastAttemptSeconds = _currentAttemptSeconds;
     });
     _stopwatch.reset();
 
@@ -96,8 +100,10 @@ class _HoldChallengeScreenState extends State<HoldChallengeScreen> {
       HapticFeedback.heavyImpact();
 
       if (_isLegendPhase) {
+        // Отпустил в легенде - даем новый цветок
         _awardNormalAndFinish();
       } else {
+        // Базовая фаза - просто сброс
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -157,7 +163,7 @@ class _HoldChallengeScreenState extends State<HoldChallengeScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Новая цель: $newTarget секунд без перерыва.\nЕсли выдержишь — 🌟 ЗОЛОТОЙ ЦВЕТОК!\nЕсли отпустишь — обычный.',
+              'Новая цель: $newTarget секунд.\nЕсли выдержишь — 🌟 ЗОЛОТОЙ ЦВЕТОК!\nЕсли отпустишь — просто новый.',
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 13, height: 1.4),
             ),
@@ -199,7 +205,8 @@ class _HoldChallengeScreenState extends State<HoldChallengeScreen> {
       if (!mounted) return;
       setState(() {
         _isLegendPhase = true;
-        _targetSeconds = newTarget;
+        _legendStartSeconds = _targetSeconds; // Например, 30
+        _targetSeconds = newTarget; // 60
         _isCompleted = false;
         _lastAttemptSeconds = 0;
       });
@@ -245,11 +252,11 @@ class _HoldChallengeScreenState extends State<HoldChallengeScreen> {
     String message;
     if (granted) {
       if (isGold) {
-        message = 'Ты продержался $_targetSeconds секунд без перерыва!\n\n🌟 В твоем Саду Феи расцвел ЗОЛОТОЙ цветок! Загляни туда, чтобы полюбоваться.';
+        message = 'Ты продержался $_targetSeconds секунд без перерыва!\n\n🌟 В твоем Саду Феи расцвел ЗОЛОТОЙ цветок!\n⚡️ Начислено +15 энергии!';
       } else if (wasLegendAttempt) {
-        message = 'Ты не достоял до $_targetSeconds секунд в легенде, но всё равно молодец!\n\n🌸 В твоем Саду Феи расцвел обычный цветок.';
+        message = 'Ты не достоял до $_targetSeconds секунд в легенде, но базовую цель выполнил!\n\n🌸 В твоем Саду Феи расцвел новый цветок.\n⚡️ Начислено +15 энергии!';
       } else {
-        message = 'Ты продержался $_targetSeconds секунд!\n\n🌸 В твоем Саду Феи расцвел новый цветок! Загляни туда, чтобы полюбоваться.';
+        message = 'Ты продержался $_targetSeconds секунд!\n\n🌸 В твоем Саду Феи расцвел новый цветок!\n⚡️ Начислено +15 энергии!';
       }
     } else {
       message = 'Ты уже получал награду за этот челлендж. Но всё равно молодец!';
@@ -318,7 +325,7 @@ class _HoldChallengeScreenState extends State<HoldChallengeScreen> {
             width: 220, height: 220,
             child: CircularProgressIndicator(
               value: _isCompleted ? 1.0 : _progress, strokeWidth: 12,
-              backgroundColor: accent.withOpacity(0.15), valueColor: AlwaysStoppedAnimation(accent),
+              backgroundColor: accent.withValues(alpha: 0.15), valueColor: AlwaysStoppedAnimation(accent),
             ),
           ),
           Column(
@@ -326,7 +333,7 @@ class _HoldChallengeScreenState extends State<HoldChallengeScreen> {
             children: [
               Text('$secondsToShow', style: TextStyle(fontSize: 64, fontWeight: FontWeight.w800, color: accent, height: 1)),
               const SizedBox(height: 4),
-              Text('из $_targetSeconds сек', style: TextStyle(fontSize: 14, color: accent.withOpacity(0.7))),
+              Text('из $_targetSeconds сек', style: TextStyle(fontSize: 14, color: accent.withValues(alpha: 0.7))),
             ],
           ),
         ],
@@ -339,7 +346,7 @@ class _HoldChallengeScreenState extends State<HoldChallengeScreen> {
 
     if (_isHolding) {
       if (_isLegendPhase) {
-        final needMore = _targetSeconds - _currentAttemptSeconds;
+        final needMore = _targetSeconds - _displaySeconds;
         return Text(
           'Держи! Осталось $needMore сек до золота 🌟',
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFFE17055)),
@@ -355,7 +362,7 @@ class _HoldChallengeScreenState extends State<HoldChallengeScreen> {
           const Text('🔥 Режим легенды', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFFE17055))),
           const SizedBox(height: 8),
           Text(
-            'Достой $_targetSeconds секунд без перерыва.\nЕсли отпустишь — получишь обычный цветок.',
+            'Достой $_targetSeconds секунд без перерыва.\nЕсли отпустишь — получишь новый цветок.',
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 14, color: Colors.grey, height: 1.4),
           ),
@@ -392,10 +399,10 @@ class _HoldChallengeScreenState extends State<HoldChallengeScreen> {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 32),
         decoration: BoxDecoration(
-          color: _isHolding ? accent.withOpacity(0.9) : _isCompleted ? accent.withOpacity(0.15) : accent.withOpacity(0.08),
+          color: _isHolding ? accent.withValues(alpha: 0.9) : _isCompleted ? accent.withValues(alpha: 0.15) : accent.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: accent, width: _isHolding ? 3 : 2),
-          boxShadow: _isHolding ? [BoxShadow(color: accent.withOpacity(0.4), blurRadius: 24, offset: const Offset(0, 8))] : null,
+          boxShadow: _isHolding ? [BoxShadow(color: accent.withValues(alpha: 0.4), blurRadius: 24, offset: const Offset(0, 8))] : null,
         ),
         child: Column(
           children: [

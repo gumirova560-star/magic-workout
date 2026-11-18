@@ -5,7 +5,8 @@ import 'energy_service.dart';
 class GardenService {
   static const String currentPattern = 'free_sandbox';
 
-  static const int gridColumns = 30;
+  // 👇 СЕТКА УВЕЛИЧЕНА ДО 20x40 (800 клеток)
+  static const int gridColumns = 20;
   static const int gridRows = 40;
   static const int totalGridCells = gridColumns * gridRows;
 
@@ -18,14 +19,14 @@ class GardenService {
     );
   }
 
-  // 👇 ЦВЕТОК САЖАЕТСЯ В ЦЕНТР (по спирали). Принимает тип цветка.
   static Future<bool> plantNextFlower({required int profileId, String flowerType = 'normal'}) async {
     final db = await DatabaseHelper.instance.database;
     final existing = await getGarden(profileId);
     final existingSlots = existing.map((e) => e['slotIndex'] as int).toSet();
 
-    final centerCol = gridColumns ~/ 2;
-    final centerRow = gridRows ~/ 2;
+    // Ищем свободную клетку от центра (10, 20)
+    const centerCol = gridColumns ~/ 2; // 10
+    const centerRow = gridRows ~/ 2;    // 20
 
     int? nextSlot;
     for (int r = 0; r < max(gridRows, gridColumns); r++) {
@@ -46,13 +47,23 @@ class GardenService {
       if (nextSlot != null) break;
     }
 
-    if (nextSlot == null) return false;
+    // Если по спирали не нашли, ищем любую свободную
+    if (nextSlot == null) {
+      for (int i = 0; i < totalGridCells; i++) {
+        if (!existingSlots.contains(i)) {
+          nextSlot = i;
+          break;
+        }
+      }
+    }
+
+    if (nextSlot == null) return false; // Сад переполнен
 
     await db.insert('garden_flowers', {
       'profileId': profileId,
       'slotIndex': nextSlot,
       'state': 'bloomed',
-      'flowerType': flowerType, // 👈 normal или legendary
+      'flowerType': flowerType,
       'rotation': 0,
       'createdAt': DateTime.now().toIso8601String(),
     });
@@ -91,7 +102,9 @@ class GardenService {
   static Future<bool> placeDecor({required int profileId, required int slotIndex, required String type}) async {
     final db = await DatabaseHelper.instance.database;
 
-    final cost = type == 'pond' ? 80
+    final cost = type == 'arch' ? 100
+        : type == 'pond' ? 80
+        : type == 'lamp' ? 70
         : type == 'tree' ? 60
         : type == 'fountain' ? 50
         : type == 'pavilion' ? 40

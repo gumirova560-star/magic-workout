@@ -44,7 +44,6 @@ class ChallengeService {
 
   static Future<void> updateProgress(int challengeId, int newProgress) async {
     final db = await DatabaseHelper.instance.database;
-
     final maps = await db.query('daily_challenges', where: 'id = ?', whereArgs: [challengeId]);
     if (maps.isEmpty) return;
 
@@ -64,7 +63,6 @@ class ChallengeService {
 
   static Future<void> increaseTarget(int challengeId, int extraValue) async {
     final db = await DatabaseHelper.instance.database;
-
     final maps = await db.query('daily_challenges', where: 'id = ?', whereArgs: [challengeId]);
     if (maps.isEmpty) return;
 
@@ -82,11 +80,12 @@ class ChallengeService {
     );
   }
 
-  // 👇 УЛУЧШЕННЫЙ МЕТОД: проверяет прогресс, а не только флаг isCompleted
+  // 👇 ВЫДАЧА НАГРАДЫ (Энергия + Цветок + Защита от сбоев)
   static Future<bool> tryAwardReward({
     required int profileId,
     required int challengeId,
     bool isLegendary = false,
+    int energyReward = 15, // Начисляем 15 энергии
   }) async {
     final db = await DatabaseHelper.instance.database;
 
@@ -104,25 +103,40 @@ class ChallengeService {
     final currentProgress = row['currentProgress'] as int? ?? 0;
     final targetValue = row['targetValue'] as int? ?? 0;
 
-    // 👇 Проверяем, что прогресс реально достиг цели
     final actuallyCompleted = currentProgress >= targetValue;
 
+    // Если награда уже выдана или цель не достигнута — выходим
     if (alreadyGranted || !actuallyCompleted) return false;
 
-    // Обновляем флаги в базе
-    await db.update(
-      'daily_challenges',
-      {'isCompleted': 1, 'rewardGranted': 1},
-      where: 'id = ?',
-      whereArgs: [challengeId],
-    );
+    try {
+      // 1. Начисляем энергию
+      if (energyReward > 0) {
+        await EnergyService.addEnergy(
+          profileId: profileId,
+          delta: energyReward,
+          reason: 'challenge_reward',
+          refId: challengeId,
+        );
+      }
 
-    // Сажаем цветок
-    await GardenService.plantNextFlower(
-      profileId: profileId,
-      flowerType: isLegendary ? 'legendary' : 'normal',
-    );
+      // 2. Сажаем цветок (вызывается наш GardenService)
+      await GardenService.plantNextFlower(
+        profileId: profileId,
+        flowerType: isLegendary ? 'legendary' : 'normal',
+      );
 
-    return true;
+      // 3. Отмечаем награду как полученную
+      await db.update(
+        'daily_challenges',
+        {'isCompleted': 1, 'rewardGranted': 1},
+        where: 'id = ?',
+        whereArgs: [challengeId],
+      );
+
+      return true;
+    } catch (e) {
+      print('ОШИБКА ВЫДАЧИ НАГРАДЫ: $e');
+      return false;
+    }
   }
 }

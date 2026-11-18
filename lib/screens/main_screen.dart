@@ -102,7 +102,7 @@ class _MainScreenState extends State<MainScreen> {
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, -4)),
+            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 20, offset: const Offset(0, -4)),
           ],
         ),
         child: SafeArea(
@@ -136,15 +136,15 @@ class _MainScreenState extends State<MainScreen> {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
           decoration: BoxDecoration(
-            color: isActive ? theme.colorScheme.primary.withOpacity(0.12) : Colors.transparent,
+            color: isActive ? theme.colorScheme.primary.withValues(alpha: 0.12) : Colors.transparent,
             borderRadius: BorderRadius.circular(14),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(isActive ? activeIcon : icon, color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.5), size: 22),
+              Icon(isActive ? activeIcon : icon, color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.5), size: 22),
               const SizedBox(height: 4),
-              Text(label, style: TextStyle(fontSize: 10, fontWeight: isActive ? FontWeight.w600 : FontWeight.w500, color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.5))),
+              Text(label, style: TextStyle(fontSize: 10, fontWeight: isActive ? FontWeight.w600 : FontWeight.w500, color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.5))),
             ],
           ),
         ),

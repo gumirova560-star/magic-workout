@@ -1,5 +1,4 @@
 import 'dart:html' as html;
-import 'dart:typed_data';
 
 Future<void> downloadFile(List<int> bytes, String filename) async {
   final blob = html.Blob([bytes]);

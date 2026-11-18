@@ -127,7 +127,7 @@ class _TransformationScreenState extends State<TransformationScreen> {
                 Text(
                   'Делай фото с трёх ракурсов.',
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurface.withOpacity(0.6),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -174,9 +174,9 @@ class _TransformationScreenState extends State<TransformationScreen> {
           aspectRatio: 0.75,
           child: Container(
             decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.1),
+              color: theme.colorScheme.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: theme.colorScheme.primary.withOpacity(0.3), width: 1.5),
+              border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.3), width: 1.5),
               image: base64 != null && base64.isNotEmpty
                   ? DecorationImage(
                       image: MemoryImage(base64Decode(base64)),
@@ -255,7 +255,7 @@ class _TransformationScreenState extends State<TransformationScreen> {
               color: theme.colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: photo != null ? theme.colorScheme.primary.withOpacity(0.5) : theme.colorScheme.onSurface.withOpacity(0.1),
+                color: photo != null ? theme.colorScheme.primary.withValues(alpha: 0.5) : theme.colorScheme.onSurface.withValues(alpha: 0.1),
                 width: 1.5,
               ),
               image: photo != null
@@ -269,9 +269,9 @@ class _TransformationScreenState extends State<TransformationScreen> {
                 ? Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.add_rounded, color: theme.colorScheme.primary.withOpacity(0.5)),
+                      Icon(Icons.add_rounded, color: theme.colorScheme.primary.withValues(alpha: 0.5)),
                       const SizedBox(height: 4),
-                      Text(label, style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurface.withOpacity(0.5))),
+                      Text(label, style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
                     ],
                   )
                 : Align(

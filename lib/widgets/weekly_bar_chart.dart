@@ -38,7 +38,7 @@ class WeeklyBarChart extends StatelessWidget {
           Text(
             'Сколько раз тренировались по дням',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.6),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
           const SizedBox(height: 20),
@@ -52,7 +52,7 @@ class WeeklyBarChart extends StatelessWidget {
                   show: true,
                   drawVerticalLine: false,
                   getDrawingHorizontalLine: (value) => FlLine(
-                    color: theme.colorScheme.onSurface.withOpacity(0.08),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
                     strokeWidth: 1,
                   ),
                 ),
@@ -80,7 +80,7 @@ class WeeklyBarChart extends StatelessWidget {
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                               color: theme.colorScheme.onSurface
-                                  .withOpacity(0.7),
+                                  .withValues(alpha: 0.7),
                             ),
                           ),
                         );
@@ -98,7 +98,7 @@ class WeeklyBarChart extends StatelessWidget {
                         toY: count.toDouble(),
                         color: count > 0
                             ? theme.colorScheme.primary
-                            : theme.colorScheme.primary.withOpacity(0.2),
+                            : theme.colorScheme.primary.withValues(alpha: 0.2),
                         width: 22,
                         borderRadius: BorderRadius.circular(6),
                       ),

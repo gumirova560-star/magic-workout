@@ -4,8 +4,9 @@ import '../../models/workout_day.dart';
 import '../../models/exercise.dart';
 import '../../models/user_profile.dart';
 import '../../services/database_helper.dart';
-import 'challenge_setup_screen.dart'; // 👈 Импорт экрана настройки
-import 'challenge_300_screen.dart';
+import '../../data/base_exercises.dart';                    // 👈 ДОБАВЛЕНО
+import '../../services/workout_generator.dart' hide DatabaseHelper; // 👈 ДОБАВЛЕНО
+import 'challenge_setup_screen.dart';
 import 'challenge_amrap_screen.dart';
 import 'challenge_plank_screen.dart';
 import 'challenge_cardio_screen.dart';
@@ -38,7 +39,6 @@ class _ChallengeWheelScreenState extends State<ChallengeWheelScreen> with Single
 
   final _types = ChallengeType.values;
 
-  // 👇 Текущий угол поворота колеса
   double _currentAngle = 0.0;
 
   @override
@@ -63,13 +63,8 @@ class _ChallengeWheelScreenState extends State<ChallengeWheelScreen> with Single
     final resultIndex = random.nextInt(_types.length);
     final resultType = _types[resultIndex];
 
-    // Угол одного сектора
     final sweepAngle = 2 * pi / _types.length;
-
-    // Количество полных оборотов (5-8)
     final spins = 5 + random.nextInt(4);
-
-    // ✅ Итоговый угол: полные обороты + угол до центра нужного сектора
     final targetAngle = (spins * 2 * pi) - (resultIndex * sweepAngle + sweepAngle / 2);
 
     setState(() {
@@ -77,7 +72,6 @@ class _ChallengeWheelScreenState extends State<ChallengeWheelScreen> with Single
       _result = null;
     });
 
-    // Анимация с замедлением
     final tween = Tween<double>(begin: 0, end: targetAngle);
     final animation = tween.animate(CurvedAnimation(
       parent: _controller,
@@ -132,12 +126,10 @@ class _ChallengeWheelScreenState extends State<ChallengeWheelScreen> with Single
     }
   }
 
-  // 👇 Обновленный метод _start (теперь асинхронный для загрузки данных)
   Future<void> _start() async {
     if (_result == null) return;
 
     if (_result == ChallengeType.reps300) {
-      // Для 300-ки сначала идем в настройку (выбор 3 упражнений)
       final profile = await DatabaseHelper.instance.getProfileById(widget.profileId);
       final allEx = await DatabaseHelper.instance.getExercises();
 
@@ -155,7 +147,6 @@ class _ChallengeWheelScreenState extends State<ChallengeWheelScreen> with Single
       return;
     }
 
-    // Для остальных челленджей — сразу на экран
     Widget screen;
     switch (_result!) {
       case ChallengeType.amrap:
@@ -168,15 +159,23 @@ class _ChallengeWheelScreenState extends State<ChallengeWheelScreen> with Single
         screen = ChallengeCardioScreen(day: widget.day, profileId: widget.profileId, items: widget.items, exerciseMap: widget.exerciseMap);
         break;
       case ChallengeType.reps300:
-      // Уже обработано выше
         return;
     }
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => screen));
   }
 
+  // ══════════════════════════════════════════════════════════════════
+  // 👇 ИЗМЕНЕНО: теперь при отказе генерируем «забытые зоны»
+  // ══════════════════════════════════════════════════════════════════
   Future<void> _decline() async {
     final updated = widget.day.copyWith(type: 'strength');
     await DatabaseHelper.instance.updateWorkoutDay(updated);
+
+    // 👇 Загружаем профиль и генерируем упражнения, чтобы день не был пустым
+    final profile = await DatabaseHelper.instance.getProfileById(widget.profileId);
+    if (profile != null) {
+      await _generateForgottenZonesWorkout(updated, profile);
+    }
 
     if (!mounted) return;
     Navigator.pushReplacement(
@@ -190,6 +189,104 @@ class _ChallengeWheelScreenState extends State<ChallengeWheelScreen> with Single
     );
   }
 
+  // ══════════════════════════════════════════════════════════════════
+  // 👇 ДУБЛИКАТ МЕТОДА ИЗ workout_screen.dart
+  //    (генерирует 3 базы + до 6 изоляций на «забытые зоны»)
+  // ══════════════════════════════════════════════════════════════════
+  Future<void> _generateForgottenZonesWorkout(WorkoutDay day, UserProfile profile) async {
+    final existing = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
+    for (final e in existing) {
+      if (e.id != null) await DatabaseHelper.instance.deleteWorkoutExercise(e.id!);
+    }
+
+    final allExercises = await DatabaseHelper.instance.getExercises();
+    final blockedZones = profile.limitations.map((e) => e.toLowerCase()).toList();
+
+    bool isExerciseAllowed(Exercise e) {
+      if (e.contraindications.any((c) => blockedZones.contains(c.toLowerCase()))) return false;
+      if (!WorkoutGenerator.matchesEquipment(e, profile.equipment)) return false;
+      if (profile.level == 'beginner') {
+        final lowerName = e.name.toLowerCase();
+        if (lowerName.contains('штанг') || lowerName.contains('на одной ноге') || lowerName.contains('в висе')) return false;
+        if (e.difficulty == 'advanced') return false;
+      }
+      return true;
+    }
+
+    final bases = allExercises.where((e) {
+      if (!isBaseExercise(e)) return false;
+      final zone = getExerciseZone(e);
+      if (blockedZones.contains(zone)) return false;
+      if (!isExerciseAllowed(e)) return false;
+      return true;
+    }).toList()..shuffle();
+
+    final selectedBases = bases.take(3).toList();
+
+    int order = 1;
+    for (final ex in selectedBases) {
+      final we = WorkoutExercise(
+        workoutDayId: day.id!,
+        itemType: 'exercise',
+        itemId: ex.id!,
+        order: order++,
+        sets: 3,
+        reps: '10-12',
+      );
+      final newId = await DatabaseHelper.instance.addWorkoutExercise(we);
+      for (int s = 1; s <= 3; s++) {
+        await DatabaseHelper.instance.addWorkoutSet(
+          WorkoutSet(workoutExerciseId: newId, order: s, completed: false),
+        );
+      }
+    }
+
+    final allZones = ['chest', 'back', 'arms', 'shoulders', 'glutes', 'legs', 'abs'];
+    final focusZones = profile.focusAreas.map((e) => e.toLowerCase()).toList();
+
+    final forgottenZones = allZones.where((z) =>
+    !blockedZones.contains(z) && !focusZones.contains(z)
+    ).toList();
+
+    int added = 0;
+    final Set<int> usedIds = selectedBases.map((e) => e.id!).toSet();
+
+    for (final zone in forgottenZones) {
+      if (added >= 6) break;
+      final zoneExs = allExercises.where((e) {
+        if (e.id == null) return false;
+        if (usedIds.contains(e.id)) return false;
+        if (isBaseExercise(e) || e.muscleGroups.contains('cardio')) return false;
+        if (!isExerciseAllowed(e)) return false;
+        return e.muscleGroups.contains(zone);
+      }).toList()..shuffle();
+
+      for (final ex in zoneExs.take(2)) {
+        if (added >= 6) break;
+        usedIds.add(ex.id!);
+
+        final we = WorkoutExercise(
+          workoutDayId: day.id!,
+          itemType: 'exercise',
+          itemId: ex.id!,
+          order: order++,
+          sets: 3,
+          reps: '15',
+        );
+        final newId = await DatabaseHelper.instance.addWorkoutExercise(we);
+        for (int s = 1; s <= 3; s++) {
+          await DatabaseHelper.instance.addWorkoutSet(
+            WorkoutSet(workoutExerciseId: newId, order: s, completed: false),
+          );
+        }
+        added++;
+      }
+    }
+  }
+  // ══════════════════════════════════════════════════════════════════
+  // 👆 КОНЕЦ ДУБЛИКАТА
+  // ══════════════════════════════════════════════════════════════════
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -202,31 +299,28 @@ class _ChallengeWheelScreenState extends State<ChallengeWheelScreen> with Single
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Колесо
               SizedBox(
                 height: 300,
                 width: 300,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    // Само колесо
                     Positioned(
                       top: 30,
                       child: Transform.rotate(
                         angle: _currentAngle,
-                        child: _WheelPainter(
+                        child: const _WheelPainter(
                           size: 240,
-                          colors: const [
+                          colors: [
                             Color(0xFFFFB800),
                             Color(0xFFE17055),
                             Color(0xFF00B894),
                             Color(0xFF6C5CE7),
                           ],
-                          labels: const ['300\nраз', 'Круг\nна время', 'Планка\n5 мин', 'HIIT\nвзрыв'],
+                          labels: ['300\nраз', 'Круг\nна время', 'Планка\n5 мин', 'HIIT\nвзрыв'],
                         ),
                       ),
                     ),
-                    // Стрелка (без белого круга)
                     Positioned(
                       top: 10,
                       child: Icon(
@@ -235,7 +329,7 @@ class _ChallengeWheelScreenState extends State<ChallengeWheelScreen> with Single
                         color: theme.colorScheme.primary,
                         shadows: [
                           Shadow(
-                            color: Colors.black.withOpacity(0.3),
+                            color: Colors.black.withValues(alpha: 0.3),
                             blurRadius: 4,
                             offset: const Offset(0, 2),
                           ),
@@ -247,14 +341,12 @@ class _ChallengeWheelScreenState extends State<ChallengeWheelScreen> with Single
               ),
               const SizedBox(height: 40),
 
-              // Результат
               if (_result != null) ...[
                 Text(_title, style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
                 const SizedBox(height: 12),
-                Text(_subtitle, style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.7)), textAlign: TextAlign.center),
+                Text(_subtitle, style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.7)), textAlign: TextAlign.center),
                 const SizedBox(height: 32),
 
-                // Кнопки
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
@@ -336,7 +428,7 @@ class _WheelPainter extends StatelessWidget {
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.25),
+            color: Colors.black.withValues(alpha: 0.25),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -362,7 +454,6 @@ class _WheelCustomPainter extends CustomPainter {
     final radius = size.width / 2;
     final sweepAngle = 2 * pi / colors.length;
 
-    // 1. Сектора
     for (int i = 0; i < colors.length; i++) {
       final paint = Paint()..color = colors[i];
       final startAngle = -pi / 2 + i * sweepAngle;
@@ -375,7 +466,6 @@ class _WheelCustomPainter extends CustomPainter {
       );
     }
 
-    // 2. Текст (строго по радиусу, без переворотов)
     for (int i = 0; i < colors.length; i++) {
       final textPainter = TextPainter(
         text: TextSpan(
@@ -411,14 +501,12 @@ class _WheelCustomPainter extends CustomPainter {
       canvas.restore();
     }
 
-    // 3. Внутренний белый обод
     final innerBorderPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     canvas.drawCircle(center, radius, innerBorderPaint);
 
-    // 4. Объемный внешний обод
     final outerBorderRect = Rect.fromCircle(center: center, radius: radius - 6);
     final outerBorderPaint = Paint()
       ..style = PaintingStyle.stroke
@@ -431,7 +519,6 @@ class _WheelCustomPainter extends CustomPainter {
 
     canvas.drawCircle(center, radius - 6, outerBorderPaint);
 
-    // 5. Блик сверху (для объема)
     final glarePath = Path()
       ..addArc(
         Rect.fromCircle(center: center, radius: radius - 12),
@@ -446,11 +533,10 @@ class _WheelCustomPainter extends CustomPainter {
       );
 
     final glarePaint = Paint()
-      ..color = Colors.white.withOpacity(0.15)
+      ..color = Colors.white.withValues(alpha: 0.15)
       ..style = PaintingStyle.fill;
     canvas.drawPath(glarePath, glarePaint);
 
-    // 6. Центральная втулка
     final centerPaint = Paint()..color = Colors.white;
     canvas.drawCircle(center, radius * 0.15, centerPaint);
 
@@ -464,3 +550,4 @@ class _WheelCustomPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
+// ⏸ КОНЕЦ ФАЙЛА challenge_dice_screen.dart

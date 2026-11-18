@@ -223,7 +223,8 @@ String getExerciseFamily(String name) {
   // Ягодицы: Отведения назад
   if (lower.contains('отведение ноги назад') || lower.contains('отведение ноги в кроссовере') || lower.contains('тяга ноги назад') || lower.contains('махи ногой назад')) return 'hip_extension_back';
   // Ягодицы: Отведения в сторону
-  if (lower.contains('отведение ноги в сторону') || lower.contains('разведение ног') || lower.contains('разгибание бедра') || lower.contains('махи ногой в сторону') || lower.contains('отведение ноги лежа')) return 'hip_abduction_side';
+ // 👈 ИСПРАВЛЕНО: добавлена Ходьба с резинкой (Monster Walk) — это те же отведения бедра
+  if (lower.contains('отведение ноги в сторону') || lower.contains('разведение ног') || lower.contains('разгибание бедра') || lower.contains('махи ногой в сторону') || lower.contains('отведение ноги лежа') || lower.contains('ходьба с резинкой')) return 'hip_abduction_side';
 
   // Новые ягодичные
   if (lower.contains('реверанс')) return 'curtsy_lunge';
@@ -234,6 +235,8 @@ String getExerciseFamily(String name) {
   if (lower.contains('разгибание ног') || lower.contains('разгибание одной ноги')) return 'leg_extension';
   // Ноги: Сгибание
   if (lower.contains('сгибание ног') || lower.contains('сгибание одной ноги')) return 'leg_curl';
+  // 👈 НОВОЕ: сведение ног (приводящие) — раньше уходило в «свободное плавание»
+  if (lower.contains('сведение ног')) return 'adduction';
   // Голень: Подъёмы на носки
   if (lower.contains('носки') || lower.contains('жим носками')) return 'calf_raise';
   // Ноги: Приседания и Жим ногами (включая новые)
@@ -243,8 +246,9 @@ String getExerciseFamily(String name) {
   // Ноги: Румынская тяга и наклоны
   if (lower.contains('румынская тяга') || lower.contains('наклоны со штангой')) return 'hinge';
 
-  // Спина: Тяги горизонтальные (включая Т-гриф)
-  if (lower.contains('тяга штанги в наклоне') || lower.contains('тяга гантели') || lower.contains('тяга нижнего блока') || lower.contains('тяга резинки к поясу') || lower.contains('тяга т-грифа')) return 'back_row_horizontal';
+  // Спина: Тяги горизонтальные (включая Т-гриф; исключаем тягу к подбородку — это плечи)
+  if ((lower.contains('тяга штанги в наклоне') || lower.contains('тяга гантели') || lower.contains('тяга нижнего блока') || lower.contains('тяга резинки к поясу') || lower.contains('тяга т-грифа')) && !lower.contains('подбородку')) return 'back_row_horizontal';
+
   // Спина: Тяги вертикальные
   if (lower.contains('подтягивания') || lower.contains('тяга верхнего блока')) return 'back_row_vertical';
   // Спина: Шраги
@@ -257,7 +261,13 @@ String getExerciseFamily(String name) {
   // Грудь: Жимы (включая тренажеры и Смит)
   if (lower.contains('жим штанги') || lower.contains('жим гантелей') || lower.contains('жим в тренажере') || lower.contains('жим в тренажёре')) return 'bench_press';
   // Грудь: Разведения/Сведения
-  if (lower.contains('разведения гантелей') || lower.contains('сведение рук') || lower.contains('бабочка')) return 'chest_fly';
+
+  // 👈 ИСПРАВЛЕНО: раньше правило ловило плечевые «Разведения гантелей в стороны»
+  // и «на заднюю дельту», а также «Обратную бабочку» — теперь исключены
+  if (lower.contains('сведение рук') ||
+      (lower.contains('бабочка') && !lower.contains('обратная бабочка')) ||
+      ((lower.contains('разведения гантелей') || lower.contains('разведение гантелей')) &&
+          !lower.contains('в стороны') && !lower.contains('заднюю дельту'))) return 'chest_fly';
   // Грудь: Отжимания (включая брусья)
   if (lower.contains('отжимания')) return 'pushup';
 
@@ -279,6 +289,9 @@ String getExerciseFamily(String name) {
 
   // Пресс: Планки
   if (lower.contains('планка')) return 'plank';
+  // 👈 НОВОЕ: подъёмы ног — раньше «Подъём ног лёжа» и «Подъём ног в висе»
+  // имели разные семейства и могли попасть в один день
+  if (lower.contains('подъём ног') || lower.contains('подъем ног')) return 'leg_raise';
   // Пресс: Скручивания (стандартные)
   if (lower.contains('скручивания') && !lower.contains('боковые') && !lower.contains('обратные')) return 'crunch_standard';
   // Пресс: Обратные скручивания

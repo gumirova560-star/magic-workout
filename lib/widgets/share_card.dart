@@ -133,14 +133,14 @@ class ShareCard extends StatelessWidget {
             top: -50, right: -50,
             child: Container(
               width: 200, height: 200,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.05)),
+              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.05)),
             ),
           ),
           Positioned(
             bottom: 100, left: -80,
             child: Container(
               width: 250, height: 250,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.03)),
+              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.03)),
             ),
           ),
 
@@ -158,7 +158,7 @@ class ShareCard extends StatelessWidget {
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(10),
                           boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))
+                            BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4, offset: const Offset(0, 2))
                           ]
                       ),
                       padding: const EdgeInsets.all(2),
@@ -193,7 +193,7 @@ class ShareCard extends StatelessWidget {
 
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
                   child: Text(title, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
                 ),
                 const SizedBox(height: 24),
@@ -248,7 +248,7 @@ class ShareCard extends StatelessWidget {
                           const Text('С верой в тебя,', style: TextStyle(color: Colors.white70, fontSize: 13, fontStyle: FontStyle.italic)),
                           const Text('твоя Фея', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800, fontStyle: FontStyle.italic)),
                           const SizedBox(height: 4),
-                          Text('magic-workout.app', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10)),
+                          Text('magic-workout.app', style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 10)),
                         ],
                       ),
                     ),
@@ -266,9 +266,9 @@ class ShareCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
+        color: Colors.white.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
       ),
       child: Column(
         children: [

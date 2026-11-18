@@ -131,7 +131,7 @@ class UserProfile {
       daysPerWeek: daysPerWeek ?? this.daysPerWeek,
       sessionMinutes: sessionMinutes ?? this.sessionMinutes,
       timeRangeLabel: timeRangeLabel ?? this.timeRangeLabel, // 👈
-      createdAt: this.createdAt,
+      createdAt: createdAt,
       avatarPath: avatarPath ?? this.avatarPath,
       beforePhotoPath: beforePhotoPath ?? this.beforePhotoPath,
       beforeSidePath: beforeSidePath ?? this.beforeSidePath,

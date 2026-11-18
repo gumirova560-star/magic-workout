@@ -71,7 +71,7 @@ class ExerciseCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isCardio = this.isCardio(ex);
-    final isTimedEx = this.isTimed(ex.name);
+    final isTimedEx = isTimed(ex.name);
     final baseZone = getBaseZone(ex);
     final isThisBase = isBase(ex);
     final defaultReps = parseReps(item.reps);
@@ -105,7 +105,7 @@ class ExerciseCard extends StatelessWidget {
                       width: 24,
                       height: 24,
                       alignment: Alignment.center,
-                      decoration: BoxDecoration(color: theme.colorScheme.primary.withOpacity(0.1), shape: BoxShape.circle),
+                      decoration: BoxDecoration(color: theme.colorScheme.primary.withValues(alpha: 0.1), shape: BoxShape.circle),
                       child: Text('$index', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
                     ),
                     const SizedBox(width: 10),
@@ -140,13 +140,13 @@ class ExerciseCard extends StatelessWidget {
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                   decoration: BoxDecoration(
                                     color: hasHistory
-                                        ? Colors.amber.withOpacity(0.08)
-                                        : theme.colorScheme.primary.withOpacity(0.08),
+                                        ? Colors.amber.withValues(alpha: 0.08)
+                                        : theme.colorScheme.primary.withValues(alpha: 0.08),
                                     borderRadius: BorderRadius.circular(10),
                                     border: Border.all(
                                       color: hasHistory
-                                          ? Colors.amber.withOpacity(0.3)
-                                          : theme.colorScheme.primary.withOpacity(0.2),
+                                          ? Colors.amber.withValues(alpha: 0.3)
+                                          : theme.colorScheme.primary.withValues(alpha: 0.2),
                                     ),
                                   ),
                                   child: Column(
@@ -198,13 +198,13 @@ class ExerciseCard extends StatelessWidget {
                                     if (isThisBase)
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(color: const Color(0xFF6C5CE7).withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                                        decoration: BoxDecoration(color: const Color(0xFF6C5CE7).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
                                         child: Text('БАЗА - ${groupLabel(baseZone ?? '').toUpperCase()}', style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF6C5CE7))),
                                       )
                                     else ...[
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(color: const Color(0xFF00B894).withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                                        decoration: BoxDecoration(color: const Color(0xFF00B894).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
                                         child: const Text('ИЗОЛЯЦИЯ', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF00B894))),
                                       ),
                                       const SizedBox(width: 4),
@@ -213,7 +213,7 @@ class ExerciseCard extends StatelessWidget {
                                           ex.muscleGroups.map((g) => groupLabel(g)).join(' + ').toUpperCase(),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
                                         ),
                                       ),
                                     ],
@@ -242,7 +242,7 @@ class ExerciseCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (!isViewMode) Icon(Icons.more_vert_rounded, color: theme.colorScheme.onSurface.withOpacity(0.4)),
+                  if (!isViewMode) Icon(Icons.more_vert_rounded, color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
                 ],
               ),
             ),
@@ -250,7 +250,7 @@ class ExerciseCard extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 ex.description,
-                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.7)),
+                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),

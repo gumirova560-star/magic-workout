@@ -65,7 +65,7 @@ class _RestTimerState extends State<RestTimer> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF6C5CE7).withOpacity(0.3), width: 1.5),
+        border: Border.all(color: const Color(0xFF6C5CE7).withValues(alpha: 0.3), width: 1.5),
       ),
       child: Row(
         children: [
@@ -78,7 +78,7 @@ class _RestTimerState extends State<RestTimer> {
                 child: CircularProgressIndicator(
                   value: progress,
                   strokeWidth: 4,
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
                   color: const Color(0xFF6C5CE7),
                 ),
               ),

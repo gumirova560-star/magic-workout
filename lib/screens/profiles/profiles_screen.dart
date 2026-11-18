@@ -163,8 +163,8 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    theme.colorScheme.primary.withOpacity(0.15),
-                    theme.colorScheme.primary.withOpacity(0.05),
+                    theme.colorScheme.primary.withValues(alpha: 0.15),
+                    theme.colorScheme.primary.withValues(alpha: 0.05),
                   ],
                 ),
                 borderRadius: BorderRadius.circular(32),
@@ -182,7 +182,7 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
               'Создайте профиль,\nчтобы начать тренировки',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.6),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
             const SizedBox(height: 32),
@@ -227,7 +227,7 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
               onTap: _pickAvatar,
               child: CircleAvatar(
                 radius: 50,
-                backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+                backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
                 backgroundImage: profile.avatarPath != null && profile.avatarPath!.isNotEmpty
                     ? MemoryImage(base64Decode(profile.avatarPath!))
                     : null,
@@ -276,7 +276,7 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
             child: Text(
               text,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.8),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
               ),
             ),
           ),

@@ -84,11 +84,9 @@ class _CumulativeChallengeScreenState extends State<CumulativeChallengeScreen> {
       }
     });
 
-    // 👇 Сохраняем прогресс в базу
     await ChallengeService.updateProgress(widget.challenge.id!, _currentProgress);
 
     if (_isCompleted) {
-      // 👇 Небольшая задержка, чтобы база точно обновилась
       await Future.delayed(const Duration(milliseconds: 100));
       await _awardFlower();
     } else {
@@ -106,7 +104,6 @@ class _CumulativeChallengeScreenState extends State<CumulativeChallengeScreen> {
   }
 
   Future<void> _awardFlower() async {
-    // 👇 Явно передаём isLegendary: false (обычный цветок)
     final granted = await ChallengeService.tryAwardReward(
       profileId: widget.profileId,
       challengeId: widget.challenge.id!,
@@ -126,7 +123,7 @@ class _CumulativeChallengeScreenState extends State<CumulativeChallengeScreen> {
         title: const Text('🎉 Челлендж выполнен!', textAlign: TextAlign.center),
         content: Text(
           granted
-              ? 'Ты отлично справился!\n\n🌸 В твоем Саду Феи расцвел новый цветок! Загляни туда, чтобы полюбоваться.'
+              ? 'Ты отлично справился!\n\n🌸 В твоем Саду Феи расцвел новый цветок!\n⚡️ Начислено +15 энергии!'
               : 'Ты уже получал награду за этот челлендж. Но всё равно молодец!',
           textAlign: TextAlign.center,
         ),

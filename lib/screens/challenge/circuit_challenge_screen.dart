@@ -151,7 +151,7 @@ class _CircuitChallengeScreenState extends State<CircuitChallengeScreen> {
                       child: LinearProgressIndicator(
                         value: progressPercent.clamp(0.0, 1.0),
                         minHeight: 12,
-                        backgroundColor: Colors.deepPurple.withOpacity(0.15),
+                        backgroundColor: Colors.deepPurple.withValues(alpha: 0.15),
                         valueColor: AlwaysStoppedAnimation(_isCompleted ? const Color(0xFF00B894) : Colors.deepPurple),
                       ),
                     ),
@@ -183,10 +183,10 @@ class _CircuitChallengeScreenState extends State<CircuitChallengeScreen> {
 
     Color borderColor; Color bgColor; Color textColor; IconData? trailingIcon;
     if (isDone) {
-      borderColor = const Color(0xFF00B894); bgColor = const Color(0xFF00B894).withOpacity(0.08);
+      borderColor = const Color(0xFF00B894); bgColor = const Color(0xFF00B894).withValues(alpha: 0.08);
       textColor = const Color(0xFF00B894); trailingIcon = Icons.check_circle_rounded;
     } else if (isCurrent) {
-      borderColor = Colors.deepPurple; bgColor = Colors.deepPurple.withOpacity(0.08);
+      borderColor = Colors.deepPurple; bgColor = Colors.deepPurple.withValues(alpha: 0.08);
       textColor = Colors.deepPurple; trailingIcon = _isRunning ? null : Icons.play_circle_fill_rounded;
     } else {
       borderColor = Colors.grey.shade300; bgColor = Colors.grey.shade100;
@@ -201,7 +201,7 @@ class _CircuitChallengeScreenState extends State<CircuitChallengeScreen> {
         children: [
           Container(
             width: 44, height: 44,
-            decoration: BoxDecoration(color: borderColor.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(color: borderColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
             alignment: Alignment.center,
             child: Text(ex.emoji, style: const TextStyle(fontSize: 24)),
           ),
@@ -212,7 +212,7 @@ class _CircuitChallengeScreenState extends State<CircuitChallengeScreen> {
               children: [
                 Text(ex.name, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: textColor, decoration: isDone ? TextDecoration.lineThrough : null)),
                 const SizedBox(height: 2),
-                Text('${ex.durationSeconds} сек', style: TextStyle(fontSize: 13, color: textColor.withOpacity(0.7))),
+                Text('${ex.durationSeconds} сек', style: TextStyle(fontSize: 13, color: textColor.withValues(alpha: 0.7))),
               ],
             ),
           ),
@@ -226,7 +226,7 @@ class _CircuitChallengeScreenState extends State<CircuitChallengeScreen> {
     if (_isCompleted) {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(color: const Color(0xFF00B894).withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
+        decoration: BoxDecoration(color: const Color(0xFF00B894).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
         alignment: Alignment.center,
         child: const Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -322,7 +322,7 @@ class _ExerciseTimerDialogState extends State<_ExerciseTimerDialog> {
                     width: 160, height: 160,
                     child: CircularProgressIndicator(
                       value: progress, strokeWidth: 10,
-                      backgroundColor: Colors.deepPurple.withOpacity(0.15),
+                      backgroundColor: Colors.deepPurple.withValues(alpha: 0.15),
                       valueColor: AlwaysStoppedAnimation(_done ? const Color(0xFF00B894) : Colors.deepPurple),
                     ),
                   ),

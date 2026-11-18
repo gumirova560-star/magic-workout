@@ -315,13 +315,13 @@ return Container(
 padding: const EdgeInsets.all(20),
 decoration: BoxDecoration(
 gradient: LinearGradient(
-colors: [theme.colorScheme.primary, theme.colorScheme.primary.withOpacity(0.7)],
+colors: [theme.colorScheme.primary, theme.colorScheme.primary.withValues(alpha: 0.7)],
 begin: Alignment.topLeft,
 end: Alignment.bottomRight,
 ),
 borderRadius: BorderRadius.circular(24),
 boxShadow: [
-BoxShadow(color: theme.colorScheme.primary.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 8)),
+BoxShadow(color: theme.colorScheme.primary.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 8)),
 ],
 ),
 child: Row(
@@ -353,7 +353,7 @@ controller: _searchController,
 onChanged: (v) => setState(() => _searchQuery = v),
 decoration: InputDecoration(
 hintText: 'Найти ответ...',
-hintStyle: TextStyle(fontSize: 14, color: theme.colorScheme.onSurface.withOpacity(0.4)),
+hintStyle: TextStyle(fontSize: 14, color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
 prefixIcon: Icon(Icons.search_rounded, color: theme.colorScheme.primary),
 suffixIcon: _searchQuery.isNotEmpty
 ? IconButton(
@@ -365,7 +365,7 @@ setState(() => _searchQuery = '');
 )
 : null,
 filled: true,
-fillColor: theme.colorScheme.primary.withOpacity(0.05),
+fillColor: theme.colorScheme.primary.withValues(alpha: 0.05),
 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
 border: OutlineInputBorder(
 borderRadius: BorderRadius.circular(14),
@@ -380,17 +380,17 @@ return Padding(
 padding: const EdgeInsets.symmetric(vertical: 40),
 child: Column(
 children: [
-Icon(Icons.search_off_rounded, size: 48, color: theme.colorScheme.primary.withOpacity(0.4)),
+Icon(Icons.search_off_rounded, size: 48, color: theme.colorScheme.primary.withValues(alpha: 0.4)),
 const SizedBox(height: 12),
 Text(
 'Ничего не нашлось',
-style: theme.textTheme.headlineMedium?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6)),
+style: theme.textTheme.headlineMedium?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
 ),
 const SizedBox(height: 6),
 Text(
 'Попробуй другой запрос или напиши мне вопрос внизу',
 textAlign: TextAlign.center,
-style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.5)),
+style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
 ),
 ],
 ),
@@ -414,7 +414,7 @@ style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.wi
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.15),
+                    color: color.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(group['icon'] as IconData, color: color, size: 20),
@@ -468,13 +468,13 @@ style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.wi
       curve: Curves.easeInOut,
       decoration: BoxDecoration(
         color: isExpanded
-            ? theme.colorScheme.primary.withOpacity(0.12)
-            : theme.colorScheme.primary.withOpacity(0.05),
+            ? theme.colorScheme.primary.withValues(alpha: 0.12)
+            : theme.colorScheme.primary.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isExpanded
               ? theme.colorScheme.primary
-              : theme.colorScheme.primary.withOpacity(0.15),
+              : theme.colorScheme.primary.withValues(alpha: 0.15),
           width: isExpanded ? 2 : 1,
         ),
       ),
@@ -502,7 +502,7 @@ style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.wi
                     ),
                     Icon(
                       isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                      color: isExpanded ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.5),
+                      color: isExpanded ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.5),
                     ),
                   ],
                 ),
@@ -512,7 +512,7 @@ style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.wi
                     answer,
                     style: TextStyle(
                       fontSize: 14,
-                      color: theme.colorScheme.onSurface.withOpacity(0.8),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
                       height: 1.5,
                     ),
                   ),
@@ -556,14 +556,14 @@ style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.wi
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: theme.colorScheme.primary.withOpacity(0.1)),
+              border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.1)),
             ),
             child: Text(
               'P.S. Если не нашла ответа — задай вопрос или оставь пожелание ниже. Я обязательно прочитаю! 🧚‍♀️',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 12,
-                color: theme.colorScheme.onSurface.withOpacity(0.7),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                 fontStyle: FontStyle.italic,
                 height: 1.4,
               ),
@@ -612,9 +612,9 @@ style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.wi
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: accent.withOpacity(0.2)),
+        border: Border.all(color: accent.withValues(alpha: 0.2)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4)),
         ],
       ),
       child: Column(
@@ -638,13 +638,13 @@ style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.wi
                   minLines: 1,
                   decoration: InputDecoration(
                     hintText: hint,
-                    hintStyle: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface.withOpacity(0.4)),
+                    hintStyle: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
                     ),
                     filled: true,
-                    fillColor: accent.withOpacity(0.05),
+                    fillColor: accent.withValues(alpha: 0.05),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   ),
                   style: const TextStyle(fontSize: 14),

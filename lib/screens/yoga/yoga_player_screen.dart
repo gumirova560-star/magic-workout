@@ -129,9 +129,7 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
     _timer?.cancel();
     setState(() => _playing = true);
 
-    if (_startedAt == null) {
-      _startedAt = DateTime.now();
-    }
+    _startedAt ??= DateTime.now();
 
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (_remaining > 1) {
@@ -236,7 +234,7 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
                 child: LinearProgressIndicator(
                   value: (_currentIndex + 1) / _steps.length,
                   backgroundColor:
-                      theme.colorScheme.primary.withOpacity(0.15),
+                      theme.colorScheme.primary.withValues(alpha: 0.15),
                   color: theme.colorScheme.primary,
                   minHeight: 6,
                   borderRadius: BorderRadius.circular(4),
@@ -260,7 +258,7 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
                     value: progress,
                     strokeWidth: 10,
                     backgroundColor:
-                        theme.colorScheme.primary.withOpacity(0.15),
+                        theme.colorScheme.primary.withValues(alpha: 0.15),
                     color: theme.colorScheme.primary,
                     strokeCap: StrokeCap.round,
                   ),
@@ -271,7 +269,7 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
                     Icon(
                       Icons.self_improvement_rounded,
                       size: 40,
-                      color: theme.colorScheme.primary.withOpacity(0.6),
+                      color: theme.colorScheme.primary.withValues(alpha: 0.6),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -300,7 +298,7 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
             Text(
               '${stretch.durationLabel}${stretch.bothSides ? " · 2 стороны" : ""}',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.6),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
             if (step.notes != null && step.notes!.isNotEmpty) ...[
@@ -309,7 +307,7 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.1),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -334,7 +332,7 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
                 icon: const Icon(Icons.skip_previous_rounded, size: 36),
                 color: _currentIndex > 0
                     ? theme.colorScheme.onSurface
-                    : theme.colorScheme.onSurface.withOpacity(0.2),
+                    : theme.colorScheme.onSurface.withValues(alpha: 0.2),
               ),
 
               GestureDetector(
@@ -349,7 +347,7 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF6C5CE7).withOpacity(0.3),
+                        color: const Color(0xFF6C5CE7).withValues(alpha: 0.3),
                         blurRadius: 20,
                         offset: const Offset(0, 8),
                       ),
@@ -396,7 +394,7 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
             Icon(
               Icons.self_improvement_rounded,
               size: 80,
-              color: theme.colorScheme.primary.withOpacity(0.4),
+              color: theme.colorScheme.primary.withValues(alpha: 0.4),
             ),
             const SizedBox(height: 16),
             Text('Сессия пуста',
@@ -406,7 +404,7 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
               'В этой практике ещё нет упражнений',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.6),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
           ],
@@ -433,7 +431,7 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF00B894).withOpacity(0.3),
+                    color: const Color(0xFF00B894).withValues(alpha: 0.3),
                     blurRadius: 24,
                     offset: const Offset(0, 12),
                   ),
@@ -455,7 +453,7 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
             Text(
               'Отличная работа 🧘',
               style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.6),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
             const SizedBox(height: 32),

@@ -70,8 +70,10 @@ FairyReactionService().removeWorkoutListener(_onWorkoutCompleted);
 super.dispose();
 }
 
+// ═══ 👈 ИЗМЕНЕНО: trainingWeekdays участвует в хеше профиля ═══
+// Иначе смена расписания (выбранные дни) не предложит обновить план.
 String _computeProfileHash(UserProfile p) {
-return [p.gender, p.age, p.height, p.weight, p.level, p.goal, p.equipment, p.daysPerWeek, p.sessionMinutes, p.focusAreas.join(','), p.limitations.join(',')].join('|');
+return [p.gender, p.age, p.height, p.weight, p.level, p.goal, p.equipment, p.daysPerWeek, p.sessionMinutes, p.trainingWeekdays.join(','), p.focusAreas.join(','), p.limitations.join(',')].join('|');
 }
 
 String _profileHashKey(int profileId) => 'workout_plan_profile_hash_$profileId';
@@ -152,7 +154,8 @@ final weekEnd = weekStart.add(const Duration(days: 7));
 int curWeekCount = 0;
 int curWeekMinutes = 0;
 for (final w in completed) {
-final d = DateTime(w.date.year, w.date.month, w.date.day);
+final actual = w.completedAt ?? w.date;
+final d = DateTime(actual.year, actual.month, actual.day);
 if (!d.isBefore(weekStart) && d.isBefore(weekEnd)) {
 curWeekCount++;
 curWeekMinutes += (w.durationMinutes ?? 0).toInt();
@@ -179,9 +182,9 @@ await FairyReactionService().setActiveProfile(active.id, active.name, gender: ac
 if (shouldHold) {
 WidgetsBinding.instance.addPostFrameCallback((_) {
 if (mounted) {
-  _showProfileChangedBannerNow(active);
+_showProfileChangedBannerNow(active);
 } else {
-  FairyReactionService().releaseScreenPhrases();
+FairyReactionService().releaseScreenPhrases();
 }
 });
 }
@@ -281,7 +284,6 @@ setState(() => _generating = false);
 _showMessage('Ошибка: $e');
 }
 }
-
 // ═══ КОНЕЦ ЧАСТИ 1 ═══
 Future<void> _openDay(WorkoutDay day) async {
 final isUnlocked = _isWeekUnlocked(day.weekNumber ?? 1);
@@ -385,7 +387,7 @@ await _checkAndUnlockNextWeek();
 }
 }
 
-// 👇 ИСПРАВЛЕННЫЙ МЕТОД: ТЕПЕРЬ УЧИТЫВАЕТ ИНВЕНТАРЬ И УРОВЕНЬ
+// 👇 УЧИТЫВАЕТ ИНВЕНТАРЬ И УРОВЕНЬ
 Future<void> _generateForgottenZonesWorkout(WorkoutDay day, UserProfile profile) async {
 final existing = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
 for (final e in existing) {
@@ -401,7 +403,7 @@ bool isExerciseAllowed(Exercise e) {
 if (e.contraindications.any((c) => blockedZones.contains(c.toLowerCase()))) return false;
 
 // Оборудование
-  if (!WorkoutGenerator.matchesEquipment(e, profile.equipment)) return false;
+if (!WorkoutGenerator.matchesEquipment(e, profile.equipment)) return false;
 
 // Уровень (новичкам не даем штангу и сложные элементы)
 if (profile.level == 'beginner') {
@@ -666,8 +668,7 @@ const SizedBox(height: 32),
 ),
 );
 }
-
-// ═══ КОНЕЦ ЧАСТИ 2 ═══
+  // ═══ КОНЕЦ ЧАСТИ 2 ═══
   Widget _buildWeekChips(BuildContext context) {
     final theme = Theme.of(context);
     return SingleChildScrollView(
@@ -764,10 +765,34 @@ const SizedBox(height: 32),
                       ),
                       const SizedBox(height: 4),
                       Text('${day.type == 'challenge' ? 'Челлендж' : day.type == 'strength' ? 'Силовая' : 'Йога'} · ${day.durationMinutes ?? 45} мин', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Icon(Icons.event_rounded, size: 13, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                          const SizedBox(width: 4),
+                          Text(
+                            _fmtDate(day),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
-                Icon(isCompleted ? Icons.check_circle_rounded : isUnlocked ? Icons.chevron_right_rounded : Icons.lock_rounded, color: isCompleted ? accentColor : isUnlocked ? theme.colorScheme.onSurface.withValues(alpha: 0.4) : Colors.grey),
+                // 👇 Перенос — только для запланированных разблокированных дней текущей недели
+                if (day.status == 'planned' && isUnlocked && _isWithinCurrentWeek(day.date)) ...[
+                  IconButton(
+                    tooltip: 'Перенести',
+                    icon: Icon(Icons.event_repeat_rounded,
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+                    onPressed: () => _showRescheduleSheet(day),
+                  ),
+                ] else ...[
+                  Icon(isCompleted ? Icons.check_circle_rounded : isUnlocked ? Icons.chevron_right_rounded : Icons.lock_rounded, color: isCompleted ? accentColor : isUnlocked ? theme.colorScheme.onSurface.withValues(alpha: 0.4) : Colors.grey),
+                ],
               ],
             ),
           ),
@@ -816,6 +841,128 @@ const SizedBox(height: 32),
     if (mod10 == 1 && mod100 != 11) return 'неделя';
     if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'недели';
     return 'недель';
+  }
+
+  // ═══ ДАТЫ И ПЕРЕНОС ═══
+
+  String _fmtDate(WorkoutDay day) {
+    // Выполненная тренировка показывает факт, остальные — план
+    if (day.status == 'completed' && day.completedAt != null) {
+      return 'Выполнено: ${_fmtPlain(day.completedAt!)}';
+    }
+    return _fmtPlain(day.date);
+  }
+
+  String _fmtPlain(DateTime d) {
+    const weekDays = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
+    const months = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн',
+      'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+    return '${weekDays[d.weekday - 1]}, ${d.day} ${months[d.month - 1]}';
+  }
+
+  bool _isWithinCurrentWeek(DateTime d) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final monday = today.subtract(Duration(days: today.weekday - 1));
+    final sunday = monday.add(const Duration(days: 6));
+    return !d.isBefore(monday) && !d.isAfter(sunday);
+  }
+
+  Future<void> _rescheduleDay(WorkoutDay day, DateTime newDate) async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(newDate.year, newDate.month, newDate.day);
+
+    if (day.status != 'planned') {
+      _showMessage('Перенести можно только запланированную тренировку');
+      return;
+    }
+    if (!_isWithinCurrentWeek(day.date)) {
+      _showMessage('Переносить можно только дни текущей недели');
+      return;
+    }
+    if (!_isWithinCurrentWeek(target)) {
+      _showMessage('Перенести можно только на день текущей недели');
+      return;
+    }
+
+    // Не даём встать на день, где уже запланирована другая тренировка
+    final occupied = _monthDays.any((d) =>
+    d.id != day.id &&
+        d.status == 'planned' &&
+        d.date.year == target.year &&
+        d.date.month == target.month &&
+        d.date.day == target.day);
+    if (occupied) {
+      _showMessage('На этот день уже запланирована тренировка');
+      return;
+    }
+
+    await DatabaseHelper.instance.updateWorkoutDay(day.copyWith(date: target));
+    await _loadData();
+  }
+
+  void _showRescheduleSheet(WorkoutDay day) {
+    final theme = Theme.of(context);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final monday = today.subtract(Duration(days: today.weekday - 1));
+    const weekDays = ['Понедельник', 'Вторник', 'Среда', 'Четверг',
+      'Пятница', 'Суббота', 'Воскресенье'];
+    const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+      'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text('Куда перенести?', style: theme.textTheme.headlineMedium),
+            ),
+            ...List.generate(7, (i) {
+              final d = monday.add(Duration(days: i));
+              final isPast = d.isBefore(today);
+              final isSame = d.year == day.date.year &&
+                  d.month == day.date.month && d.day == day.date.day;
+              final occupied = _monthDays.any((w) =>
+              w.id != day.id &&
+                  w.status == 'planned' &&
+                  w.date.year == d.year &&
+                  w.date.month == d.month &&
+                  w.date.day == d.day);
+              final enabled = !isPast && !isSame && !occupied;
+
+              return ListTile(
+                enabled: enabled,
+                leading: Icon(
+                  isSame ? Icons.check_circle_rounded : Icons.event_rounded,
+                  color: enabled ? theme.colorScheme.primary : Colors.grey,
+                ),
+                title: Text('${weekDays[i]}, ${d.day} ${months[d.month - 1]}'),
+                trailing: isPast
+                    ? const Text('прошло', style: TextStyle(color: Colors.grey, fontSize: 12))
+                    : occupied
+                    ? const Text('занято', style: TextStyle(color: Colors.grey, fontSize: 12))
+                    : null,
+                onTap: enabled
+                    ? () {
+                  Navigator.pop(ctx);
+                  _rescheduleDay(day, d);
+                }
+                    : null,
+              );
+            }),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildLastWeekCard(BuildContext context) {
@@ -1099,5 +1246,4 @@ const SizedBox(height: 32),
     );
   }
 }
-// ═══ КОНЕЦ ЧАСТИ 3 ═══
 // ═══ КОНЕЦ ФАЙЛА workout_screen.dart ═══

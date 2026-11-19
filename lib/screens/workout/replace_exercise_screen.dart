@@ -7,11 +7,13 @@ import '../exercise/exercise_detail_screen.dart';
 class ReplaceExerciseScreen extends StatefulWidget {
   final Exercise original;
   final String? reasonCode;
+  final bool allowPermanent; // 👈 НОВЫЙ ПАРАМЕТР
 
   const ReplaceExerciseScreen({
     super.key,
     required this.original,
     this.reasonCode,
+    this.allowPermanent = true, // По умолчанию разрешаем (для базы)
   });
 
   @override
@@ -138,37 +140,46 @@ class _ReplaceExerciseScreenState extends State<ReplaceExerciseScreen> {
     return map[code] ?? code;
   }
 
+  // 👇 ОБНОВЛЕННЫЙ МЕТОД _pickExercise
   Future<void> _pickExercise(Exercise exercise) async {
-    final typeResult = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Как заменить?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Заменить на «${exercise.name}»', style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 16),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.today_rounded),
-              title: const Text('Только сегодня'),
-              subtitle: const Text('В этой тренировке'),
-              onTap: () => Navigator.pop(ctx, 'today'),
-            ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.save_rounded),
-              title: const Text('Навсегда'),
-              subtitle: const Text('Изменить и шаблон'),
-              onTap: () => Navigator.pop(ctx, 'forever'),
-            ),
-          ],
-        ),
-      ),
-    );
+    String? typeResult;
 
-    if (typeResult == null) return;
+    if (widget.allowPermanent) {
+      // Для БАЗОВЫХ упражнений показываем выбор
+      typeResult = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Как заменить?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Заменить на «${exercise.name}»', style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.today_rounded),
+                title: const Text('Только сегодня'),
+                subtitle: const Text('В этой тренировке'),
+                onTap: () => Navigator.pop(ctx, 'today'),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.save_rounded),
+                title: const Text('Навсегда'),
+                subtitle: const Text('Изменить и шаблон'),
+                onTap: () => Navigator.pop(ctx, 'forever'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (typeResult == null) return; // Пользователь нажал "Отмена"
+    } else {
+      // Для ИЗОЛЯЦИИ сразу заменяем на сегодня, без диалога
+      typeResult = 'today';
+    }
+
     if (!mounted) return;
 
     Navigator.pop(context, {
@@ -211,7 +222,6 @@ class _ReplaceExerciseScreenState extends State<ReplaceExerciseScreen> {
           ),
           const SizedBox(height: 12),
 
-          // 👇 ФИЛЬТРЫ ТЕПЕРЬ ПЕРЕНОСЯТСЯ НА СЛЕДУЮЩУЮ СТРОКУ (Wrap) 👇
           Wrap(
             spacing: 8,
             runSpacing: 8,

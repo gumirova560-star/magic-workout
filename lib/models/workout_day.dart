@@ -54,21 +54,31 @@ class WorkoutDay {
       templateId: map['templateId'],
       name: map['name'] ?? '',
       type: map['type'] ?? 'strength',
-      date: map['date'] != null ? DateTime.parse(map['date']) : DateTime.now(),
+      date: DateTime.tryParse(map['date']?.toString() ?? '') ?? DateTime.now(),
       status: map['status'] ?? 'planned',
       durationMinutes: map['durationMinutes'],
       notes: map['notes'],
-      startedAt: map['startedAt'] != null ? DateTime.parse(map['startedAt']) : null,
-      completedAt: map['completedAt'] != null ? DateTime.parse(map['completedAt']) : null,
+      startedAt: DateTime.tryParse(map['startedAt']?.toString() ?? ''),
+      completedAt: DateTime.tryParse(map['completedAt']?.toString() ?? ''),
       weekNumber: map['weekNumber'],
       cycleNumber: map['cycleNumber'],
     );
   }
 
   WorkoutDay copyWith({
-    int? id, int? profileId, int? templateId, String? name, String? type,
-    DateTime? date, String? status, int? durationMinutes, String? notes,
-    DateTime? startedAt, DateTime? completedAt, int? weekNumber, int? cycleNumber,
+    int? id,
+    int? profileId,
+    int? templateId,
+    String? name,
+    String? type,
+    DateTime? date,
+    String? status,
+    int? durationMinutes,
+    String? notes,
+    DateTime? startedAt,
+    DateTime? completedAt,
+    int? weekNumber,
+    int? cycleNumber,
   }) {
     return WorkoutDay(
       id: id ?? this.id,
@@ -93,6 +103,7 @@ class WorkoutDay {
       case 'in_progress': return 'В процессе';
       case 'completed': return 'Завершена';
       case 'skipped': return 'Пропущена';
+      case 'missed': return 'Пропущена';
       default: return 'Запланирована';
     }
   }
@@ -111,7 +122,7 @@ class WorkoutExercise {
   String reps;
   int restSeconds;
   int durationSeconds;
-  bool isWarmup;      // 👈 новое: разминка (не участвует в «день выполнен»)
+  bool isWarmup;
   bool isCoolDown;
   String? notes;
   int? blockNumber;
@@ -129,7 +140,7 @@ class WorkoutExercise {
     this.reps = '10-12',
     this.restSeconds = 60,
     this.durationSeconds = 30,
-    this.isWarmup = false,      // 👈
+    this.isWarmup = false,
     this.isCoolDown = false,
     this.notes,
     this.blockNumber,
@@ -149,7 +160,7 @@ class WorkoutExercise {
       'reps': reps,
       'restSeconds': restSeconds,
       'durationSeconds': durationSeconds,
-      'isWarmup': isWarmup ? 1 : 0,        // 👈
+      'isWarmup': isWarmup ? 1 : 0,
       'isCoolDown': isCoolDown ? 1 : 0,
       'notes': notes,
       'blockNumber': blockNumber,
@@ -170,7 +181,7 @@ class WorkoutExercise {
       reps: map['reps'] ?? '10-12',
       restSeconds: map['restSeconds'] ?? 60,
       durationSeconds: map['durationSeconds'] ?? 30,
-      isWarmup: map['isWarmup'] == 1,      // 👈
+      isWarmup: map['isWarmup'] == 1,
       isCoolDown: map['isCoolDown'] == 1,
       notes: map['notes'],
       blockNumber: map['blockNumber'],
@@ -178,10 +189,22 @@ class WorkoutExercise {
   }
 
   WorkoutExercise copyWith({
-    int? id, int? workoutDayId, String? itemType, int? itemId, int? order,
-    int? replacedByItemId, String? replacementReason, bool? replacementPermanent,
-    int? sets, String? reps, int? restSeconds, int? durationSeconds,
-    bool? isWarmup, bool? isCoolDown, String? notes, int? blockNumber,
+    int? id,
+    int? workoutDayId,
+    String? itemType,
+    int? itemId,
+    int? order,
+    int? replacedByItemId,
+    String? replacementReason,
+    bool? replacementPermanent,
+    int? sets,
+    String? reps,
+    int? restSeconds,
+    int? durationSeconds,
+    bool? isWarmup,
+    bool? isCoolDown,
+    String? notes,
+    int? blockNumber,
   }) {
     return WorkoutExercise(
       id: id ?? this.id,
@@ -196,7 +219,7 @@ class WorkoutExercise {
       reps: reps ?? this.reps,
       restSeconds: restSeconds ?? this.restSeconds,
       durationSeconds: durationSeconds ?? this.durationSeconds,
-      isWarmup: isWarmup ?? this.isWarmup,        // 👈
+      isWarmup: isWarmup ?? this.isWarmup,
       isCoolDown: isCoolDown ?? this.isCoolDown,
       notes: notes ?? this.notes,
       blockNumber: blockNumber ?? this.blockNumber,
@@ -251,8 +274,13 @@ class WorkoutSet {
   }
 
   WorkoutSet copyWith({
-    int? id, int? workoutExerciseId, int? order,
-    double? weight, int? reps, bool? completed, String? notes,
+    int? id,
+    int? workoutExerciseId,
+    int? order,
+    double? weight,
+    int? reps,
+    bool? completed,
+    String? notes,
   }) {
     return WorkoutSet(
       id: id ?? this.id,

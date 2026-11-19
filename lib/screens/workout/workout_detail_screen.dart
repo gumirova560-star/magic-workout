@@ -31,1490 +31,1642 @@ class WorkoutDetailScreen extends StatefulWidget {
 }
 
 class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
-List<WorkoutExercise> _items = [];
-Map<int, Exercise> _exerciseMap = {};
-Map<int, Stretch> _stretchMap = {};
-
-int? _workoutDayId;
-bool _started = false;
-bool _completed = false;
-bool _loading = true;
-
-bool _hasBlocks = false;
-bool _blocksReady = false;
-final Map<int, int> _pendingBlocks = {};
-
-final Set<String> _collapsedCircles = {};
-final Set<int> _exercisesWithHistory = {};
-
-int _globalRestSeconds = 60;
-
-final Map<int, List<SetData>> _setsData = {};
-final Map<int, List<int>> _setIds = {};
-final Map<int, double?> _targetWeights = {};
-
-final Map<int, Map<String, dynamic>> _lastRecords = {};
-
-WorkoutDay? _day;
-UserProfile? _profile;
-
-Timer? _restTimer;
-int _restTimeLeft = 0;
-int _restTotalTime = 0;
-bool _isRestTimerRunning = false;
-bool _isRestTimerPaused = false;
-
-bool get _isViewMode => _completed;
-bool get _isInProgressMode => _started && !_completed;
-bool get _isNewMode => !_started && !_completed;
-
-String get _title => _day?.name ?? 'Тренировка';
-
-@override
-void initState() {
-super.initState();
-_day = widget.workoutDay;
-_loadSavedRestTime();
-_init();
-}
-
-@override
-void dispose() {
-_restTimer?.cancel();
-super.dispose();
-}
-
-Future<void> _loadSavedRestTime() async {
-final prefs = await SharedPreferences.getInstance();
-final saved = prefs.getInt('global_rest_seconds');
-if (saved != null && mounted) setState(() => _globalRestSeconds = saved);
-}
-
-Future<void> _init() async {
-setState(() => _loading = true);
-_profile = await DatabaseHelper.instance.getProfileById(widget.profileId);
-
-if (widget.workoutDay != null) {
-await _loadExistingDay(widget.workoutDay!);
-}
-
-if (!mounted) return;
-setState(() => _loading = false);
-_preloadHistory();
-_showWeekNotification();
-}
-
-bool _isCardio(Exercise ex) {
-final lower = ex.name.toLowerCase();
-if (_isCardioName(lower)) return true;
-final coreGroups = ['abs', 'core', 'obliques'];
-if (ex.muscleGroups.any((m) => coreGroups.contains(m))) return false;
-return ex.muscleGroups.contains('cardio');
-}
-
-bool _isTimed(String name) {
-final lower = name.toLowerCase();
-return lower.contains('планка') || lower.contains('plank') || _isCardioName(lower);
-}
-
-bool _isCardioName(String lowerName) {
-if (lowerName.contains('бег') || lowerName.contains('дорожк') || lowerName.contains('скакалк') ||
-lowerName.contains('эллипс') || lowerName.contains('велотренаж') || lowerName.contains('велоэргометр') ||
-lowerName.contains('гребл') || lowerName.contains('степпер') || lowerName.contains('кардио')) {
-  return true;
-}
-if (lowerName.contains('скалолаз')) return true;
-if (lowerName.contains('канат') && (lowerName.contains('махи') || lowerName.contains('волны') || lowerName.contains('бэтл'))) return true;
-return false;
-}
-
-Future<int?> _getPrevTarget(int itemId, int week, int? cycle) async {
-if (week <= 1) return null;
-final prevDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(
-profileId: widget.profileId, weekNumber: week - 1, cycleNumber: cycle
-);
-for (final pd in prevDays) {
-final exs = await DatabaseHelper.instance.getWorkoutExercises(pd.id!);
-for (final ex in exs) {
-if (ex.itemId == itemId || ex.replacedByItemId == itemId) {
-return _parseReps(ex.reps);
-}
-}
-}
-return null;
-}
-
-Future<List<WorkoutSet>> _getSmartPrevSets(int exerciseId, int currentWeek, int? cycle) async {
-if (currentWeek > 1) {
-final prevDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(
-profileId: widget.profileId, weekNumber: currentWeek - 1, cycleNumber: cycle
-);
-for (final d in prevDays) {
-final exs = await DatabaseHelper.instance.getWorkoutExercises(d.id!);
-for (final ex in exs) {
-if (ex.itemId == exerciseId || ex.replacedByItemId == exerciseId) {
-final sets = await DatabaseHelper.instance.getWorkoutSets(ex.id!);
-if (sets.isNotEmpty && sets.any((s) => s.completed || s.weight != null || s.reps != null)) {
-return sets;
-}
-}
-}
-}
-}
-
-if (currentWeek == 4) {
-final dayNumMatch = RegExp(r'День (\d+)').firstMatch(_day?.name ?? '');
-final currentDayNum = dayNumMatch?.group(1);
-
-final w3Days = await DatabaseHelper.instance.getWorkoutDaysByWeek(
-profileId: widget.profileId, weekNumber: 3, cycleNumber: cycle
-);
-
-WorkoutDay? correspondingDay3;
-for (final d in w3Days) {
-if (currentDayNum != null && d.name.contains('День $currentDayNum')) {
-correspondingDay3 = d;
-break;
-}
-}
-
-if (correspondingDay3 != null && correspondingDay3.type == 'challenge') {
-final w2Days = await DatabaseHelper.instance.getWorkoutDaysByWeek(
-profileId: widget.profileId, weekNumber: 2, cycleNumber: cycle
-);
-for (final d in w2Days) {
-if (currentDayNum != null && d.name.contains('День $currentDayNum')) {
-final exs = await DatabaseHelper.instance.getWorkoutExercises(d.id!);
-for (final ex in exs) {
-if (ex.itemId == exerciseId || ex.replacedByItemId == exerciseId) {
-final sets = await DatabaseHelper.instance.getWorkoutSets(ex.id!);
-if (sets.isNotEmpty) return sets;
-}
-}
-}
-}
-}
-}
-
-return await DatabaseHelper.instance.getLastWorkoutExerciseSets(
-profileId: widget.profileId, exerciseId: exerciseId, daysLimit: 365,
-);
-}
-
-Future<void> _loadExistingDay(WorkoutDay day) async {
-if (day.type == 'challenge') {
-_workoutDayId = day.id;
-_completed = false;
-_started = true;
-
-final allWorkoutExs = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
-_items = allWorkoutExs.where((we) => we.blockNumber == 1).toList();
-
-final exMap = <int, Exercise>{};
-final stMap = <int, Stretch>{};
-
-for (final we in _items) {
-if (we.itemType == 'exercise') {
-final ex = await DatabaseHelper.instance.getExerciseById(we.replacedByItemId ?? we.itemId);
-if (ex != null) exMap[ex.id!] = ex;
-} else {
-final st = await DatabaseHelper.instance.getStretchById(we.itemId);
-if (st != null) stMap[we.itemId] = st;
-}
-}
-
-final setsData = <int, List<SetData>>{};
-final setIds = <int, List<int>>{};
-
-for (final item in _items) {
-if (item.id == null) continue;
-final sets = await DatabaseHelper.instance.getWorkoutSets(item.id!);
-final list = <SetData>[];
-final ids = <int>[];
-
-for (final s in sets) {
-list.add(SetData(weight: s.weight, reps: s.reps, completed: s.completed));
-ids.add(s.id!);
-}
-
-setsData[item.id!] = list;
-setIds[item.id!] = ids;
-}
-
-_exerciseMap = exMap;
-_stretchMap = stMap;
-_setsData.addAll(setsData);
-_setIds.addAll(setIds);
-
-return;
-}
-
-_workoutDayId = day.id;
-_completed = day.status == 'completed';
-_started = day.status == 'completed' || day.status == 'in_progress';
-final workoutExs = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
-
-final Map<String, List<WorkoutExercise>> groupedExs = {};
-for (final we in workoutExs) {
-String prefix = we.isWarmup ? 'warmup_' : (we.isCoolDown ? 'cooldown_' : 'main_');
-String key = '$prefix${we.itemType}_${we.itemId}';
-
-if (we.itemType == 'exercise') {
-final ex = await DatabaseHelper.instance.getExerciseById(we.replacedByItemId ?? we.itemId);
-if (ex != null) {
-final cleanName = ex.name.toLowerCase().replaceAll('ё', 'е').replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
-key = '${prefix}exercise_$cleanName';
-}
-} else {
-final st = await DatabaseHelper.instance.getStretchById(we.itemId);
-if (st != null) {
-final cleanName = st.name.toLowerCase().replaceAll('ё', 'е').replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
-key = '${prefix}stretch_$cleanName';
-}
-}
-groupedExs.putIfAbsent(key, () => []).add(we);
-}
-
-final List<WorkoutExercise> uniqueExs = [];
-for (final entry in groupedExs.entries) {
-final list = entry.value;
-if (list.length == 1) {
-uniqueExs.add(list.first);
-} else {
-WorkoutExercise? keeper;
-for (final we in list) {
-final sets = await DatabaseHelper.instance.getWorkoutSets(we.id!);
-final hasCompleted = sets.any((s) => s.completed || s.weight != null);
-if (hasCompleted) {
-keeper = we;
-break;
-}
-}
-keeper ??= list.first;
-uniqueExs.add(keeper);
-for (final we in list) {
-if (we.id != keeper.id) await DatabaseHelper.instance.deleteWorkoutExercise(we.id!);
-}
-}
-}
-uniqueExs.sort((a, b) => a.order.compareTo(b.order));
-
-_hasBlocks = uniqueExs.any((we) => we.blockNumber != null && !we.isWarmup);
-_pendingBlocks.clear();
-for (int i = 0; i < uniqueExs.length; i++) {
-final bn = uniqueExs[i].blockNumber;
-if (bn != null && !uniqueExs[i].isWarmup) _pendingBlocks[i] = bn;
-}
-_items = uniqueExs;
-
-final exMap = <int, Exercise>{};
-final stMap = <int, Stretch>{};
-for (final we in _items) {
-if (we.itemType == 'exercise') {
-final effId = we.replacedByItemId ?? we.itemId;
-final ex = await DatabaseHelper.instance.getExerciseById(effId);
-if (ex != null) exMap[effId] = ex;
-} else {
-final st = await DatabaseHelper.instance.getStretchById(we.itemId);
-if (st != null) stMap[we.itemId] = st;
-}
-}
-final setsData = <int, List<SetData>>{};
-final setIds = <int, List<int>>{};
-
-for (final item in _items) {
-if (item.id == null) continue;
-final sets = await DatabaseHelper.instance.getWorkoutSets(item.id!);
-
-var list = <SetData>[];
-var ids = <int>[];
-
-bool needsPulling = true;
-if (sets.isNotEmpty) {
-for (final s in sets) {
-if (s.completed || s.weight != null) needsPulling = false;
-list.add(SetData(weight: s.weight, reps: s.reps, completed: s.completed));
-ids.add(s.id!);
-}
-}
-
-if (!item.isWarmup && !item.isCoolDown && item.itemType == 'exercise') {
-final lastSets = await _getSmartPrevSets(item.replacedByItemId ?? item.itemId, day.weekNumber ?? 1, day.cycleNumber);
-if (lastSets.isNotEmpty) {
-final doneSets = lastSets.where((s) => s.completed || s.reps != null || s.weight != null).toList();
-if (doneSets.isNotEmpty) {
-double? maxW = doneSets.map((s) => s.weight ?? 0).reduce((a, b) => a > b ? a : b);
-int? maxR = doneSets.map((s) => s.reps ?? 0).reduce((a, b) => a > b ? a : b);
-if (maxW == 0) maxW = null;
-if (maxR == 0) maxR = null;
-if (maxW != null || maxR != null) {
-_lastRecords[item.id!] = {'weight': maxW, 'reps': maxR};
-}
-}
-}
-}
-
-if (needsPulling && !item.isWarmup && !item.isCoolDown && day.weekNumber != null && day.weekNumber! > 1) {
-final ex = exMap[item.replacedByItemId ?? item.itemId];
-final isCardio = ex != null && _isCardio(ex);
-final isTimed = ex != null && _isTimed(ex.name);
-
-if (!isCardio && !isTimed) {
-double? baseWeight;
-int? prevReps;
-bool wasInPrevWeek = false;
-
-if (_lastRecords.containsKey(item.id!)) {
-wasInPrevWeek = true;
-baseWeight = _lastRecords[item.id!]!['weight'] as double?;
-prevReps = _lastRecords[item.id!]!['reps'] as int?;
-}
-
-double? targetWeight = baseWeight;
-final step = (_profile?.level == 'beginner') ? 1.5 : 2.5;
-
-final prevTarget = await _getPrevTarget(item.itemId, day.weekNumber!, day.cycleNumber);
-final planMin = _parseReps(item.reps) ?? 10;
-final planMax = _parseMaxReps(item.reps) ?? planMin;
-final effectivePrevTarget = prevTarget ?? planMin;
-
-int? targetReps = planMax;
-final isBaseEx = ex != null && isBaseExercise(ex);
-
-if (isBaseEx) {
-if (baseWeight != null && baseWeight > 0) {
-if (day.weekNumber == 3 && wasInPrevWeek) {
-targetWeight = baseWeight + step;
-} else {
-targetWeight = baseWeight;
-}
-}
-
-if (wasInPrevWeek && prevReps != null) {
-bool isSuccessful = prevReps >= (effectivePrevTarget - 2);
-
-if (day.weekNumber == 3) {
-targetReps = prevReps;
-} else if (day.weekNumber == 4) {
-targetReps = 15;
-} else if (isSuccessful) {
-targetReps = planMax;
-} else {
-targetReps = effectivePrevTarget;
-}
-} else {
-targetReps = planMax;
-}
-} else {
-targetWeight = baseWeight;
-if (wasInPrevWeek && prevReps != null) {
-if (day.weekNumber == 3) {
-targetReps = prevReps;
-} else if (day.weekNumber == 4) {
-targetReps = 15;
-} else if (prevReps >= (effectivePrevTarget - 2)) {
-targetReps = (prevReps > planMax) ? prevReps : planMax;
-} else {
-targetReps = effectivePrevTarget;
-}
-} else {
-targetReps = planMax;
-}
-}
-
-if (targetWeight != null) _targetWeights[item.id!] = targetWeight;
-
-for (int i = 0; i < list.length; i++) {
-list[i] = SetData(weight: targetWeight, reps: targetReps, completed: false);
-if (ids[i] > 0) {
-await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
-id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: targetWeight, reps: targetReps, completed: false
-));
-}
-}
-}
-
-if (isTimed && !isCardio) {
-int? prevSeconds;
-bool wasTimedInPrevWeek = false;
-if (_lastRecords.containsKey(item.id!) && _lastRecords[item.id!]!['reps'] != null) {
-wasTimedInPrevWeek = true;
-prevSeconds = _lastRecords[item.id!]!['reps'] as int?;
-}
-
-int? targetSeconds = _parseReps(item.reps);
-final bool isBaseEx = isBaseExercise(ex);
-if (isBaseEx && prevSeconds != null) {
-bool isSuccessful = prevSeconds >= (targetSeconds ?? 0);
-if (day.weekNumber == 1 && prevSeconds >= 100) {
-  targetSeconds = prevSeconds;
-} else if (day.weekNumber == 2) targetSeconds = isSuccessful ? (prevSeconds + 20) : (targetSeconds ?? 80);
-else if (day.weekNumber == 3) targetSeconds = isSuccessful ? (prevSeconds + 20) : (targetSeconds ?? 100);
-else if (day.weekNumber == 4) targetSeconds = isSuccessful ? prevSeconds : (targetSeconds ?? 100);
-}
-for (int i = 0; i < list.length; i++) {
-list[i] = SetData(weight: null, reps: targetSeconds, completed: false);
-if (ids[i] > 0) {
-await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
-id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: null, reps: targetSeconds, completed: false
-));
-}
-}
-}
-}
-
-if (day.weekNumber == 4 && !item.isWarmup && !item.isCoolDown) {
-final planMin = _parseReps(item.reps) ?? 15;
-for (int i = 0; i < list.length; i++) {
-if (!list[i].completed) {
-list[i] = SetData(weight: list[i].weight, reps: planMin, completed: false);
-if (ids[i] > 0) {
-await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
-id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: list[i].weight, reps: planMin, completed: false
-));
-}
-}
-}
-}
-
-if (!_completed) {
-final int targetSets = item.sets > 0 ? item.sets : 3;
-if (list.length > targetSets) {
-for (int i = targetSets; i < list.length; i++) {
-if (ids[i] > 0) await DatabaseHelper.instance.deleteWorkoutSet(ids[i]);
-}
-list = list.sublist(0, targetSets);
-ids = ids.sublist(0, targetSets);
-}
-while (list.length < targetSets && list.length < 10) {
-final newSetId = await DatabaseHelper.instance.addWorkoutSet(WorkoutSet(
-workoutExerciseId: item.id!, order: list.length + 1, weight: null, reps: _parseReps(item.reps), completed: false
-));
-list.add(SetData(reps: _parseReps(item.reps), completed: false));
-ids.add(newSetId);
-}
-}
-
-setsData[item.id!] = list;
-setIds[item.id!] = ids;
-}
-_exerciseMap = exMap;
-_stretchMap = stMap;
-_setsData.addAll(setsData);
-_setIds.addAll(setIds);
-}
-int? _parseReps(String repsStr) {
-final match = RegExp(r'(\d+)').firstMatch(repsStr);
-if (match == null) return null;
-return int.tryParse(match.group(1) ?? '');
-}
-
-int? _parseMaxReps(String repsStr) {
-final matches = RegExp(r'(\d+)').allMatches(repsStr);
-if (matches.isEmpty) return null;
-final nums = matches.map((m) => int.tryParse(m.group(1) ?? '')).whereType<int>().toList();
-if (nums.isEmpty) return null;
-return nums.reduce((a, b) => a > b ? a : b);
-}
-
-void _startRestTimer() {
-_restTimer?.cancel();
-setState(() {
-_restTotalTime = _globalRestSeconds;
-_restTimeLeft = _globalRestSeconds;
-_isRestTimerRunning = true;
-_isRestTimerPaused = false;
-});
-_restTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-if (!mounted || _isRestTimerPaused) return;
-if (_restTimeLeft > 0) {
-  setState(() => _restTimeLeft--);
-} else {
-  _stopRestTimer();
-}
-});
-}
-
-void _stopRestTimer() {
-_restTimer?.cancel();
-if (!mounted) return;
-setState(() {
-_isRestTimerRunning = false;
-_isRestTimerPaused = false;
-});
-}
-
-void _togglePauseRestTimer() => setState(() => _isRestTimerPaused = !_isRestTimerPaused);
-
-Future<void> _showWeekNotification() async {
-final week = _day?.weekNumber;
-if (week == null || week == 1 || _started || _completed) return;
-
-final prefs = await SharedPreferences.getInstance();
-final key = 'week${week}_notified_${widget.profileId}_${_day?.id}';
-if (prefs.getBool(key) == true) return;
-
-final prevDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(
-profileId: widget.profileId, weekNumber: week - 1, cycleNumber: _day?.cycleNumber,
-);
-prevDays.sort((a, b) => a.date.compareTo(b.date));
-
-if (prevDays.isEmpty) { await prefs.setBool(key, true); return; }
-
-final currentWeekDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(
-profileId: widget.profileId, weekNumber: week, cycleNumber: _day?.cycleNumber,
-);
-currentWeekDays.sort((a, b) => a.date.compareTo(b.date));
-final currentDayIndex = currentWeekDays.indexWhere((d) => d.id == _day?.id);
-
-WorkoutDay? prevDay;
-if (currentDayIndex != -1 && currentDayIndex < prevDays.length) {
-prevDay = prevDays[currentDayIndex];
-}
-
-if (prevDay == null) {
-final match = RegExp(r'День (\d+)').firstMatch(_day?.name ?? '');
-final dayNum = match?.group(1);
-if (dayNum != null) {
-for (final pd in prevDays) {
-if (pd.name.contains('День $dayNum')) {
-prevDay = pd;
-break;
-}
-}
-}
-}
-
-if (prevDay == null || (prevDay.status != 'completed' && prevDay.status != 'in_progress')) {
-return;
-}
-
-List<String> repsNotDone = [];
-List<String> weightNotDone = [];
-List<String> notDoneExercises = [];
-
-final exs = await DatabaseHelper.instance.getWorkoutExercises(prevDay.id!);
-for (final we in exs) {
-if (we.itemType != 'exercise' || we.isCoolDown || we.isWarmup) continue;
-final exId = we.replacedByItemId ?? we.itemId;
-
-final ex = await DatabaseHelper.instance.getExerciseById(exId);
-if (ex == null) continue;
-
-final sets = await DatabaseHelper.instance.getWorkoutSets(we.id!);
-final completed = sets.where((s) => s.completed).toList();
-final exName = ex.name;
-
-bool allDone = completed.isNotEmpty && completed.length == sets.length;
-
-if (!allDone) {
-notDoneExercises.add('«$exName» (${completed.length} из ${sets.length} подходов)');
-}
-
-if (!isBaseExercise(ex)) continue;
-
-double avgReps = completed.isNotEmpty ? completed.map((s) => s.reps ?? 0).reduce((a, b) => a + b) / completed.length : 0;
-final actualTargetReps = _parseReps(we.reps) ?? 0;
-final targetWeight = _targetWeights[we.id!];
-
-if (targetWeight != null && targetWeight > 0) {
-final maxWeight = completed.isNotEmpty ? completed.map((s) => s.weight ?? 0).reduce((a, b) => a > b ? a : b) : 0;
-if (maxWeight < targetWeight * 0.95) {
-weightNotDone.add('«$exName»: ${maxWeight.toStringAsFixed(1)} кг из ${targetWeight.toStringAsFixed(1)} кг');
-}
-}
-
-if (!allDone || (actualTargetReps > 0 && avgReps < (actualTargetReps - 3))) {
-final realReps = avgReps.round();
-if (realReps < actualTargetReps) {
-repsNotDone.add('«$exName»: $realReps из $actualTargetReps');
-} else {
-repsNotDone.add('«$exName»: не все подходы выполнены');
-}
-}
-}
-
-String title, message;
-Color dialogColor = const Color(0xFF00B894);
-final isFemale = _profile?.gender == 'female';
-final name = _profile?.name ?? 'друг';
-final coped = isFemale ? 'справилась' : 'справился';
-final didNot = isFemale ? 'не доделала' : 'не доделал';
-
-if (week == 2) {
-title = 'Неделя 2: Работа над ошибками 📈';
-if (notDoneExercises.isNotEmpty) {
-message = 'Привет, $name! На прошлой неделе ты $didNot:\n${notDoneExercises.take(5).join('\n')}.\n\nДавай на этой неделе доделаем всё по плану! 🔥';
-} else if (repsNotDone.isNotEmpty) {
-message = 'Привет, $name! На прошлой неделе ты $didNot норму в:\n${repsNotDone.take(5).join('\n')}.\n\nНа этой неделе мы закрепляем эти повторы, чтобы ты могла догнать план. На остальных упражнениях повторы увеличены! 🔥';
-} else if (weightNotDone.isNotEmpty) {
-message = 'Привет, $name! На прошлой неделе не хватило веса в:\n${weightNotDone.take(5).join('\n')}.\n\nВес оставляем прежним, но добавляем повторения. Работаем над техникой! 💪';
-} else {
-message = 'Привет, $name! Ты отлично $coped! На этой неделе мы не трогаем вес, но добавляем повторения, чтобы стимулировать мышцы. Всё по плану! 🚀';
-}
-} else if (week == 3) {
-title = 'Неделя 3: Пик силы! 🚀';
-dialogColor = const Color(0xFFE17055);
-if (notDoneExercises.isNotEmpty) {
-message = 'Пиковая неделя, $name! На прошлой неделе остались недоделанными:\n${notDoneExercises.take(5).join('\n')}.\n\nСоберись, это пик нагрузки! 💪';
-} else if (weightNotDone.isNotEmpty) {
-message = 'Пиковая неделя, $name! Были сложности с весом в:\n${weightNotDone.take(5).join('\n')}.\n\nВес пока оставляем прежним, но на остальных упражнениях мы его добавили. Выкладываемся на максимум! 🏋️‍♂️';
-} else if (repsNotDone.isNotEmpty) {
-message = 'Пиковая неделя, $name! На прошлой неделе ты $didNot повторы в:\n${repsNotDone.take(5).join('\n')}.\n\nНа этой неделе мы добавляем вес, а повторы на этих упражнениях оставляем базовыми. Работаем! 🔥';
-} else {
-message = 'Пиковая неделя, $name! Это пик нагрузки. Мы добавляем вес, а повторения остаются на уровне прошлой недели. Выкладываемся на максимум! 🔥';
-}
-} else {
-title = 'Неделя 4: Закрепление 🌿';
-dialogColor = const Color(0xFF0984E3);
-
-final isSpecialDay = prevDay.name.toLowerCase().contains('челлендж');
-
-if (isSpecialDay) {
-final workedOut = isFemale ? 'проработала' : 'проработал';
-message = 'Привет, $name! На прошлой неделе у нас был особый день — ты отлично $workedOut забытые зоны! А сегодня возвращаемся к нашим фокусным группам. Вес закрепляем с прошлой недели, а повторения снижаем для отдыха. ✨';
-} else {
-message = 'Время восстанавливаться, $name! Вес закрепляем с прошлой недели, а повторения снижаем для отдыха. ✨';
-}
-}
-
-if (!mounted) return;
-Future.delayed(const Duration(milliseconds: 600), () {
-if (!mounted) return;
-showDialog(
-context: context,
-barrierDismissible: false,
-builder: (ctx) => AlertDialog(
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-title: Row(children: [
-Image.asset(FairyMood.wink.asset, width: 44, height: 44, fit: BoxFit.contain),
-const SizedBox(width: 10),
-Expanded(child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)))
-]),
-content: Text(message, style: const TextStyle(fontSize: 15)),
-actions: [
-ElevatedButton(
-onPressed: () => Navigator.pop(ctx),
-style: ElevatedButton.styleFrom(backgroundColor: dialogColor, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
-child: const Text('Вперёд! 🚀', style: TextStyle(fontWeight: FontWeight.bold))
-)
-],
-),
-);
-});
-await prefs.setBool(key, true);
-}
-
-Future<void> _preloadHistory() async {
-final Set<int> loadedHistory = {};
-for (final item in _items) {
-if (item.isCoolDown || item.isWarmup || item.itemType != 'exercise') continue;
-final exId = item.replacedByItemId ?? item.itemId;
-if (loadedHistory.contains(exId)) continue;
-final sets = await DatabaseHelper.instance.getLastWorkoutExerciseSets(profileId: widget.profileId, exerciseId: exId);
-if (sets.isNotEmpty) loadedHistory.add(exId);
-}
-if (mounted) {
-  setState(() {
-_exercisesWithHistory.clear();
-_exercisesWithHistory.addAll(loadedHistory);
-});
-}
-}
-
-String? _getBaseZone(Exercise ex) => getExerciseZone(ex);
-String _groupLabel(String code) => getZoneLabel(code);
-
-String _circleKey(int blockNum, int circleNum) => '${blockNum}_$circleNum';
-bool _isCircleCollapsed(int blockNum, int circleNum) => _collapsedCircles.contains(_circleKey(blockNum, circleNum));
-
-int _totalInCircle(List<WorkoutExercise> blockItems, int circle) {
-int count = 0;
-for (final item in blockItems) {
-final sets = _setsData[item.id];
-if (sets != null && circle < sets.length) {
-count++;
-}
-}
-return count;
-}
-
-bool _isCircleComplete(List<WorkoutExercise> blockItems, int circle) {
-final total = _totalInCircle(blockItems, circle);
-if (total == 0) return false;
-return _completedInCircle(blockItems, circle) == total;
-}
-
-int _completedInCircle(List<WorkoutExercise> blockItems, int circle) {
-int count = 0;
-for (final item in blockItems) {
-final sets = _setsData[item.id];
-if (sets == null || circle >= sets.length) continue;
-if (sets[circle].completed) count++;
-}
-return count;
-}
-
-void _toggleCircle(int blockNum, int circleNum) {
-final key = _circleKey(blockNum, circleNum);
-setState(() {
-if (_collapsedCircles.contains(key)) {
-  _collapsedCircles.remove(key);
-} else {
-  _collapsedCircles.add(key);
-}
-});
-}
-
-void _showMessage(String text) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
-
-Map<int, int> _computeBlockDistribution() {
-final Map<int, int> distribution = {};
-if (_day?.type == 'challenge') return distribution;
-
-bool hasStored = false;
-for (int i = 0; i < _items.length; i++) {
-final item = _items[i];
-if (item.isWarmup || item.order == 150) continue;
-final bn = item.blockNumber;
-if (bn != null) {
-distribution[i] = bn;
-hasStored = true;
-}
-}
-if (hasStored) return distribution;
-
-final List<int> baseIndices = [];
-final List<int> isolationIndices = [];
-for (int i = 0; i < _items.length; i++) {
-final item = _items[i];
-if (item.isCoolDown || item.isWarmup || item.order == 150) continue;
-final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
-if (ex == null || _isCardio(ex)) continue;
-if (isBaseExercise(ex)) {
-  baseIndices.add(i);
-} else {
-  isolationIndices.add(i);
-}
-}
-
-if (baseIndices.isEmpty) {
-for (final idx in isolationIndices) {
-distribution[idx] = 1;
-}
-return distribution;
-}
-
-final int baseCount = baseIndices.length;
-final int isoCount = isolationIndices.length;
-
-int isoPerBase = isoCount == 0 ? 0 : (isoCount / baseCount).ceil().clamp(1, 2);
-if (isoCount < baseCount) isoPerBase = 1;
-
-int isoIndex = 0;
-for (int b = 0; b < baseCount; b++) {
-final blockNum = b + 1;
-distribution[baseIndices[b]] = blockNum;
-
-int remainingBases = baseCount - b - 1;
-int remainingIso = isoCount - isoIndex;
-int maxForThisBlock = isoPerBase;
-
-if (remainingBases > 0) {
-final minForRest = remainingBases * 1;
-maxForThisBlock = (remainingIso - minForRest).clamp(0, isoPerBase);
-} else {
-maxForThisBlock = remainingIso;
-}
-
-int taken = 0;
-while (taken < maxForThisBlock && isoIndex < isolationIndices.length) {
-distribution[isolationIndices[isoIndex]] = blockNum;
-isoIndex++;
-taken++;
-}
-}
-
-while (isoIndex < isolationIndices.length) {
-distribution[isolationIndices[isoIndex]] = baseCount;
-isoIndex++;
-}
-
-return distribution;
-}
-
-Future<void> _createBlocks() async {
-if (_workoutDayId == null) return;
-_pendingBlocks.clear();
-_collapsedCircles.clear();
-final dist = _computeBlockDistribution();
-_pendingBlocks.addAll(dist);
-for (final entry in dist.entries) {
-final item = _items[entry.key];
-if (item.id != null) await DatabaseHelper.instance.updateWorkoutExerciseBlock(id: item.id!, blockNumber: entry.value);
-}
-if (!mounted) return;
-setState(() {
-_blocksReady = true;
-_hasBlocks = true;
-});
-final maxBlock = dist.values.isEmpty ? 0 : dist.values.reduce((a, b) => a > b ? a : b);
-_showMessage('Сформировано блоков: $maxBlock');
-}
-
-void _resetBlocks() {
-setState(() {
-_pendingBlocks.clear();
-_blocksReady = false;
-_hasBlocks = false;
-_collapsedCircles.clear();
-});
-_showMessage('Блоки сброшены');
-}
-
-Future<void> _toggleBlocks() async {
-if (_workoutDayId == null) return;
-if (_hasBlocks) {
-await DatabaseHelper.instance.clearBlocksForWorkoutDay(_workoutDayId!);
-if (!mounted) return;
-setState(() {
-_hasBlocks = false;
-_collapsedCircles.clear();
-});
-_showMessage('Блоки убраны');
-} else {
-for (final item in _items) {
-if (item.id == null || item.isCoolDown || item.isWarmup) continue;
-final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
-if (ex != null && _isCardio(ex)) await DatabaseHelper.instance.updateWorkoutExerciseBlock(id: item.id!, blockNumber: null);
-}
-final dist = _computeBlockDistribution();
-for (final entry in dist.entries) {
-final item = _items[entry.key];
-if (item.id != null) await DatabaseHelper.instance.updateWorkoutExerciseBlock(id: item.id!, blockNumber: entry.value);
-}
-if (!mounted) return;
-setState(() => _hasBlocks = true);
-final maxBlock = dist.values.isEmpty ? 0 : dist.values.reduce((a, b) => a > b ? a : b);
-_showMessage('Сформировано блоков: $maxBlock');
-}
-}
-
-Future<void> _startWorkout() async {
-if (_workoutDayId == null) return;
-final day = await DatabaseHelper.instance.getWorkoutDayById(_workoutDayId!);
-if (day == null) return;
-if (day.status == 'completed') {
-_showMessage('Эта тренировка уже завершена');
-return;
-}
-
-if (day.type != 'challenge' && day.weekNumber != null && day.weekNumber! > 1) {
-final prevWeekDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(profileId: widget.profileId, weekNumber: day.weekNumber! - 1, cycleNumber: day.cycleNumber);
-final isPrevDone = prevWeekDays.isNotEmpty && prevWeekDays.every((d) => d.status == 'completed');
-if (!isPrevDone) {
-_showMessage('Сначала завершите предыдущую неделю!');
-return;
-}
-}
-
-final updated = day.copyWith(status: 'in_progress', startedAt: DateTime.now());
-await DatabaseHelper.instance.updateWorkoutDay(updated);
-if (!mounted) return;
-setState(() {
-_started = true;
-_day = updated;
-});
-FairyReactionService().trigger('workout_started', mood: FairyMood.wink);
-_showMessage('Тренировка началась! 💪');
-}
-
-// ══════════════════════════════════════════════════════════════════
-// 👇 ИЗМЕНЕНИЯ ЗДЕСЬ: награда за челлендж / обычную тренировку
-// ══════════════════════════════════════════════════════════════════
-Future<void> _finishWorkout() async {
-if (_workoutDayId == null) return;
-
-final preUpdates = <Future>[];
-for (final item in _items) {
-if (item.isCoolDown || item.isWarmup || item.id == null) continue;
-final sets = _setsData[item.id!];
-if (sets == null) continue;
-for (int i = 0; i < sets.length; i++) {
-final ids = _setIds[item.id!];
-if (ids != null && i < ids.length && ids[i] > 0) {
-preUpdates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
-id: ids[i], workoutExerciseId: item.id!, order: i + 1,
-weight: sets[i].weight, reps: sets[i].reps, completed: sets[i].completed,
-)));
-}
-}
-}
-if (preUpdates.isNotEmpty) await Future.wait(preUpdates);
-
-int completedSets = 0;
-int totalSets = 0;
-
-for (final item in _items) {
-if (item.isCoolDown || item.isWarmup || item.id == null) continue;
-final sets = _setsData[item.id!];
-if (sets == null) continue;
-for (final s in sets) {
-totalSets++;
-if (s.completed) completedSets++;
-}
-}
-
-// 👇 ЗАЩИТА: если нет упражнений — не даём завершить (иначе награда за пустую тренировку)
-if (totalSets == 0) {
-_showMessage('В тренировке нет упражнений. Начните заново или выберите другой день.');
-return;
-}
-
-if (completedSets < totalSets) {
-final confirm = await showDialog<bool>(
-context: context,
-builder: (ctx) => AlertDialog(
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-title: const Text('Тренировка не завершена'),
-content: Text('Вы выполнили $completedSets из $totalSets подходов.\n\nСохранить прогресс и вернуться? День останется в плане как «В процессе».'),
-actions: [
-TextButton(
-onPressed: () => Navigator.pop(ctx, false),
-child: const Text('Продолжить'),
-),
-ElevatedButton(
-onPressed: () => Navigator.pop(ctx, true),
-style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE17055)),
-child: const Text('Сохранить и выйти'),
-),
-],
-),
-);
-
-if (confirm != true) return;
-
-final updates = <Future>[];
-for (final item in _items) {
-if (item.isCoolDown || item.isWarmup || item.id == null) continue;
-final sets = _setsData[item.id!];
-if (sets == null) continue;
-for (int i = 0; i < sets.length; i++) {
-final ids = _setIds[item.id!];
-if (ids != null && i < ids.length && ids[i] > 0) {
-updates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
-id: ids[i], workoutExerciseId: item.id!, order: i + 1,
-weight: sets[i].weight, reps: sets[i].reps, completed: sets[i].completed,
-)));
-}
-}
-}
-if (updates.isNotEmpty) await Future.wait(updates);
-
-final day = await DatabaseHelper.instance.getWorkoutDayById(_workoutDayId!);
-if (day == null) return;
-final updated = day.copyWith(status: 'in_progress', startedAt: day.startedAt ?? DateTime.now());
-await DatabaseHelper.instance.updateWorkoutDay(updated);
-if (mounted) Navigator.pop(context, true);
-return;
-}
-
-String? note;
-final noteController = TextEditingController();
-final noteResult = await showDialog<bool>(
-context: context,
-builder: (ctx) => AlertDialog(
-title: const Text('Заметка к тренировке'),
-content: TextField(
-controller: noteController,
-autofocus: true,
-maxLines: 3,
-decoration: const InputDecoration(hintText: 'Как прошло?', border: OutlineInputBorder()),
-),
-actions: [
-TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Пропустить')),
-ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
-],
-),
-);
-if (noteResult == true) note = noteController.text.trim();
-
-final updates = <Future>[];
-for (final item in _items) {
-if (item.isCoolDown || item.isWarmup || item.id == null) continue;
-final sets = _setsData[item.id!];
-if (sets == null) continue;
-for (int i = 0; i < sets.length; i++) {
-final ids = _setIds[item.id!];
-if (ids != null && i < ids.length) {
-updates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: sets[i].weight, reps: sets[i].reps, completed: true)));
-}
-}
-}
-if (updates.isNotEmpty) await Future.wait(updates);
-
-bool isOverperformed = false;
-for (final item in _items) {
-if (item.isCoolDown || item.isWarmup || item.id == null) continue;
-final sets = _setsData[item.id!];
-if (sets == null) continue;
-final targetW = _targetWeights[item.id!];
-for (final s in sets) {
-if (s.completed && targetW != null && targetW > 0 && s.weight != null && s.weight! > targetW) isOverperformed = true;
-}
-}
-
-final day = await DatabaseHelper.instance.getWorkoutDayById(_workoutDayId!);
-if (day == null) return;
-final minutes = DateTime.now().difference(day.startedAt ?? DateTime.now()).inMinutes;
-
-final updated = day.copyWith(status: 'completed', completedAt: DateTime.now(), durationMinutes: minutes > 0 ? minutes : 1, notes: note);
-await DatabaseHelper.instance.updateWorkoutDay(updated);
-if (!mounted) return;
-
-// ══════════════════════════════════════════════════════════════════
-// 👇👇👇 НАГРАДА: ЧЕЛЛЕНДЖ (3-я неделя) → 60⚡ + золотой лотос
-//       Обычная тренировка → +20⚡ (как раньше)
-// ══════════════════════════════════════════════════════════════════
-final bool isChallengeDay = updated.weekNumber == 3
-&& updated.name.toLowerCase().contains('челлендж');
-
-String snackMessage;
-Color snackColor;
-
-if (isChallengeDay) {
-// UNIQUE(profileId, reason, refId) в energy_transactions —
-// гарантия, что 60⚡ и лотос выдаются только ОДИН раз за этот день
-final awarded = await EnergyService.addEnergy(
-profileId: widget.profileId,
-delta: 60,
-reason: 'challenge_day_reward',
-refId: _workoutDayId,
-);
-if (awarded) {
-await GardenService.plantNextFlower(
-profileId: widget.profileId,
-flowerType: 'legendary', // 👈 flower_gold.png в саду
-);
-snackMessage = '🏆 ЧЕЛЛЕНДЖ ПРОЙДЕН!\n+60 ⚡️ и Золотой Лотос выросли в Саду Феи 🌸✨';
-} else {
-snackMessage = 'Челлендж уже засчитан ранее. Отличная работа! 💪';
-}
-snackColor = const Color(0xFFFFB800);
-} else {
-await EnergyService.addEnergy(
-profileId: widget.profileId,
-delta: 20,
-reason: 'workout_completed',
-refId: _workoutDayId,
-);
-snackMessage = 'Тренировка завершена! Твоя физическая усталость конвертирована в +20 ⚡️ Жизненной Энергии. Загляни в Сад Феи 🌸';
-snackColor = const Color(0xFF00B894);
-}
-
-if (mounted) {
-ScaffoldMessenger.of(context).showSnackBar(
-SnackBar(
-content: Text(snackMessage),
-backgroundColor: snackColor,
-duration: const Duration(seconds: 4),
-),
-);
-}
-// ══════════════════════════════════════════════════════════════════
-// 👆👆👆 КОНЕЦ БЛОКА НАГРАДЫ
-// ══════════════════════════════════════════════════════════════════
-
-if (isOverperformed) {
-  FairyReactionService().trigger('workout_overperformed', mood: FairyMood.party);
-} else {
-  FairyReactionService().trigger('workout_completed', mood: FairyMood.party);
-}
-
-final unlocked = await AchievementService.checkAchievements(widget.profileId);
-if (unlocked.isNotEmpty && mounted) {
-for (final a in unlocked) {
-ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-content: Row(children: [
-Text(a.icon, style: const TextStyle(fontSize: 24)),
-const SizedBox(width: 12),
-Expanded(child: Text('Новое достижение: ${a.title}!', style: const TextStyle(fontWeight: FontWeight.w600)))
-]),
-backgroundColor: const Color(0xFF6C5CE7),
-duration: const Duration(seconds: 3),
-));
-}
-}
-
-bool isWeekComplete = false;
-bool isCycleComplete = false;
-
-if (updated.weekNumber != null) {
-final weekDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(profileId: widget.profileId, weekNumber: updated.weekNumber!, cycleNumber: updated.cycleNumber);
-final plannedDays = _profile?.daysPerWeek ?? 3;
-final completedCount = weekDays.where((d) => d.status == 'completed').length;
-final hasSkipped = weekDays.any((d) => d.status != 'completed');
-isWeekComplete = completedCount >= plannedDays && !hasSkipped;
-
-if (isWeekComplete && updated.cycleNumber != null) {
-bool allWeeksDone = true;
-for (int w = 1; w <= 4; w++) {
-final wDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(profileId: widget.profileId, weekNumber: w, cycleNumber: updated.cycleNumber);
-final wCompleted = wDays.where((d) => d.status == 'completed').length;
-final wHasSkipped = wDays.any((d) => d.status != 'completed');
-if (wCompleted < plannedDays || wHasSkipped) {
-allWeeksDone = false;
-break;
-}
-}
-isCycleComplete = allWeeksDone;
-}
-}
-
-await Future.delayed(const Duration(milliseconds: 300));
-if (!mounted) return;
-
-await Navigator.pushReplacement(
-context,
-MaterialPageRoute(
-builder: (_) => WorkoutCompleteScreen(
-completedDay: updated,
-exercisesCount: _items.where((i) => !i.isCoolDown && !i.isWarmup).length,
-isWeekComplete: isWeekComplete,
-isCycleComplete: isCycleComplete,
-userName: _profile?.name ?? 'друг',
-),
-),
-);
-
-if (mounted) Navigator.pop(context, true);
-}
-// ══════════════════════════════════════════════════════════════════
-// 👆 КОНЕЦ ИЗМЕНЁННОГО МЕТОДА _finishWorkout
-// ══════════════════════════════════════════════════════════════════
-
-Future<void> _saveAsTemplate() async {
-if (_day == null || _day!.id == null) return;
-if (_items.isEmpty) {
-_showMessage('Нечего сохранять — нет упражнений');
-return;
-}
-final nameController = TextEditingController(text: _day!.name);
-final confirm = await showDialog<bool>(
-context: context,
-builder: (ctx) => AlertDialog(
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-title: const Row(children: [Icon(Icons.bookmark_add_rounded), SizedBox(width: 8), Expanded(child: Text('Сохранить как шаблон', style: TextStyle(fontSize: 18)))]),
-content: Column(
-mainAxisSize: MainAxisSize.min,
-crossAxisAlignment: CrossAxisAlignment.start,
-children: [
-const Text('Создаст шаблон с этими упражнениями. Разминка в шаблон не попадёт.', style: TextStyle(fontSize: 13)),
-const SizedBox(height: 16),
-TextField(controller: nameController, autofocus: true, decoration: const InputDecoration(labelText: 'Название шаблона', prefixIcon: Icon(Icons.fitness_center_rounded), hintText: 'Например: Моя силовая A')),
-],
-),
-actions: [
-TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
-],
-),
-);
-if (confirm != true) return;
-final templateName = nameController.text.trim().isEmpty ? _day!.name : nameController.text.trim();
-try {
-await DatabaseHelper.instance.createTemplateFromWorkoutDay(profileId: widget.profileId, workoutDayId: _day!.id!, templateName: templateName, type: _day!.type, estimatedMinutes: _day!.durationMinutes ?? 45);
-if (!mounted) return;
-ScaffoldMessenger.of(context).hideCurrentSnackBar();
-ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✅ Шаблон «$templateName» сохранён'), duration: const Duration(seconds: 3)));
-} catch (e) {
-if (!mounted) return;
-_showMessage('Ошибка: $e');
-}
-}
-
-Future<void> _openExerciseMenu(WorkoutExercise item, Exercise exercise) async {
-if (_isViewMode) return;
-final result = await showModalBottomSheet<String>(
-context: context,
-shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-builder: (ctx) => _buildExerciseMenu(ctx, exercise),
-);
-if (result == null) return;
-switch (result) {
-case 'replace': await _replaceExercise(item, exercise); break;
-case 'edit': await _editExerciseParams(item); break;
-case 'delete': await _deleteExercise(item); break;
-}
-}
-
-Widget _buildExerciseMenu(BuildContext ctx, Exercise exercise) {
-final theme = Theme.of(ctx);
-return Padding(
-padding: const EdgeInsets.all(20),
-child: Column(
-mainAxisSize: MainAxisSize.min,
-crossAxisAlignment: CrossAxisAlignment.stretch,
-children: [
-Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.onSurface.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(2)))),
-const SizedBox(height: 16),
-Text(exercise.name, style: theme.textTheme.headlineMedium, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-const SizedBox(height: 20),
-_menuTile(ctx, icon: Icons.swap_horiz_rounded, title: 'Заменить упражнение', color: theme.colorScheme.primary, onTap: () => Navigator.pop(ctx, 'replace')),
-_menuTile(ctx, icon: Icons.tune_rounded, title: 'Изменить подходы и повторения', color: const Color(0xFF00B894), onTap: () => Navigator.pop(ctx, 'edit')),
-_menuTile(ctx, icon: Icons.delete_outline_rounded, title: 'Удалить из тренировки', color: theme.colorScheme.error, onTap: () => Navigator.pop(ctx, 'delete')),
-],
-),
-);
-}
-
-Widget _menuTile(BuildContext ctx, {required IconData icon, required String title, required Color color, required VoidCallback onTap}) {
-return Padding(
-padding: const EdgeInsets.only(bottom: 8),
-child: Material(
-color: Colors.transparent,
-child: ListTile(
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.1))),
-leading: Icon(icon, color: color),
-title: Text(title),
-onTap: onTap,
-),
-),
-);
-}
-
-Future<void> _replaceExercise(WorkoutExercise item, Exercise original) async {
-final reason = await showModalBottomSheet<String>(context: context, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))), builder: (ctx) => _buildReasonSheet(ctx));
-if (reason == null) return;
-final result = await Navigator.push<Map<String, dynamic>>(context, MaterialPageRoute(builder: (_) => ReplaceExerciseScreen(original: original, reasonCode: reason)));
-if (result == null) return;
-
-_applyReplacement(item, original, result);
-}
-
-Future<void> _quickReplaceExercise(WorkoutExercise item, Exercise original) async {
-final result = await Navigator.push<Map<String, dynamic>>(
-context,
-MaterialPageRoute(
-builder: (_) => ReplaceExerciseScreen(
-original: original,
-reasonCode: null,
-),
-),
-);
-if (result == null) return;
-
-_applyReplacement(item, original, result);
-}
-
-void _applyReplacement(WorkoutExercise item, Exercise original, Map<String, dynamic> result) async {
-final newExercise = result['newExercise'] as Exercise;
-final permanent = result['permanent'] as bool;
-final reasonCode = result['reason'] as String? ?? 'other';
-
-final isAlreadyInWorkout = _items.any((i) =>
-i.id != item.id &&
-(i.replacedByItemId ?? i.itemId) == newExercise.id
-);
-
-if (isAlreadyInWorkout) {
-_showMessage('Упражнение «${newExercise.name}» уже есть в этой тренировке!');
-return;
-}
-
-setState(() {
-_exerciseMap[newExercise.id!] = newExercise;
-final idx = _items.indexOf(item);
-if (idx >= 0) {
-_items[idx] = item.copyWith(itemId: newExercise.id!, replacedByItemId: newExercise.id, replacementReason: reasonCode, replacementPermanent: permanent);
-if (item.id != null) {
-final defaultReps = _parseReps(_items[idx].reps);
-_setsData[item.id!] = List.generate(_items[idx].sets, (_) => SetData(reps: defaultReps, completed: false));
-_setIds[item.id!] = List.generate(_items[idx].sets, (_) => 0);
-}
-}
-});
-if (_day?.weekNumber != null) await DatabaseHelper.instance.replaceExerciseInMonth(profileId: widget.profileId, oldItemId: original.id!, newItemId: newExercise.id!, reason: reasonCode, permanent: permanent);
-_showMessage('Заменено на «${newExercise.name}» во всем месяце');
-}
-
-Widget _buildReasonSheet(BuildContext ctx) {
-final theme = Theme.of(ctx);
-final reasons = [
-('no_equipment', 'Нет оборудования', Icons.block_rounded, theme.colorScheme.error),
-('too_hard', 'Слишком тяжело', Icons.trending_down_rounded, const Color(0xFFE17055)),
-('too_easy', 'Слишком легко', Icons.trending_up_rounded, const Color(0xFF00B894)),
-('dislike', 'Не нравится', Icons.thumb_down_rounded, const Color(0xFFFDCB6E)),
-('other', 'Другое (вручную)', Icons.search_rounded, theme.colorScheme.primary)
-];
-return Padding(
-padding: const EdgeInsets.all(20),
-child: Column(
-mainAxisSize: MainAxisSize.min,
-crossAxisAlignment: CrossAxisAlignment.stretch,
-children: [
-Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.onSurface.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(2)))),
-const SizedBox(height: 16),
-Text('Почему заменить?', style: theme.textTheme.headlineMedium, textAlign: TextAlign.center),
-const SizedBox(height: 8),
-Text('Приложение подберёт замену с учётом причины', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6)), textAlign: TextAlign.center),
-const SizedBox(height: 20),
-...reasons.map((r) {
-final (code, label, icon, color) = r;
-return Padding(
-padding: const EdgeInsets.only(bottom: 8),
-child: Material(
-color: Colors.transparent,
-child: ListTile(
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: theme.colorScheme.onSurface.withValues(alpha: 0.1))),
-leading: Icon(icon, color: color),
-title: Text(label),
-onTap: () => Navigator.pop(ctx, code),
-),
-),
-);
-}),
-],
-),
-);
-}
-
-Future<void> _editExerciseParams(WorkoutExercise item) async {
-final setsController = TextEditingController(text: '${item.sets}');
-final repsController = TextEditingController(text: item.reps);
-final restController = TextEditingController(text: '${item.restSeconds}');
-final isTimed = _isTimed(_exerciseMap[item.replacedByItemId ?? item.itemId]?.name ?? '');
-final result = await showDialog<bool>(
-context: context,
-builder: (ctx) => AlertDialog(
-title: const Text('Изменить параметры'),
-content: Column(
-mainAxisSize: MainAxisSize.min,
-children: [
-TextField(controller: setsController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Подходы', prefixIcon: Icon(Icons.repeat_rounded))),
-const SizedBox(height: 12),
-TextField(controller: repsController, decoration: InputDecoration(labelText: isTimed ? 'Время (например, 60 сек)' : 'Повторения (например, 10-12)', prefixIcon: const Icon(Icons.numbers_rounded))),
-const SizedBox(height: 12),
-TextField(controller: restController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Отдых (сек)', prefixIcon: Icon(Icons.timer_rounded))),
-],
-),
-actions: [
-TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
-],
-),
-);
-if (result != true) return;
-final newSets = int.tryParse(setsController.text) ?? item.sets;
-final newReps = repsController.text.trim().isEmpty ? item.reps : repsController.text.trim();
-final newRest = int.tryParse(restController.text) ?? item.restSeconds;
-final defaultReps = _parseReps(newReps);
-setState(() {
-final idx = _items.indexOf(item);
-if (idx >= 0) _items[idx] = item.copyWith(sets: newSets, reps: newReps, restSeconds: newRest);
-if (item.id != null) {
-_setsData[item.id!] = List.generate(newSets, (_) => SetData(reps: defaultReps));
-_setIds[item.id!] = List.generate(newSets, (_) => 0);
-}
-});
-_showMessage('Параметры обновлены');
-}
-
-Future<void> _addSetToExercise(WorkoutExercise item) async {
-if (item.id == null || !_started || _isViewMode) return;
-final sets = _setsData[item.id!];
-final ids = _setIds[item.id!];
-if (sets == null || ids == null) return;
-final newOrder = sets.length + 1;
-final defaultReps = _parseReps(item.reps);
-final newSetId = await DatabaseHelper.instance.addWorkoutSet(WorkoutSet(workoutExerciseId: item.id!, order: newOrder, reps: defaultReps, completed: false));
-if (!mounted) return;
-setState(() {
-sets.add(SetData(reps: defaultReps, completed: false));
-ids.add(newSetId);
-});
-}
-
-Future<void> _deleteSetFromExercise(WorkoutExercise item, int index) async {
-if (item.id == null || _isViewMode) return;
-final sets = _setsData[item.id!];
-final ids = _setIds[item.id!];
-if (sets == null || ids == null || index < 0 || index >= sets.length) return;
-if (sets.length <= 1) {
-_showMessage('Нельзя удалить последний подход');
-return;
-}
-final setId = ids[index];
-if (setId > 0) await DatabaseHelper.instance.deleteWorkoutSet(setId);
-if (!mounted) return;
-setState(() {
-sets.removeAt(index);
-ids.removeAt(index);
-});
-_showMessage('Подход удалён');
-}
-
-Future<void> _deleteExercise(WorkoutExercise item) async {
-final confirmed = await showDialog<bool>(
-context: context,
-builder: (ctx) => AlertDialog(
-title: const Text('Удалить упражнение?'),
-content: const Text('Упражнение будет удалено из этой тренировки.'),
-actions: [
-TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Удалить', style: TextStyle(color: Colors.red)))
-],
-),
-);
-if (confirmed != true) return;
-setState(() {
-_items.remove(item);
-_setsData.remove(item.id);
-_setIds.remove(item.id);
-});
-_showMessage('Упражнение удалено');
-}
-
-Future<void> _startStretchTimer(WorkoutExercise item, Stretch st) async {
-if (_isViewMode || !_started || item.id == null) return;
-final result = await showDialog<bool>(
-context: context,
-barrierDismissible: false,
-builder: (ctx) => _StretchTimerDialog(name: st.name, totalSeconds: st.durationSeconds, bothSides: st.bothSides),
-);
-if (result != true || !mounted) return;
-final ids = _setIds[item.id!];
-if (ids != null && ids.isNotEmpty) {
-if (ids.first == 0) {
-final newId = await DatabaseHelper.instance.addWorkoutSet(WorkoutSet(workoutExerciseId: item.id!, order: 1, completed: true));
-if (mounted) setState(() => ids[0] = newId);
-} else {
-await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(id: ids.first, workoutExerciseId: item.id!, order: 1, completed: true));
-}
-}
-setState(() => _setsData[item.id!] = [SetData(completed: true)]);
-_showMessage('Заминка выполнена ✓');
-}
-
-@override
-Widget build(BuildContext context) {
-return Scaffold(
-appBar: AppBar(
-title: Text(_title),
-actions: [
-IconButton(icon: const Icon(Icons.timer_rounded), tooltip: 'Время отдыха', onPressed: _started ? _showRestTimePicker : null),
-if (_started) IconButton(tooltip: _hasBlocks ? 'Убрать блоки' : 'Сформировать блоки', onPressed: _isViewMode || _day?.type == 'challenge' ? null : _toggleBlocks, icon: Icon(_hasBlocks ? Icons.grid_off_rounded : Icons.grid_view_rounded, color: _hasBlocks ? Theme.of(context).colorScheme.primary : null)),
-if (_isInProgressMode) TextButton.icon(onPressed: _finishWorkout, icon: const Icon(Icons.check_rounded), label: const Text('Завершить')),
-],
-),
-body: _loading
-? const Center(child: CircularProgressIndicator())
-: Column(children: [
-if (_isRestTimerRunning) _buildTopRestTimer(context),
-Expanded(child: _buildContent(context))
-]),
-);
-}
+  List<WorkoutExercise> _items = [];
+  Map<int, Exercise> _exerciseMap = {};
+  Map<int, Stretch> _stretchMap = {};
+
+  int? _workoutDayId;
+  bool _started = false;
+  bool _completed = false;
+  bool _loading = true;
+
+  bool _hasBlocks = false;
+  bool _blocksReady = false;
+  final Map<int, int> _pendingBlocks = {};
+
+  final Set<String> _collapsedCircles = {};
+  final Set<int> _exercisesWithHistory = {};
+
+  int _globalRestSeconds = 60;
+
+  final Map<int, List<SetData>> _setsData = {};
+  final Map<int, List<int>> _setIds = {};
+  final Map<int, double?> _targetWeights = {};
+
+  final Map<int, Map<String, dynamic>> _lastRecords = {};
+
+  WorkoutDay? _day;
+  UserProfile? _profile;
+
+  Timer? _restTimer;
+  int _restTimeLeft = 0;
+  int _restTotalTime = 0;
+  bool _isRestTimerRunning = false;
+  bool _isRestTimerPaused = false;
+
+  bool get _isViewMode => _completed;
+  bool get _isInProgressMode => _started && !_completed;
+  bool get _isNewMode => !_started && !_completed;
+
+  String get _title => _day?.name ?? 'Тренировка';
+
+  @override
+  void initState() {
+    super.initState();
+    _day = widget.workoutDay;
+    _loadSavedRestTime();
+    _init();
+  }
+
+  @override
+  void dispose() {
+    _restTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadSavedRestTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getInt('global_rest_seconds');
+    if (saved != null && mounted) setState(() => _globalRestSeconds = saved);
+  }
+
+  Future<void> _init() async {
+    setState(() => _loading = true);
+    _profile = await DatabaseHelper.instance.getProfileById(widget.profileId);
+
+    if (widget.workoutDay != null) {
+      await _loadExistingDay(widget.workoutDay!);
+    }
+
+    if (!mounted) return;
+    setState(() => _loading = false);
+    _preloadHistory();
+    _showWeekNotification();
+  }
+
+  bool _isCardio(Exercise ex) {
+    final lower = ex.name.toLowerCase();
+    if (_isCardioName(lower)) return true;
+    final coreGroups = ['abs', 'core', 'obliques'];
+    if (ex.muscleGroups.any((m) => coreGroups.contains(m))) return false;
+    return ex.muscleGroups.contains('cardio');
+  }
+
+  bool _isTimed(String name) {
+    final lower = name.toLowerCase();
+    return lower.contains('планка') || lower.contains('plank') || _isCardioName(lower);
+  }
+
+  bool _isCardioName(String lowerName) {
+    if (lowerName.contains('бег') || lowerName.contains('дорожк') || lowerName.contains('скакалк') ||
+        lowerName.contains('эллипс') || lowerName.contains('велотренаж') || lowerName.contains('велоэргометр') ||
+        lowerName.contains('гребл') || lowerName.contains('степпер') || lowerName.contains('кардио')) {
+      return true;
+    }
+    if (lowerName.contains('скалолаз')) return true;
+    if (lowerName.contains('канат') && (lowerName.contains('махи') || lowerName.contains('волны') || lowerName.contains('бэтл'))) return true;
+    return false;
+  }
+
+  Future<int?> _getPrevTarget(int itemId, int week, int? cycle) async {
+    if (week <= 1) return null;
+    final prevDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(
+        profileId: widget.profileId, weekNumber: week - 1, cycleNumber: cycle
+    );
+    for (final pd in prevDays) {
+      final exs = await DatabaseHelper.instance.getWorkoutExercises(pd.id!);
+      for (final ex in exs) {
+        if (ex.itemId == itemId || ex.replacedByItemId == itemId) {
+          return _parseReps(ex.reps);
+        }
+      }
+    }
+    return null;
+  }
+
+  Future<List<WorkoutSet>> _getSmartPrevSets(int exerciseId, int currentWeek, int? cycle) async {
+    if (currentWeek > 1) {
+      final prevDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(
+          profileId: widget.profileId, weekNumber: currentWeek - 1, cycleNumber: cycle
+      );
+      for (final d in prevDays) {
+        final exs = await DatabaseHelper.instance.getWorkoutExercises(d.id!);
+        for (final ex in exs) {
+          if (ex.itemId == exerciseId || ex.replacedByItemId == exerciseId) {
+            final sets = await DatabaseHelper.instance.getWorkoutSets(ex.id!);
+            if (sets.isNotEmpty && sets.any((s) => s.completed || s.weight != null || s.reps != null)) {
+              return sets;
+            }
+          }
+        }
+      }
+    }
+
+    if (currentWeek == 4) {
+      final dayNumMatch = RegExp(r'День (\d+)').firstMatch(_day?.name ?? '');
+      final currentDayNum = dayNumMatch?.group(1);
+
+      final w3Days = await DatabaseHelper.instance.getWorkoutDaysByWeek(
+          profileId: widget.profileId, weekNumber: 3, cycleNumber: cycle
+      );
+
+      WorkoutDay? correspondingDay3;
+      for (final d in w3Days) {
+        if (currentDayNum != null && d.name.contains('День $currentDayNum')) {
+          correspondingDay3 = d;
+          break;
+        }
+      }
+
+      if (correspondingDay3 != null && correspondingDay3.type == 'challenge') {
+        final w2Days = await DatabaseHelper.instance.getWorkoutDaysByWeek(
+            profileId: widget.profileId, weekNumber: 2, cycleNumber: cycle
+        );
+        for (final d in w2Days) {
+          if (currentDayNum != null && d.name.contains('День $currentDayNum')) {
+            final exs = await DatabaseHelper.instance.getWorkoutExercises(d.id!);
+            for (final ex in exs) {
+              if (ex.itemId == exerciseId || ex.replacedByItemId == exerciseId) {
+                final sets = await DatabaseHelper.instance.getWorkoutSets(ex.id!);
+                if (sets.isNotEmpty) return sets;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return await DatabaseHelper.instance.getLastWorkoutExerciseSets(
+      profileId: widget.profileId, exerciseId: exerciseId, daysLimit: 365,
+    );
+  }
+
+  // 👈 НОВОЕ: максимум ФАКТИЧЕСКИ выполненных повторов упражнения
+  // в текущем цикле (недели 1–3, только завершённые дни и только
+  // выполненные подходы). Ручной ввод пользователя хранится в БД,
+  // поэтому отдельно его запоминать не нужно.
+  Future<int?> _getMaxCompletedReps(int exerciseId, int? cycle) async {
+    if (cycle == null) return null;
+    int? best;
+    for (int w = 1; w <= 3; w++) {
+      final days = await DatabaseHelper.instance.getWorkoutDaysByWeek(
+        profileId: widget.profileId, weekNumber: w, cycleNumber: cycle,
+      );
+      for (final d in days) {
+        if (d.status != 'completed') continue;
+        final exs = await DatabaseHelper.instance.getWorkoutExercises(d.id!);
+        for (final we in exs) {
+          if (we.itemId != exerciseId && we.replacedByItemId != exerciseId) continue;
+          final sets = await DatabaseHelper.instance.getWorkoutSets(we.id!);
+          final done = sets.where((s) => s.completed && (s.reps ?? 0) > 0).toList();
+          if (done.isEmpty) continue;
+          final maxR = done.map((s) => s.reps ?? 0).reduce((a, b) => a > b ? a : b);
+          if (best == null || maxR > best) best = maxR;
+        }
+      }
+    }
+    return best;
+  }
+
+  // 👈 НОВОЕ: максимум фактических повторов за ВЕСЬ цикл (недели 1–4) —
+  // используется для переноса результата на неделю 1 следующего цикла
+  Future<int?> _getMaxCompletedRepsInCycle(int exerciseId, int cycle) async {
+    int? best;
+    for (int w = 1; w <= 4; w++) {
+      final days = await DatabaseHelper.instance.getWorkoutDaysByWeek(
+        profileId: widget.profileId, weekNumber: w, cycleNumber: cycle,
+      );
+      for (final d in days) {
+        if (d.status != 'completed') continue;
+        final exs = await DatabaseHelper.instance.getWorkoutExercises(d.id!);
+        for (final we in exs) {
+          if (we.itemId != exerciseId && we.replacedByItemId != exerciseId) continue;
+          final sets = await DatabaseHelper.instance.getWorkoutSets(we.id!);
+          final done = sets.where((s) => s.completed && (s.reps ?? 0) > 0).toList();
+          if (done.isEmpty) continue;
+          final maxR = done.map((s) => s.reps ?? 0).reduce((a, b) => a > b ? a : b);
+          if (best == null || maxR > best) best = maxR;
+        }
+      }
+    }
+    return best;
+  }
+
+  Future<void> _loadExistingDay(WorkoutDay day) async {
+    if (day.type == 'challenge') {
+      _workoutDayId = day.id;
+      _completed = false;
+      _started = true;
+
+      final allWorkoutExs = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
+      _items = allWorkoutExs.where((we) => we.blockNumber == 1).toList();
+
+      final exMap = <int, Exercise>{};
+      final stMap = <int, Stretch>{};
+
+      for (final we in _items) {
+        if (we.itemType == 'exercise') {
+          final ex = await DatabaseHelper.instance.getExerciseById(we.replacedByItemId ?? we.itemId);
+          if (ex != null) exMap[ex.id!] = ex;
+        } else {
+          final st = await DatabaseHelper.instance.getStretchById(we.itemId);
+          if (st != null) stMap[we.itemId] = st;
+        }
+      }
+
+      final setsData = <int, List<SetData>>{};
+      final setIds = <int, List<int>>{};
+
+      for (final item in _items) {
+        if (item.id == null) continue;
+        final sets = await DatabaseHelper.instance.getWorkoutSets(item.id!);
+        final list = <SetData>[];
+        final ids = <int>[];
+
+        for (final s in sets) {
+          list.add(SetData(weight: s.weight, reps: s.reps, completed: s.completed));
+          ids.add(s.id!);
+        }
+
+        setsData[item.id!] = list;
+        setIds[item.id!] = ids;
+      }
+
+      _exerciseMap = exMap;
+      _stretchMap = stMap;
+      _setsData.addAll(setsData);
+      _setIds.addAll(setIds);
+
+      return;
+    }
+
+    _workoutDayId = day.id;
+    _completed = day.status == 'completed';
+    _started = day.status == 'completed' || day.status == 'in_progress';
+    final workoutExs = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
+
+    final Map<String, List<WorkoutExercise>> groupedExs = {};
+    for (final we in workoutExs) {
+      String prefix = we.isWarmup ? 'warmup_' : (we.isCoolDown ? 'cooldown_' : 'main_');
+      String key = '$prefix${we.itemType}_${we.itemId}';
+
+      if (we.itemType == 'exercise') {
+        final ex = await DatabaseHelper.instance.getExerciseById(we.replacedByItemId ?? we.itemId);
+        if (ex != null) {
+          final cleanName = ex.name.toLowerCase().replaceAll('ё', 'е').replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
+          key = '${prefix}exercise_$cleanName';
+        }
+      } else {
+        final st = await DatabaseHelper.instance.getStretchById(we.itemId);
+        if (st != null) {
+          final cleanName = st.name.toLowerCase().replaceAll('ё', 'е').replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
+          key = '${prefix}stretch_$cleanName';
+        }
+      }
+      groupedExs.putIfAbsent(key, () => []).add(we);
+    }
+
+    final List<WorkoutExercise> uniqueExs = [];
+    for (final entry in groupedExs.entries) {
+      final list = entry.value;
+      if (list.length == 1) {
+        uniqueExs.add(list.first);
+      } else {
+        WorkoutExercise? keeper;
+        for (final we in list) {
+          final sets = await DatabaseHelper.instance.getWorkoutSets(we.id!);
+          final hasCompleted = sets.any((s) => s.completed || s.weight != null);
+          if (hasCompleted) {
+            keeper = we;
+            break;
+          }
+        }
+        keeper ??= list.first;
+        uniqueExs.add(keeper);
+        for (final we in list) {
+          if (we.id != keeper.id) await DatabaseHelper.instance.deleteWorkoutExercise(we.id!);
+        }
+      }
+    }
+    uniqueExs.sort((a, b) => a.order.compareTo(b.order));
+
+    _hasBlocks = uniqueExs.any((we) => we.blockNumber != null && !we.isWarmup);
+    _pendingBlocks.clear();
+    for (int i = 0; i < uniqueExs.length; i++) {
+      final bn = uniqueExs[i].blockNumber;
+      if (bn != null && !uniqueExs[i].isWarmup) _pendingBlocks[i] = bn;
+    }
+    _items = uniqueExs;
+
+    final exMap = <int, Exercise>{};
+    final stMap = <int, Stretch>{};
+    for (final we in _items) {
+      if (we.itemType == 'exercise') {
+        final effId = we.replacedByItemId ?? we.itemId;
+        final ex = await DatabaseHelper.instance.getExerciseById(effId);
+        if (ex != null) exMap[effId] = ex;
+      } else {
+        final st = await DatabaseHelper.instance.getStretchById(we.itemId);
+        if (st != null) stMap[we.itemId] = st;
+      }
+    }
+    final setsData = <int, List<SetData>>{};
+    final setIds = <int, List<int>>{};
+
+    for (final item in _items) {
+      if (item.id == null) continue;
+      final sets = await DatabaseHelper.instance.getWorkoutSets(item.id!);
+
+      var list = <SetData>[];
+      var ids = <int>[];
+
+      bool needsPulling = true;
+      if (sets.isNotEmpty) {
+        for (final s in sets) {
+          if (s.completed || s.weight != null) needsPulling = false;
+          list.add(SetData(weight: s.weight, reps: s.reps, completed: s.completed));
+          ids.add(s.id!);
+        }
+      }
+
+      if (!item.isWarmup && !item.isCoolDown && item.itemType == 'exercise') {
+        final lastSets = await _getSmartPrevSets(item.replacedByItemId ?? item.itemId, day.weekNumber ?? 1, day.cycleNumber);
+        if (lastSets.isNotEmpty) {
+          final doneSets = lastSets.where((s) => s.completed || s.reps != null || s.weight != null).toList();
+          if (doneSets.isNotEmpty) {
+            double? maxW = doneSets.map((s) => s.weight ?? 0).reduce((a, b) => a > b ? a : b);
+            int? maxR = doneSets.map((s) => s.reps ?? 0).reduce((a, b) => a > b ? a : b);
+            if (maxW == 0) maxW = null;
+            if (maxR == 0) maxR = null;
+            if (maxW != null || maxR != null) {
+              _lastRecords[item.id!] = {'weight': maxW, 'reps': maxR};
+            }
+          }
+        }
+
+        if (needsPulling && !item.isWarmup && !item.isCoolDown && day.weekNumber != null && day.weekNumber! > 1) {
+          final ex = exMap[item.replacedByItemId ?? item.itemId];
+          final isCardio = ex != null && _isCardio(ex);
+          final isTimed = ex != null && _isTimed(ex.name);
+
+          if (!isCardio && !isTimed) {
+            double? baseWeight;
+            int? prevReps;
+            bool wasInPrevWeek = false;
+
+            if (_lastRecords.containsKey(item.id!)) {
+              wasInPrevWeek = true;
+              baseWeight = _lastRecords[item.id!]!['weight'] as double?;
+              prevReps = _lastRecords[item.id!]!['reps'] as int?;
+            }
+
+            double? targetWeight = baseWeight;
+            final step = (_profile?.level == 'beginner') ? 1.5 : 2.5;
+
+            final prevTarget = await _getPrevTarget(item.itemId, day.weekNumber!, day.cycleNumber);
+            final planMin = _parseReps(item.reps) ?? 10;
+            final planMax = _parseMaxReps(item.reps) ?? planMin;
+            final effectivePrevTarget = prevTarget ?? planMin;
+
+            int? targetReps = planMax;
+            final isBaseEx = ex != null && isBaseExercise(ex);
+
+            if (isBaseEx) {
+              if (baseWeight != null && baseWeight > 0) {
+                if (day.weekNumber == 3 && wasInPrevWeek) {
+                  targetWeight = baseWeight + step;
+                } else {
+                  targetWeight = baseWeight;
+                }
+              }
+
+              if (wasInPrevWeek && prevReps != null) {
+                bool isSuccessful = prevReps >= (effectivePrevTarget - 2);
+
+                if (day.weekNumber == 3) {
+                  targetReps = prevReps;
+                } else if (day.weekNumber == 4) {
+                  // 👈 ИЗМЕНЕНО: неделя 4 — фактический максимум, если выше 15
+                  final actualReps = await _getMaxCompletedReps(item.replacedByItemId ?? item.itemId, day.cycleNumber);
+                  targetReps = (actualReps != null && actualReps > 15) ? actualReps : 15;
+                } else if (isSuccessful) {
+                  targetReps = planMax;
+                } else {
+                  targetReps = effectivePrevTarget;
+                }
+              } else {
+                targetReps = planMax;
+              }
+            } else {
+              targetWeight = baseWeight;
+              if (wasInPrevWeek && prevReps != null) {
+                if (day.weekNumber == 3) {
+                  targetReps = prevReps;
+                } else if (day.weekNumber == 4) {
+                  // 👈 ИЗМЕНЕНО: та же логика для изоляции
+                  final actualReps = await _getMaxCompletedReps(item.replacedByItemId ?? item.itemId, day.cycleNumber);
+                  targetReps = (actualReps != null && actualReps > 15) ? actualReps : 15;
+                } else if (prevReps >= (effectivePrevTarget - 2)) {
+                  targetReps = (prevReps > planMax) ? prevReps : planMax;
+                } else {
+                  targetReps = effectivePrevTarget;
+                }
+              } else {
+                targetReps = planMax;
+              }
+            }
+
+            // 👈 НОВОЕ: подтяжка плана до факта.
+            // Для упражнений с весом — не выше планового максимума
+            // (рост идёт через вес на неделе 3),
+            // для упражнений без веса — без ограничений.
+            // Неделя 1 сюда не попадает: у неё всегда план.
+            if (day.weekNumber != null && day.weekNumber! > 1) {
+              final isWeighted = baseWeight != null && baseWeight > 0;
+              final cap = isWeighted ? planMax : null;
+              final actualReps = await _getMaxCompletedReps(item.replacedByItemId ?? item.itemId, day.cycleNumber);
+              if (actualReps != null && actualReps > targetReps && (cap == null || actualReps <= cap)) {
+                targetReps = actualReps;
+              }
+            }
+
+            if (targetWeight != null) _targetWeights[item.id!] = targetWeight;
+
+            for (int i = 0; i < list.length; i++) {
+              list[i] = SetData(weight: targetWeight, reps: targetReps, completed: false);
+              if (ids[i] > 0) {
+                await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
+                    id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: targetWeight, reps: targetReps, completed: false
+                ));
+              }
+            }
+          }
+
+          if (isTimed && !isCardio) {
+            int? prevSeconds;
+            bool wasTimedInPrevWeek = false;
+            if (_lastRecords.containsKey(item.id!) && _lastRecords[item.id!]!['reps'] != null) {
+              wasTimedInPrevWeek = true;
+              prevSeconds = _lastRecords[item.id!]!['reps'] as int?;
+            }
+
+            int? targetSeconds = _parseReps(item.reps);
+            final bool isBaseEx = isBaseExercise(ex);
+            if (isBaseEx && prevSeconds != null) {
+              bool isSuccessful = prevSeconds >= (targetSeconds ?? 0);
+              if (day.weekNumber == 1 && prevSeconds >= 100) {
+                targetSeconds = prevSeconds;
+              } else if (day.weekNumber == 2) targetSeconds = isSuccessful ? (prevSeconds + 20) : (targetSeconds ?? 80);
+              else if (day.weekNumber == 3) targetSeconds = isSuccessful ? (prevSeconds + 20) : (targetSeconds ?? 100);
+              else if (day.weekNumber == 4) targetSeconds = isSuccessful ? prevSeconds : (targetSeconds ?? 100);
+            }
+
+            // 👈 НОВОЕ: подтяжка секунд до факта (стандартная прогрессия
+            // при успехе даёт prev + 20 — выше факта, подтяжка не сработает;
+            // сработает только если факт выше того, что насчитала формула)
+            if (day.weekNumber != null && day.weekNumber! > 1) {
+              final actualReps = await _getMaxCompletedReps(item.replacedByItemId ?? item.itemId, day.cycleNumber);
+              if (actualReps != null && actualReps > (targetSeconds ?? 0)) {
+                targetSeconds = actualReps;
+              }
+            }
+
+            for (int i = 0; i < list.length; i++) {
+              list[i] = SetData(weight: null, reps: targetSeconds, completed: false);
+              if (ids[i] > 0) {
+                await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
+                    id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: null, reps: targetSeconds, completed: false
+                ));
+              }
+            }
+          }
+        }
+
+        // 👈 НОВОЕ: неделя 1 нового цикла — переносим фактический результат
+        // из прошлого цикла. Если упражнения там не было — остаётся план.
+        // Кардио исключено (там «повторы» — это минуты).
+        // Упражнения на время переносятся автоматически: секунды хранятся в reps.
+        if (day.weekNumber == 1 &&
+            day.cycleNumber != null && day.cycleNumber! > 1) {
+          final ex = exMap[item.replacedByItemId ?? item.itemId];
+          final isCardio = ex != null && _isCardio(ex);
+          if (!isCardio) {
+            final planMin = _parseReps(item.reps) ?? 15;
+            final prevMax = await _getMaxCompletedRepsInCycle(
+                item.replacedByItemId ?? item.itemId, day.cycleNumber! - 1);
+            if (prevMax != null && prevMax > planMin) {
+              for (int i = 0; i < list.length; i++) {
+                if (!list[i].completed) {
+                  list[i] = SetData(weight: list[i].weight, reps: prevMax, completed: false);
+                  if (ids[i] > 0) {
+                    await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
+                        id: ids[i], workoutExerciseId: item.id!, order: i + 1,
+                        weight: list[i].weight, reps: prevMax, completed: false
+                    ));
+                  }
+                }
+              }
+              // запоминаем в кэше — неделя 2 увидит это как «прошлый результат»
+              _lastRecords[item.id!] = {
+                'weight': _lastRecords[item.id!]?['weight'],
+                'reps': prevMax,
+              };
+            }
+          }
+        }
+
+        // 👈 ИЗМЕНЕНО: на неделе 4 вместо слепого прижима к плану —
+        // фактический максимум из цикла, если он выше плана.
+        // Вниз по плану не опускаем: закрепление не должно наказывать.
+        if (day.weekNumber == 4 && !item.isWarmup && !item.isCoolDown) {
+          final planMin = _parseReps(item.reps) ?? 15;
+          final actualReps = await _getMaxCompletedReps(item.replacedByItemId ?? item.itemId, day.cycleNumber);
+          final int target4 = (actualReps != null && actualReps > planMin) ? actualReps : planMin;
+          for (int i = 0; i < list.length; i++) {
+            if (!list[i].completed) {
+              list[i] = SetData(weight: list[i].weight, reps: target4, completed: false);
+              if (ids[i] > 0) {
+                await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
+                    id: ids[i], workoutExerciseId: item.id!, order: i + 1,
+                    weight: list[i].weight, reps: target4, completed: false
+                ));
+              }
+            }
+          }
+        }
+      }
+
+      if (!_completed) {
+        final int targetSets = item.sets > 0 ? item.sets : 3;
+        if (list.length > targetSets) {
+          for (int i = targetSets; i < list.length; i++) {
+            if (ids[i] > 0) await DatabaseHelper.instance.deleteWorkoutSet(ids[i]);
+          }
+          list = list.sublist(0, targetSets);
+          ids = ids.sublist(0, targetSets);
+        }
+        while (list.length < targetSets && list.length < 10) {
+          final newSetId = await DatabaseHelper.instance.addWorkoutSet(WorkoutSet(
+              workoutExerciseId: item.id!, order: list.length + 1, weight: null, reps: _parseReps(item.reps), completed: false
+          ));
+          list.add(SetData(reps: _parseReps(item.reps), completed: false));
+          ids.add(newSetId);
+        }
+      }
+
+      setsData[item.id!] = list;
+      setIds[item.id!] = ids;
+    }
+    _exerciseMap = exMap;
+    _stretchMap = stMap;
+    _setsData.addAll(setsData);
+    _setIds.addAll(setIds);
+  }
+
+  int? _parseReps(String repsStr) {
+    final match = RegExp(r'(\d+)').firstMatch(repsStr);
+    if (match == null) return null;
+    return int.tryParse(match.group(1) ?? '');
+  }
+
+  int? _parseMaxReps(String repsStr) {
+    final matches = RegExp(r'(\d+)').allMatches(repsStr);
+    if (matches.isEmpty) return null;
+    final nums = matches.map((m) => int.tryParse(m.group(1) ?? '')).whereType<int>().toList();
+    if (nums.isEmpty) return null;
+    return nums.reduce((a, b) => a > b ? a : b);
+  }
+
+  void _startRestTimer() {
+    _restTimer?.cancel();
+    setState(() {
+      _restTotalTime = _globalRestSeconds;
+      _restTimeLeft = _globalRestSeconds;
+      _isRestTimerRunning = true;
+      _isRestTimerPaused = false;
+    });
+    _restTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || _isRestTimerPaused) return;
+      if (_restTimeLeft > 0) {
+        setState(() => _restTimeLeft--);
+      } else {
+        _stopRestTimer();
+      }
+    });
+  }
+
+  void _stopRestTimer() {
+    _restTimer?.cancel();
+    if (!mounted) return;
+    setState(() {
+      _isRestTimerRunning = false;
+      _isRestTimerPaused = false;
+    });
+  }
+
+  void _togglePauseRestTimer() => setState(() => _isRestTimerPaused = !_isRestTimerPaused);
+
+  Future<void> _showWeekNotification() async {
+    final week = _day?.weekNumber;
+    if (week == null || week == 1 || _started || _completed) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'week${week}_notified_${widget.profileId}_${_day?.id}';
+    if (prefs.getBool(key) == true) return;
+
+    final prevDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(
+      profileId: widget.profileId, weekNumber: week - 1, cycleNumber: _day?.cycleNumber,
+    );
+    prevDays.sort((a, b) => a.date.compareTo(b.date));
+
+    if (prevDays.isEmpty) { await prefs.setBool(key, true); return; }
+
+    final currentWeekDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(
+      profileId: widget.profileId, weekNumber: week, cycleNumber: _day?.cycleNumber,
+    );
+    currentWeekDays.sort((a, b) => a.date.compareTo(b.date));
+    final currentDayIndex = currentWeekDays.indexWhere((d) => d.id == _day?.id);
+
+    WorkoutDay? prevDay;
+    if (currentDayIndex != -1 && currentDayIndex < prevDays.length) {
+      prevDay = prevDays[currentDayIndex];
+    }
+
+    if (prevDay == null) {
+      final match = RegExp(r'День (\d+)').firstMatch(_day?.name ?? '');
+      final dayNum = match?.group(1);
+      if (dayNum != null) {
+        for (final pd in prevDays) {
+          if (pd.name.contains('День $dayNum')) {
+            prevDay = pd;
+            break;
+          }
+        }
+      }
+    }
+
+    if (prevDay == null || (prevDay.status != 'completed' && prevDay.status != 'in_progress')) {
+      return;
+    }
+
+    List<String> repsNotDone = [];
+    List<String> weightNotDone = [];
+    List<String> notDoneExercises = [];
+
+    final exs = await DatabaseHelper.instance.getWorkoutExercises(prevDay.id!);
+    for (final we in exs) {
+      if (we.itemType != 'exercise' || we.isCoolDown || we.isWarmup) continue;
+      final exId = we.replacedByItemId ?? we.itemId;
+
+      final ex = await DatabaseHelper.instance.getExerciseById(exId);
+      if (ex == null) continue;
+
+      final sets = await DatabaseHelper.instance.getWorkoutSets(we.id!);
+      final completed = sets.where((s) => s.completed).toList();
+      final exName = ex.name;
+
+      bool allDone = completed.isNotEmpty && completed.length == sets.length;
+
+      if (!allDone) {
+        notDoneExercises.add('«$exName» (${completed.length} из ${sets.length} подходов)');
+      }
+
+      if (!isBaseExercise(ex)) continue;
+
+      double avgReps = completed.isNotEmpty ? completed.map((s) => s.reps ?? 0).reduce((a, b) => a + b) / completed.length : 0;
+      final actualTargetReps = _parseReps(we.reps) ?? 0;
+      final targetWeight = _targetWeights[we.id!];
+
+      if (targetWeight != null && targetWeight > 0) {
+        final maxWeight = completed.isNotEmpty ? completed.map((s) => s.weight ?? 0).reduce((a, b) => a > b ? a : b) : 0;
+        if (maxWeight < targetWeight * 0.95) {
+          weightNotDone.add('«$exName»: ${maxWeight.toStringAsFixed(1)} кг из ${targetWeight.toStringAsFixed(1)} кг');
+        }
+      }
+
+      if (!allDone || (actualTargetReps > 0 && avgReps < (actualTargetReps - 3))) {
+        final realReps = avgReps.round();
+        if (realReps < actualTargetReps) {
+          repsNotDone.add('«$exName»: $realReps из $actualTargetReps');
+        } else {
+          repsNotDone.add('«$exName»: не все подходы выполнены');
+        }
+      }
+    }
+
+    String title, message;
+    Color dialogColor = const Color(0xFF00B894);
+    final isFemale = _profile?.gender == 'female';
+    final name = _profile?.name ?? 'друг';
+    final coped = isFemale ? 'справилась' : 'справился';
+    final didNot = isFemale ? 'не доделала' : 'не доделал';
+
+    if (week == 2) {
+      title = 'Неделя 2: Работа над ошибками 📈';
+      if (notDoneExercises.isNotEmpty) {
+        message = 'Привет, $name! На прошлой неделе ты $didNot:\n${notDoneExercises.take(5).join('\n')}.\n\nДавай на этой неделе доделаем всё по плану! 🔥';
+      } else if (repsNotDone.isNotEmpty) {
+        message = 'Привет, $name! На прошлой неделе ты $didNot норму в:\n${repsNotDone.take(5).join('\n')}.\n\nНа этой неделе мы закрепляем эти повторы, чтобы ты могла догнать план. На остальных упражнениях повторы увеличены! 🔥';
+      } else if (weightNotDone.isNotEmpty) {
+        message = 'Привет, $name! На прошлой неделе не хватило веса в:\n${weightNotDone.take(5).join('\n')}.\n\nВес оставляем прежним, но добавляем повторения. Работаем над техникой! 💪';
+      } else {
+        message = 'Привет, $name! Ты отлично $coped! На этой неделе мы не трогаем вес, но добавляем повторения, чтобы стимулировать мышцы. Всё по плану! 🚀';
+      }
+    } else if (week == 3) {
+      title = 'Неделя 3: Пик силы! 🚀';
+      dialogColor = const Color(0xFFE17055);
+      if (notDoneExercises.isNotEmpty) {
+        message = 'Пиковая неделя, $name! На прошлой неделе остались недоделанными:\n${notDoneExercises.take(5).join('\n')}.\n\nСоберись, это пик нагрузки! 💪';
+      } else if (weightNotDone.isNotEmpty) {
+        message = 'Пиковая неделя, $name! Были сложности с весом в:\n${weightNotDone.take(5).join('\n')}.\n\nВес пока оставляем прежним, но на остальных упражнениях мы его добавили. Выкладываемся на максимум! 🏋️‍♂️';
+      } else if (repsNotDone.isNotEmpty) {
+        message = 'Пиковая неделя, $name! На прошлой неделе ты $didNot повторы в:\n${repsNotDone.take(5).join('\n')}.\n\nНа этой неделе мы добавляем вес, а повторы на этих упражнениях оставляем базовыми. Работаем! 🔥';
+      } else {
+        message = 'Пиковая неделя, $name! Это пик нагрузки. Мы добавляем вес, а повторения остаются на уровне прошлой недели. Выкладываемся на максимум! 🔥';
+      }
+    } else {
+      title = 'Неделя 4: Закрепление 🌿';
+      dialogColor = const Color(0xFF0984E3);
+
+      final isSpecialDay = prevDay.name.toLowerCase().contains('челлендж');
+
+      if (isSpecialDay) {
+        final workedOut = isFemale ? 'проработала' : 'проработал';
+        message = 'Привет, $name! На прошлой неделе у нас был особый день — ты отлично $workedOut забытые зоны! А сегодня возвращаемся к нашим фокусным группам. Вес закрепляем с прошлой недели, а повторения снижаем для отдыха. ✨';
+      } else {
+        message = 'Время восстанавливаться, $name! Вес закрепляем с прошлой недели, а повторения снижаем для отдыха. ✨';
+      }
+    }
+
+    if (!mounted) return;
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Row(children: [
+            Image.asset(FairyMood.wink.asset, width: 44, height: 44, fit: BoxFit.contain),
+            const SizedBox(width: 10),
+            Expanded(child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)))
+          ]),
+          content: Text(message, style: const TextStyle(fontSize: 15)),
+          actions: [
+            ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(backgroundColor: dialogColor, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
+                child: const Text('Вперёд! 🚀', style: TextStyle(fontWeight: FontWeight.bold))
+            )
+          ],
+        ),
+      );
+    });
+    await prefs.setBool(key, true);
+  }
+
+  Future<void> _preloadHistory() async {
+    final Set<int> loadedHistory = {};
+    for (final item in _items) {
+      if (item.isCoolDown || item.isWarmup || item.itemType != 'exercise') continue;
+      final exId = item.replacedByItemId ?? item.itemId;
+      if (loadedHistory.contains(exId)) continue;
+      final sets = await DatabaseHelper.instance.getLastWorkoutExerciseSets(profileId: widget.profileId, exerciseId: exId);
+      if (sets.isNotEmpty) loadedHistory.add(exId);
+    }
+    if (mounted) {
+      setState(() {
+        _exercisesWithHistory.clear();
+        _exercisesWithHistory.addAll(loadedHistory);
+      });
+    }
+  }
+
+  String? _getBaseZone(Exercise ex) => getExerciseZone(ex);
+  String _groupLabel(String code) => getZoneLabel(code);
+
+  String _circleKey(int blockNum, int circleNum) => '${blockNum}_$circleNum';
+  bool _isCircleCollapsed(int blockNum, int circleNum) => _collapsedCircles.contains(_circleKey(blockNum, circleNum));
+
+  int _totalInCircle(List<WorkoutExercise> blockItems, int circle) {
+    int count = 0;
+    for (final item in blockItems) {
+      final sets = _setsData[item.id];
+      if (sets != null && circle < sets.length) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  bool _isCircleComplete(List<WorkoutExercise> blockItems, int circle) {
+    final total = _totalInCircle(blockItems, circle);
+    if (total == 0) return false;
+    return _completedInCircle(blockItems, circle) == total;
+  }
+
+  int _completedInCircle(List<WorkoutExercise> blockItems, int circle) {
+    int count = 0;
+    for (final item in blockItems) {
+      final sets = _setsData[item.id];
+      if (sets == null || circle >= sets.length) continue;
+      if (sets[circle].completed) count++;
+    }
+    return count;
+  }
+
+  void _toggleCircle(int blockNum, int circleNum) {
+    final key = _circleKey(blockNum, circleNum);
+    setState(() {
+      if (_collapsedCircles.contains(key)) {
+        _collapsedCircles.remove(key);
+      } else {
+        _collapsedCircles.add(key);
+      }
+    });
+  }
+
+  void _showMessage(String text) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+
+  Map<int, int> _computeBlockDistribution() {
+    final Map<int, int> distribution = {};
+    if (_day?.type == 'challenge') return distribution;
+
+    bool hasStored = false;
+    for (int i = 0; i < _items.length; i++) {
+      final item = _items[i];
+      if (item.isWarmup || item.order == 150) continue;
+      final bn = item.blockNumber;
+      if (bn != null) {
+        distribution[i] = bn;
+        hasStored = true;
+      }
+    }
+    if (hasStored) return distribution;
+
+    final List<int> baseIndices = [];
+    final List<int> isolationIndices = [];
+    for (int i = 0; i < _items.length; i++) {
+      final item = _items[i];
+      if (item.isCoolDown || item.isWarmup || item.order == 150) continue;
+      final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
+      if (ex == null || _isCardio(ex)) continue;
+      if (isBaseExercise(ex)) {
+        baseIndices.add(i);
+      } else {
+        isolationIndices.add(i);
+      }
+    }
+
+    if (baseIndices.isEmpty) {
+      for (final idx in isolationIndices) {
+        distribution[idx] = 1;
+      }
+      return distribution;
+    }
+
+    final int baseCount = baseIndices.length;
+    final int isoCount = isolationIndices.length;
+
+    int isoPerBase = isoCount == 0 ? 0 : (isoCount / baseCount).ceil().clamp(1, 2);
+    if (isoCount < baseCount) isoPerBase = 1;
+
+    int isoIndex = 0;
+    for (int b = 0; b < baseCount; b++) {
+      final blockNum = b + 1;
+      distribution[baseIndices[b]] = blockNum;
+
+      int remainingBases = baseCount - b - 1;
+      int remainingIso = isoCount - isoIndex;
+      int maxForThisBlock = isoPerBase;
+
+      if (remainingBases > 0) {
+        final minForRest = remainingBases * 1;
+        maxForThisBlock = (remainingIso - minForRest).clamp(0, isoPerBase);
+      } else {
+        maxForThisBlock = remainingIso;
+      }
+
+      int taken = 0;
+      while (taken < maxForThisBlock && isoIndex < isolationIndices.length) {
+        distribution[isolationIndices[isoIndex]] = blockNum;
+        isoIndex++;
+        taken++;
+      }
+    }
+
+    while (isoIndex < isolationIndices.length) {
+      distribution[isolationIndices[isoIndex]] = baseCount;
+      isoIndex++;
+    }
+
+    return distribution;
+  }
+
+  Future<void> _createBlocks() async {
+    if (_workoutDayId == null) return;
+    _pendingBlocks.clear();
+    _collapsedCircles.clear();
+    final dist = _computeBlockDistribution();
+    _pendingBlocks.addAll(dist);
+    for (final entry in dist.entries) {
+      final item = _items[entry.key];
+      if (item.id != null) await DatabaseHelper.instance.updateWorkoutExerciseBlock(id: item.id!, blockNumber: entry.value);
+    }
+    if (!mounted) return;
+    setState(() {
+      _blocksReady = true;
+      _hasBlocks = true;
+    });
+    final maxBlock = dist.values.isEmpty ? 0 : dist.values.reduce((a, b) => a > b ? a : b);
+    _showMessage('Сформировано блоков: $maxBlock');
+  }
+
+  void _resetBlocks() {
+    setState(() {
+      _pendingBlocks.clear();
+      _blocksReady = false;
+      _hasBlocks = false;
+      _collapsedCircles.clear();
+    });
+    _showMessage('Блоки сброшены');
+  }
+
+  Future<void> _toggleBlocks() async {
+    if (_workoutDayId == null) return;
+    if (_hasBlocks) {
+      await DatabaseHelper.instance.clearBlocksForWorkoutDay(_workoutDayId!);
+      if (!mounted) return;
+      setState(() {
+        _hasBlocks = false;
+        _collapsedCircles.clear();
+      });
+      _showMessage('Блоки убраны');
+    } else {
+      for (final item in _items) {
+        if (item.id == null || item.isCoolDown || item.isWarmup) continue;
+        final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
+        if (ex != null && _isCardio(ex)) await DatabaseHelper.instance.updateWorkoutExerciseBlock(id: item.id!, blockNumber: null);
+      }
+      final dist = _computeBlockDistribution();
+      for (final entry in dist.entries) {
+        final item = _items[entry.key];
+        if (item.id != null) await DatabaseHelper.instance.updateWorkoutExerciseBlock(id: item.id!, blockNumber: entry.value);
+      }
+      if (!mounted) return;
+      setState(() => _hasBlocks = true);
+      final maxBlock = dist.values.isEmpty ? 0 : dist.values.reduce((a, b) => a > b ? a : b);
+      _showMessage('Сформировано блоков: $maxBlock');
+    }
+  }
+
+  Future<void> _startWorkout() async {
+    if (_workoutDayId == null) return;
+    final day = await DatabaseHelper.instance.getWorkoutDayById(_workoutDayId!);
+    if (day == null) return;
+    if (day.status == 'completed') {
+      _showMessage('Эта тренировка уже завершена');
+      return;
+    }
+
+    if (day.type != 'challenge' && day.weekNumber != null && day.weekNumber! > 1) {
+      final prevWeekDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(profileId: widget.profileId, weekNumber: day.weekNumber! - 1, cycleNumber: day.cycleNumber);
+      final isPrevDone = prevWeekDays.isNotEmpty && prevWeekDays.every((d) => d.status == 'completed');
+      if (!isPrevDone) {
+        _showMessage('Сначала завершите предыдущую неделю!');
+        return;
+      }
+    }
+
+    final updated = day.copyWith(status: 'in_progress', startedAt: DateTime.now());
+    await DatabaseHelper.instance.updateWorkoutDay(updated);
+    if (!mounted) return;
+    setState(() {
+      _started = true;
+      _day = updated;
+    });
+    FairyReactionService().trigger('workout_started', mood: FairyMood.wink);
+    _showMessage('Тренировка началась! 💪');
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // НАГРАДА: челлендж (неделя 3) → 60⚡ + золотой лотос;
+  // обычная тренировка → +20⚡ (UNIQUE-защита от дублей)
+  // ══════════════════════════════════════════════════════════════════
+  Future<void> _finishWorkout() async {
+    if (_workoutDayId == null) return;
+
+    final preUpdates = <Future>[];
+    for (final item in _items) {
+      if (item.isCoolDown || item.isWarmup || item.id == null) continue;
+      final sets = _setsData[item.id!];
+      if (sets == null) continue;
+      for (int i = 0; i < sets.length; i++) {
+        final ids = _setIds[item.id!];
+        if (ids != null && i < ids.length && ids[i] > 0) {
+          preUpdates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
+            id: ids[i], workoutExerciseId: item.id!, order: i + 1,
+            weight: sets[i].weight, reps: sets[i].reps, completed: sets[i].completed,
+          )));
+        }
+      }
+    }
+    if (preUpdates.isNotEmpty) await Future.wait(preUpdates);
+
+    int completedSets = 0;
+    int totalSets = 0;
+
+    for (final item in _items) {
+      if (item.isCoolDown || item.isWarmup || item.id == null) continue;
+      final sets = _setsData[item.id!];
+      if (sets == null) continue;
+      for (final s in sets) {
+        totalSets++;
+        if (s.completed) completedSets++;
+      }
+    }
+
+    // ЗАЩИТА: если нет упражнений — не даём завершить (иначе награда за пустую тренировку)
+    if (totalSets == 0) {
+      _showMessage('В тренировке нет упражнений. Начните заново или выберите другой день.');
+      return;
+    }
+
+    if (completedSets < totalSets) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Тренировка не завершена'),
+          content: Text('Вы выполнили $completedSets из $totalSets подходов.\n\nСохранить прогресс и вернуться? День останется в плане как «В процессе».'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Продолжить'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE17055)),
+              child: const Text('Сохранить и выйти'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm != true) return;
+
+      final updates = <Future>[];
+      for (final item in _items) {
+        if (item.isCoolDown || item.isWarmup || item.id == null) continue;
+        final sets = _setsData[item.id!];
+        if (sets == null) continue;
+        for (int i = 0; i < sets.length; i++) {
+          final ids = _setIds[item.id!];
+          if (ids != null && i < ids.length && ids[i] > 0) {
+            updates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
+              id: ids[i], workoutExerciseId: item.id!, order: i + 1,
+              weight: sets[i].weight, reps: sets[i].reps, completed: sets[i].completed,
+            )));
+          }
+        }
+      }
+      if (updates.isNotEmpty) await Future.wait(updates);
+
+      final day = await DatabaseHelper.instance.getWorkoutDayById(_workoutDayId!);
+      if (day == null) return;
+      final updated = day.copyWith(status: 'in_progress', startedAt: day.startedAt ?? DateTime.now());
+      await DatabaseHelper.instance.updateWorkoutDay(updated);
+      if (mounted) Navigator.pop(context, true);
+      return;
+    }
+
+    String? note;
+    final noteController = TextEditingController();
+    final noteResult = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Заметка к тренировке'),
+        content: TextField(
+          controller: noteController,
+          autofocus: true,
+          maxLines: 3,
+          decoration: const InputDecoration(hintText: 'Как прошло?', border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Пропустить')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
+        ],
+      ),
+    );
+    if (noteResult == true) note = noteController.text.trim();
+
+    final updates = <Future>[];
+    for (final item in _items) {
+      if (item.isCoolDown || item.isWarmup || item.id == null) continue;
+      final sets = _setsData[item.id!];
+      if (sets == null) continue;
+      for (int i = 0; i < sets.length; i++) {
+        final ids = _setIds[item.id!];
+        if (ids != null && i < ids.length) {
+          updates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: sets[i].weight, reps: sets[i].reps, completed: true)));
+        }
+      }
+    }
+    if (updates.isNotEmpty) await Future.wait(updates);
+
+    bool isOverperformed = false;
+    for (final item in _items) {
+      if (item.isCoolDown || item.isWarmup || item.id == null) continue;
+      final sets = _setsData[item.id!];
+      if (sets == null) continue;
+      final targetW = _targetWeights[item.id!];
+      for (final s in sets) {
+        if (s.completed && targetW != null && targetW > 0 && s.weight != null && s.weight! > targetW) isOverperformed = true;
+      }
+    }
+
+    final day = await DatabaseHelper.instance.getWorkoutDayById(_workoutDayId!);
+    if (day == null) return;
+    final minutes = DateTime.now().difference(day.startedAt ?? DateTime.now()).inMinutes;
+
+    final updated = day.copyWith(status: 'completed', completedAt: DateTime.now(), durationMinutes: minutes > 0 ? minutes : 1, notes: note);
+    await DatabaseHelper.instance.updateWorkoutDay(updated);
+    if (!mounted) return;
+
+    // ══════════════════════════════════════════════════════════════════
+    // НАГРАДА: ЧЕЛЛЕНДЖ (3-я неделя) → 60⚡ + золотой лотос
+    //       Обычная тренировка → +20⚡ (как раньше)
+    // ══════════════════════════════════════════════════════════════════
+    final bool isChallengeDay = updated.weekNumber == 3
+        && updated.name.toLowerCase().contains('челлендж');
+
+    String snackMessage;
+    Color snackColor;
+
+    if (isChallengeDay) {
+      // UNIQUE(profileId, reason, refId) в energy_transactions —
+      // гарантия, что 60⚡ и лотос выдаются только ОДИН раз за этот день
+      final awarded = await EnergyService.addEnergy(
+        profileId: widget.profileId,
+        delta: 60,
+        reason: 'challenge_day_reward',
+        refId: _workoutDayId,
+      );
+      if (awarded) {
+        await GardenService.plantNextFlower(
+          profileId: widget.profileId,
+          flowerType: 'legendary', // flower_gold.png в саду
+        );
+        snackMessage = '🏆 ЧЕЛЛЕНДЖ ПРОЙДЕН!\n+60 ⚡️ и Золотой Лотос выросли в Саду Феи 🌸✨';
+      } else {
+        snackMessage = 'Челлендж уже засчитан ранее. Отличная работа! 💪';
+      }
+      snackColor = const Color(0xFFFFB800);
+    } else {
+      await EnergyService.addEnergy(
+        profileId: widget.profileId,
+        delta: 20,
+        reason: 'workout_completed',
+        refId: _workoutDayId,
+      );
+      snackMessage = 'Тренировка завершена! Твоя физическая усталость конвертирована в +20 ⚡️ Жизненной Энергии. Загляни в Сад Феи 🌸';
+      snackColor = const Color(0xFF00B894);
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(snackMessage),
+          backgroundColor: snackColor,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+    // ══════════════════════════════════════════════════════════════════
+    // КОНЕЦ БЛОКА НАГРАДЫ
+    // ══════════════════════════════════════════════════════════════════
+
+    if (isOverperformed) {
+      FairyReactionService().trigger('workout_overperformed', mood: FairyMood.party);
+    } else {
+      FairyReactionService().trigger('workout_completed', mood: FairyMood.party);
+    }
+
+    final unlocked = await AchievementService.checkAchievements(widget.profileId);
+    if (unlocked.isNotEmpty && mounted) {
+      for (final a in unlocked) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Row(children: [
+            Text(a.icon, style: const TextStyle(fontSize: 24)),
+            const SizedBox(width: 12),
+            Expanded(child: Text('Новое достижение: ${a.title}!', style: const TextStyle(fontWeight: FontWeight.w600)))
+          ]),
+          backgroundColor: const Color(0xFF6C5CE7),
+          duration: const Duration(seconds: 3),
+        ));
+      }
+    }
+
+    bool isWeekComplete = false;
+    bool isCycleComplete = false;
+
+    if (updated.weekNumber != null) {
+      final weekDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(profileId: widget.profileId, weekNumber: updated.weekNumber!, cycleNumber: updated.cycleNumber);
+      final plannedDays = _profile?.daysPerWeek ?? 3;
+      final completedCount = weekDays.where((d) => d.status == 'completed').length;
+      final hasSkipped = weekDays.any((d) => d.status != 'completed');
+      isWeekComplete = completedCount >= plannedDays && !hasSkipped;
+
+      if (isWeekComplete && updated.cycleNumber != null) {
+        bool allWeeksDone = true;
+        for (int w = 1; w <= 4; w++) {
+          final wDays = await DatabaseHelper.instance.getWorkoutDaysByWeek(profileId: widget.profileId, weekNumber: w, cycleNumber: updated.cycleNumber);
+          final wCompleted = wDays.where((d) => d.status == 'completed').length;
+          final wHasSkipped = wDays.any((d) => d.status != 'completed');
+          if (wCompleted < plannedDays || wHasSkipped) {
+            allWeeksDone = false;
+            break;
+          }
+        }
+        isCycleComplete = allWeeksDone;
+      }
+    }
+
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
+
+    await Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WorkoutCompleteScreen(
+          completedDay: updated,
+          exercisesCount: _items.where((i) => !i.isCoolDown && !i.isWarmup).length,
+          isWeekComplete: isWeekComplete,
+          isCycleComplete: isCycleComplete,
+          userName: _profile?.name ?? 'друг',
+        ),
+      ),
+    );
+
+    if (mounted) Navigator.pop(context, true);
+  }
+
+  Future<void> _saveAsTemplate() async {
+    if (_day == null || _day!.id == null) return;
+    if (_items.isEmpty) {
+      _showMessage('Нечего сохранять — нет упражнений');
+      return;
+    }
+    final nameController = TextEditingController(text: _day!.name);
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(children: [Icon(Icons.bookmark_add_rounded), SizedBox(width: 8), Expanded(child: Text('Сохранить как шаблон', style: TextStyle(fontSize: 18)))]),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Создаст шаблон с этими упражнениями. Разминка в шаблон не попадёт.', style: TextStyle(fontSize: 13)),
+            const SizedBox(height: 16),
+            TextField(controller: nameController, autofocus: true, decoration: const InputDecoration(labelText: 'Название шаблона', prefixIcon: Icon(Icons.fitness_center_rounded), hintText: 'Например: Моя силовая A')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    final templateName = nameController.text.trim().isEmpty ? _day!.name : nameController.text.trim();
+    try {
+      await DatabaseHelper.instance.createTemplateFromWorkoutDay(profileId: widget.profileId, workoutDayId: _day!.id!, templateName: templateName, type: _day!.type, estimatedMinutes: _day!.durationMinutes ?? 45);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✅ Шаблон «$templateName» сохранён'), duration: const Duration(seconds: 3)));
+    } catch (e) {
+      if (!mounted) return;
+      _showMessage('Ошибка: $e');
+    }
+  }
+
+  Future<void> _openExerciseMenu(WorkoutExercise item, Exercise exercise) async {
+    if (_isViewMode) return;
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => _buildExerciseMenu(ctx, exercise),
+    );
+    if (result == null) return;
+    switch (result) {
+      case 'replace': await _replaceExercise(item, exercise); break;
+      case 'edit': await _editExerciseParams(item); break;
+      case 'delete': await _deleteExercise(item); break;
+    }
+  }
+
+  Widget _buildExerciseMenu(BuildContext ctx, Exercise exercise) {
+    final theme = Theme.of(ctx);
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.onSurface.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(2)))),
+          const SizedBox(height: 16),
+          Text(exercise.name, style: theme.textTheme.headlineMedium, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 20),
+          _menuTile(ctx, icon: Icons.swap_horiz_rounded, title: 'Заменить упражнение', color: theme.colorScheme.primary, onTap: () => Navigator.pop(ctx, 'replace')),
+          _menuTile(ctx, icon: Icons.tune_rounded, title: 'Изменить подходы и повторения', color: const Color(0xFF00B894), onTap: () => Navigator.pop(ctx, 'edit')),
+          _menuTile(ctx, icon: Icons.delete_outline_rounded, title: 'Удалить из тренировки', color: theme.colorScheme.error, onTap: () => Navigator.pop(ctx, 'delete')),
+        ],
+      ),
+    );
+  }
+
+  Widget _menuTile(BuildContext ctx, {required IconData icon, required String title, required Color color, required VoidCallback onTap}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.transparent,
+        child: ListTile(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.1))),
+          leading: Icon(icon, color: color),
+          title: Text(title),
+          onTap: onTap,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _replaceExercise(WorkoutExercise item, Exercise original) async {
+    final reason = await showModalBottomSheet<String>(context: context, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))), builder: (ctx) => _buildReasonSheet(ctx));
+    if (reason == null) return;
+
+    // 👇 ПРОВЕРЯЕМ, БАЗОВОЕ ЛИ ЭТО УПРАЖНЕНИЕ
+    final isBase = isBaseExercise(original);
+
+    final result = await Navigator.push<Map<String, dynamic>>(context, MaterialPageRoute(builder: (_) => ReplaceExerciseScreen(
+      original: original,
+      reasonCode: reason,
+      allowPermanent: isBase, // 👈 Передаем флаг
+    )));
+    if (result == null) return;
+
+    _applyReplacement(item, original, result);
+  }
+
+  Future<void> _quickReplaceExercise(WorkoutExercise item, Exercise original) async {
+    // 👇 ПРОВЕРЯЕМ, БАЗОВОЕ ЛИ ЭТО УПРАЖНЕНИЕ
+    final isBase = isBaseExercise(original);
+
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReplaceExerciseScreen(
+          original: original,
+          reasonCode: null,
+          allowPermanent: isBase, // 👈 Передаем флаг
+        ),
+      ),
+    );
+    if (result == null) return;
+
+    _applyReplacement(item, original, result);
+  }
+
+  void _applyReplacement(WorkoutExercise item, Exercise original, Map<String, dynamic> result) async {
+    final newExercise = result['newExercise'] as Exercise;
+    final permanent = result['permanent'] as bool; // 👈 Если изоляция, тут всегда будет false
+    final reasonCode = result['reason'] as String? ?? 'other';
+
+    final isAlreadyInWorkout = _items.any((i) =>
+    i.id != item.id &&
+        (i.replacedByItemId ?? i.itemId) == newExercise.id
+    );
+
+    if (isAlreadyInWorkout) {
+      _showMessage('Упражнение «${newExercise.name}» уже есть в этой тренировке!');
+      return;
+    }
+
+    setState(() {
+      _exerciseMap[newExercise.id!] = newExercise;
+      final idx = _items.indexOf(item);
+      if (idx >= 0) {
+        _items[idx] = item.copyWith(
+            itemId: newExercise.id!,
+            replacedByItemId: newExercise.id,
+            replacementReason: reasonCode,
+            replacementPermanent: permanent
+        );
+        if (item.id != null) {
+          final defaultReps = _parseReps(_items[idx].reps);
+          _setsData[item.id!] = List.generate(_items[idx].sets, (_) => SetData(reps: defaultReps, completed: false));
+          _setIds[item.id!] = List.generate(_items[idx].sets, (_) => 0);
+        }
+      }
+    });
+
+    if (permanent && _day?.weekNumber != null) {
+      // 👇 ЗАМЕНА НА ВЕСЬ МЕСЯЦ (для базовых упражнений)
+      await DatabaseHelper.instance.replaceExerciseInMonth(
+          profileId: widget.profileId,
+          oldItemId: original.id!,
+          newItemId: newExercise.id!,
+          reason: reasonCode,
+          permanent: true
+      );
+      _showMessage('Заменено на «${newExercise.name}» во всем месяце'); // ← акцент остаётся
+    } else {
+      // 👇 ЗАМЕНА ТОЛЬКО НА СЕГОДНЯ (сохраняем в БД для текущего дня)
+      if (item.id != null) {
+        final updatedItem = _items.firstWhere((i) => i.id == item.id);
+        await DatabaseHelper.instance.updateWorkoutExercise(updatedItem);
+      }
+      _showMessage('Заменено на «${newExercise.name}»'); // ← «только на сегодня» убрали
+    }
+  }
+  Widget _buildReasonSheet(BuildContext ctx) {
+    final theme = Theme.of(ctx);
+    final reasons = [
+      ('no_equipment', 'Нет оборудования', Icons.block_rounded, theme.colorScheme.error),
+      ('too_hard', 'Слишком тяжело', Icons.trending_down_rounded, const Color(0xFFE17055)),
+      ('too_easy', 'Слишком легко', Icons.trending_up_rounded, const Color(0xFF00B894)),
+      ('dislike', 'Не нравится', Icons.thumb_down_rounded, const Color(0xFFFDCB6E)),
+      ('other', 'Другое (вручную)', Icons.search_rounded, theme.colorScheme.primary)
+    ];
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.onSurface.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(2)))),
+          const SizedBox(height: 16),
+          Text('Почему заменить?', style: theme.textTheme.headlineMedium, textAlign: TextAlign.center),
+          const SizedBox(height: 8),
+          Text('Приложение подберёт замену с учётом причины', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6)), textAlign: TextAlign.center),
+          const SizedBox(height: 20),
+          ...reasons.map((r) {
+            final (code, label, icon, color) = r;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Material(
+                color: Colors.transparent,
+                child: ListTile(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.1))),
+                  leading: Icon(icon, color: color),
+                  title: Text(label),
+                  onTap: () => Navigator.pop(ctx, code),
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _editExerciseParams(WorkoutExercise item) async {
+    final setsController = TextEditingController(text: '${item.sets}');
+    final repsController = TextEditingController(text: item.reps);
+    final restController = TextEditingController(text: '${item.restSeconds}');
+    final isTimed = _isTimed(_exerciseMap[item.replacedByItemId ?? item.itemId]?.name ?? '');
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Изменить параметры'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: setsController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Подходы', prefixIcon: Icon(Icons.repeat_rounded))),
+            const SizedBox(height: 12),
+            TextField(controller: repsController, decoration: InputDecoration(labelText: isTimed ? 'Время (например, 60 сек)' : 'Повторения (например, 10-12)', prefixIcon: const Icon(Icons.numbers_rounded))),
+            const SizedBox(height: 12),
+            TextField(controller: restController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Отдых (сек)', prefixIcon: Icon(Icons.timer_rounded))),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить'))
+        ],
+      ),
+    );
+    if (result != true) return;
+    final newSets = int.tryParse(setsController.text) ?? item.sets;
+    final newReps = repsController.text.trim().isEmpty ? item.reps : repsController.text.trim();
+    final newRest = int.tryParse(restController.text) ?? item.restSeconds;
+    final defaultReps = _parseReps(newReps);
+    setState(() {
+      final idx = _items.indexOf(item);
+      if (idx >= 0) _items[idx] = item.copyWith(sets: newSets, reps: newReps, restSeconds: newRest);
+      if (item.id != null) {
+        _setsData[item.id!] = List.generate(newSets, (_) => SetData(reps: defaultReps));
+        _setIds[item.id!] = List.generate(newSets, (_) => 0);
+      }
+    });
+    _showMessage('Параметры обновлены');
+  }
+
+  Future<void> _addSetToExercise(WorkoutExercise item) async {
+    if (item.id == null || !_started || _isViewMode) return;
+    final sets = _setsData[item.id!];
+    final ids = _setIds[item.id!];
+    if (sets == null || ids == null) return;
+    final newOrder = sets.length + 1;
+    final defaultReps = _parseReps(item.reps);
+    final newSetId = await DatabaseHelper.instance.addWorkoutSet(WorkoutSet(workoutExerciseId: item.id!, order: newOrder, reps: defaultReps, completed: false));
+    if (!mounted) return;
+    setState(() {
+      sets.add(SetData(reps: defaultReps, completed: false));
+      ids.add(newSetId);
+    });
+  }
+
+  Future<void> _deleteSetFromExercise(WorkoutExercise item, int index) async {
+    if (item.id == null || _isViewMode) return;
+    final sets = _setsData[item.id!];
+    final ids = _setIds[item.id!];
+    if (sets == null || ids == null || index < 0 || index >= sets.length) return;
+    if (sets.length <= 1) {
+      _showMessage('Нельзя удалить последний подход');
+      return;
+    }
+    final setId = ids[index];
+    if (setId > 0) await DatabaseHelper.instance.deleteWorkoutSet(setId);
+    if (!mounted) return;
+    setState(() {
+      sets.removeAt(index);
+      ids.removeAt(index);
+    });
+    _showMessage('Подход удалён');
+  }
+
+  Future<void> _deleteExercise(WorkoutExercise item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Удалить упражнение?'),
+        content: const Text('Упражнение будет удалено из этой тренировки.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Удалить', style: TextStyle(color: Colors.red)))
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() {
+      _items.remove(item);
+      _setsData.remove(item.id);
+      _setIds.remove(item.id);
+    });
+    _showMessage('Упражнение удалено');
+  }
+
+  Future<void> _startStretchTimer(WorkoutExercise item, Stretch st) async {
+    if (_isViewMode || !_started || item.id == null) return;
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => _StretchTimerDialog(name: st.name, totalSeconds: st.durationSeconds, bothSides: st.bothSides),
+    );
+    if (result != true || !mounted) return;
+    final ids = _setIds[item.id!];
+    if (ids != null && ids.isNotEmpty) {
+      if (ids.first == 0) {
+        final newId = await DatabaseHelper.instance.addWorkoutSet(WorkoutSet(workoutExerciseId: item.id!, order: 1, completed: true));
+        if (mounted) setState(() => ids[0] = newId);
+      } else {
+        await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(id: ids.first, workoutExerciseId: item.id!, order: 1, completed: true));
+      }
+    }
+    setState(() => _setsData[item.id!] = [SetData(completed: true)]);
+    _showMessage('Заминка выполнена ✓');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_title),
+        actions: [
+          IconButton(icon: const Icon(Icons.timer_rounded), tooltip: 'Время отдыха', onPressed: _started ? _showRestTimePicker : null),
+          if (_started) IconButton(tooltip: _hasBlocks ? 'Убрать блоки' : 'Сформировать блоки', onPressed: _isViewMode || _day?.type == 'challenge' ? null : _toggleBlocks, icon: Icon(_hasBlocks ? Icons.grid_off_rounded : Icons.grid_view_rounded, color: _hasBlocks ? Theme.of(context).colorScheme.primary : null)),
+          if (_isInProgressMode) TextButton.icon(onPressed: _finishWorkout, icon: const Icon(Icons.check_rounded), label: const Text('Завершить')),
+        ],
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(children: [
+        if (_isRestTimerRunning) _buildTopRestTimer(context),
+        Expanded(child: _buildContent(context))
+      ]),
+    );
+  }
+
   Widget _buildTopRestTimer(BuildContext context) {
     final theme = Theme.of(context);
     final progress = _restTotalTime > 0 ? _restTimeLeft / _restTotalTime : 0.0;
@@ -2113,7 +2265,7 @@ Expanded(child: _buildContent(context))
     if (updates.isNotEmpty) await Future.wait(updates);
   }
 }
-// ⏸ КОНЕЦ ЧАСТИ 3 / 4 — продолжение в части 4 (класс _StretchTimerDialog)
+
 class _StretchTimerDialog extends StatefulWidget {
   final String name;
   final int totalSeconds;
@@ -2125,68 +2277,67 @@ class _StretchTimerDialog extends StatefulWidget {
 }
 
 class _StretchTimerDialogState extends State<_StretchTimerDialog> {
-  late int _remaining;
-  Timer? _timer;
-  bool _finished = false;
-  bool _paused = false;
+late int _remaining;
+Timer? _timer;
+bool _finished = false;
+bool _paused = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _remaining = widget.totalSeconds;
-    _startTimer();
-  }
-
-  void _startTimer() {
-    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted || _paused) return;
-      if (_remaining > 0) {
-        setState(() => _remaining--);
-      } else {
-        setState(() => _finished = true);
-        t.cancel();
-        Future.delayed(const Duration(seconds: 1), () {
-          if (mounted) Navigator.pop(context, true);
-        });
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final progress = widget.totalSeconds > 0 ? _remaining / widget.totalSeconds : 0.0;
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(widget.name, style: theme.textTheme.headlineMedium, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 20),
-          SizedBox(width: 140, height: 140, child: Stack(alignment: Alignment.center, children: [
-            SizedBox(width: 140, height: 140, child: CircularProgressIndicator(value: progress, strokeWidth: 8, backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.15), valueColor: AlwaysStoppedAnimation(_finished ? const Color(0xFF00B894) : _paused ? const Color(0xFFFDCB6E) : theme.colorScheme.primary))),
-            Text(_finished ? '✓' : '$_remaining', style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800, color: _finished ? const Color(0xFF00B894) : _paused ? const Color(0xFFFDCB6E) : theme.colorScheme.primary)),
-          ])),
-          const SizedBox(height: 8),
-          if (_paused && !_finished) Padding(padding: const EdgeInsets.only(top: 8), child: Text('⏸ Пауза', style: theme.textTheme.bodySmall?.copyWith(color: const Color(0xFFFDCB6E), fontWeight: FontWeight.w700))),
-          if (widget.bothSides && !_finished) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Выполните для обеих сторон', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6)))),
-          const SizedBox(height: 20),
-          if (!_finished) SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => setState(() => _paused = !_paused), icon: Icon(_paused ? Icons.play_arrow_rounded : Icons.pause_rounded, size: 22), label: Text(_paused ? 'Продолжить' : 'Пауза'), style: OutlinedButton.styleFrom(foregroundColor: _paused ? theme.colorScheme.primary : const Color(0xFFFDCB6E), side: BorderSide(color: _paused ? theme.colorScheme.primary.withValues(alpha: 0.5) : const Color(0xFFFDCB6E).withValues(alpha: 0.5)), padding: const EdgeInsets.symmetric(vertical: 12)))),
-          if (!_finished) const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена'))),
-            const SizedBox(width: 12),
-            Expanded(child: ElevatedButton(onPressed: () => Navigator.pop(context, true), style: ElevatedButton.styleFrom(backgroundColor: _finished ? const Color(0xFF00B894) : theme.colorScheme.primary), child: Text(_finished ? 'Готово ✓' : 'Завершить'))),
-          ]),
-        ]),
-      ),
-    );
-  }
+@override
+void initState() {
+super.initState();
+_remaining = widget.totalSeconds;
+_startTimer();
 }
-// ⏸ КОНЕЦ ЧАСТИ 4 / 4 — ФАЙЛ workout_detail_screen.dart ЗАВЕРШЁН
+
+void _startTimer() {
+_timer = Timer.periodic(const Duration(seconds: 1), (t) {
+if (!mounted || _paused) return;
+if (_remaining > 0) {
+setState(() => _remaining--);
+} else {
+setState(() => _finished = true);
+t.cancel();
+Future.delayed(const Duration(seconds: 1), () {
+if (mounted) Navigator.pop(context, true);
+});
+}
+});
+}
+
+@override
+void dispose() {
+_timer?.cancel();
+super.dispose();
+}
+
+@override
+Widget build(BuildContext context) {
+final theme = Theme.of(context);
+final progress = widget.totalSeconds > 0 ? _remaining / widget.totalSeconds : 0.0;
+return Dialog(
+shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+child: Padding(
+padding: const EdgeInsets.all(24),
+child: Column(mainAxisSize: MainAxisSize.min, children: [
+Text(widget.name, style: theme.textTheme.headlineMedium, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+const SizedBox(height: 20),
+SizedBox(width: 140, height: 140, child: Stack(alignment: Alignment.center, children: [
+SizedBox(width: 140, height: 140, child: CircularProgressIndicator(value: progress, strokeWidth: 8, backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.15), valueColor: AlwaysStoppedAnimation(_finished ? const Color(0xFF00B894) : _paused ? const Color(0xFFFDCB6E) : theme.colorScheme.primary))),
+Text(_finished ? '✓' : '$_remaining', style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800, color: _finished ? const Color(0xFF00B894) : _paused ? const Color(0xFFFDCB6E) : theme.colorScheme.primary)),
+])),
+const SizedBox(height: 8),
+if (_paused && !_finished) Padding(padding: const EdgeInsets.only(top: 8), child: Text('⏸ Пауза', style: theme.textTheme.bodySmall?.copyWith(color: const Color(0xFFFDCB6E), fontWeight: FontWeight.w700))),
+if (widget.bothSides && !_finished) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Выполните для обеих сторон', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6)))),
+const SizedBox(height: 20),
+  if (!_finished) SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => setState(() => _paused = !_paused), icon: Icon(_paused ? Icons.play_arrow_rounded : Icons.pause_rounded, size: 22), label: Text(_paused ? 'Продолжить' : 'Пауза'), style: OutlinedButton.styleFrom(foregroundColor: _paused ? theme.colorScheme.primary : const Color(0xFFFDCB6E), side: BorderSide(color: _paused ? theme.colorScheme.primary.withValues(alpha: 0.5) : const Color(0xFFFDCB6E).withValues(alpha: 0.5)), padding: const EdgeInsets.symmetric(vertical: 12)))),
+  if (!_finished) const SizedBox(height: 12),
+  Row(children: [
+    Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена'))),
+    const SizedBox(width: 12),
+    Expanded(child: ElevatedButton(onPressed: () => Navigator.pop(context, true), style: ElevatedButton.styleFrom(backgroundColor: _finished ? const Color(0xFF00B894) : theme.colorScheme.primary), child: Text(_finished ? 'Готово ✓' : 'Завершить'))),
+  ]),
+]),
+),
+);
+}
+}

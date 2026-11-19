@@ -10,6 +10,29 @@ class GardenService {
   static const int gridRows = 40;
   static const int totalGridCells = gridColumns * gridRows;
 
+  // ═══ ЦЕНЫ И ВОЗВРАТЫ ДЕКОРА ═══
+  // Единственный источник цен: меню покупки в саду и возврат при удалении
+  // берут значения отсюда. Поменяешь цену — она изменится везде сразу.
+  // 'legendary' покупается нельзя (только награда за легендарные упражнения),
+  // поэтому его цена и возврат = 0.
+  static const Map<String, int> decorCosts = {
+    'normal': 15,    // лотос
+    'stone': 10,     // тропинка
+    'bench': 20,     // скамейка
+    'bush': 25,      // цветущий куст
+    'swing': 30,     // качели
+    'pavilion': 40,  // беседка
+    'fountain': 50,  // фонтан
+    'tree': 60,      // волшебное дерево
+    'lamp': 70,      // волшебный фонарь
+    'pond': 80,      // магический пруд
+    'arch': 100,     // розовая арка
+    'legendary': 0,  // нельзя купить — только награда за легендарные упражнения
+    'wilted': 0,     // завядший — возврата нет
+  };
+
+  static int refundFor(String type) => decorCosts[type] ?? 10;
+
   static Future<List<Map<String, dynamic>>> getGarden(int profileId) async {
     final db = await DatabaseHelper.instance.database;
     return await db.query(
@@ -73,7 +96,7 @@ class GardenService {
 
   static Future<bool> buyFlowerAtSlot({required int profileId, required int slotIndex}) async {
     final db = await DatabaseHelper.instance.database;
-    const cost = 15;
+    final cost = decorCosts['normal'] ?? 15;
 
     final currentBalance = await EnergyService.getBalance(profileId);
     if (currentBalance < cost) return false;
@@ -100,18 +123,13 @@ class GardenService {
   }
 
   static Future<bool> placeDecor({required int profileId, required int slotIndex, required String type}) async {
+    // 👇 Защита: золотой цветок нельзя купить — он только награда
+    if (type == 'legendary' || type == 'wilted') return false;
+
     final db = await DatabaseHelper.instance.database;
 
-    final cost = type == 'arch' ? 100
-        : type == 'pond' ? 80
-        : type == 'lamp' ? 70
-        : type == 'tree' ? 60
-        : type == 'fountain' ? 50
-        : type == 'pavilion' ? 40
-        : type == 'swing' ? 30
-        : type == 'bush' ? 25
-        : type == 'bench' ? 20
-        : 10;
+    // 👇 Цена из единого справочника (раньше была if-цепочка)
+    final cost = decorCosts[type] ?? 10;
 
     final currentBalance = await EnergyService.getBalance(profileId);
     if (currentBalance < cost) return false;
@@ -187,3 +205,4 @@ class GardenService {
     }
   }
 }
+// ═══ КОНЕЦ ФАЙЛА garden_service.dart ═══

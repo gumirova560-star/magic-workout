@@ -11,6 +11,10 @@ class UserProfile {
   List<String> limitations;
   String equipment;
   int daysPerWeek;
+  // 👇 НОВОЕ ПОЛЕ: выбранные дни недели тренировок (1=Пн … 7=Вс).
+  // Пустой список = пользователь не выбрал, генератор откатится
+  // на равномерную раскладку от сегодня.
+  List<int> trainingWeekdays;
   int sessionMinutes;
   String? timeRangeLabel; // 👈 НОВОЕ ПОЛЕ: Красивый текст (например, "60-75 мин")
   DateTime createdAt;
@@ -33,6 +37,7 @@ class UserProfile {
     List<String>? limitations,
     this.equipment = 'bodyweight',
     this.daysPerWeek = 3,
+    List<int>? trainingWeekdays, // 👈 НОВОЕ
     this.sessionMinutes = 45,
     this.timeRangeLabel, // 👈
     DateTime? createdAt,
@@ -43,6 +48,7 @@ class UserProfile {
     this.bodyType,
   })  : focusAreas = focusAreas ?? [],
         limitations = limitations ?? [],
+        trainingWeekdays = trainingWeekdays ?? [], // 👈 НОВОЕ
         createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toMap() {
@@ -59,6 +65,10 @@ class UserProfile {
       'limitations': limitations.join(','),
       'equipment': equipment,
       'daysPerWeek': daysPerWeek,
+      // 👈 НОВОЕ: сохраняем как строку "2,5", пустой список → NULL
+      'trainingWeekdays': trainingWeekdays.isNotEmpty
+          ? trainingWeekdays.join(',')
+          : null,
       'sessionMinutes': sessionMinutes,
       'timeRangeLabel': timeRangeLabel, // 👈
       'createdAt': createdAt.toIso8601String(),
@@ -71,6 +81,19 @@ class UserProfile {
   }
 
   factory UserProfile.fromMap(Map<String, dynamic> map) {
+    // 👈 НОВОЕ: парсим строку "2,5" обратно в список чисел.
+    // toSet() вычищает дубли ("2,2,5" → "2,5"), после чего сортируем.
+    final weekdaysStr = map['trainingWeekdays'] as String?;
+    final trainingWeekdays = (weekdaysStr == null || weekdaysStr.isEmpty)
+        ? <int>[]
+        : weekdaysStr
+        .split(',')
+        .map((s) => int.tryParse(s.trim()) ?? 0)
+        .where((w) => w >= 1 && w <= 7)
+        .toSet()
+        .toList()
+      ..sort();
+
     return UserProfile(
       id: map['id'],
       name: map['name'] ?? '',
@@ -84,6 +107,7 @@ class UserProfile {
       limitations: (map['limitations'] as String?)?.split(',').where((s) => s.isNotEmpty).toList() ?? [],
       equipment: map['equipment'] ?? 'bodyweight',
       daysPerWeek: map['daysPerWeek'] ?? 3,
+      trainingWeekdays: trainingWeekdays, // 👈 НОВОЕ
       sessionMinutes: map['sessionMinutes'] ?? 45,
       timeRangeLabel: map['timeRangeLabel'], // 👈
       createdAt: map['createdAt'] != null ? DateTime.parse(map['createdAt']) : DateTime.now(),
@@ -108,6 +132,7 @@ class UserProfile {
     List<String>? limitations,
     String? equipment,
     int? daysPerWeek,
+    List<int>? trainingWeekdays, // 👈 НОВОЕ
     int? sessionMinutes,
     String? timeRangeLabel, // 👈
     String? avatarPath,
@@ -129,6 +154,7 @@ class UserProfile {
       limitations: limitations ?? this.limitations,
       equipment: equipment ?? this.equipment,
       daysPerWeek: daysPerWeek ?? this.daysPerWeek,
+      trainingWeekdays: trainingWeekdays ?? this.trainingWeekdays, // 👈 НОВОЕ
       sessionMinutes: sessionMinutes ?? this.sessionMinutes,
       timeRangeLabel: timeRangeLabel ?? this.timeRangeLabel, // 👈
       createdAt: createdAt,
@@ -140,7 +166,18 @@ class UserProfile {
     );
   }
 
+  // ─── Лейблы ───
+
   String get genderLabel => gender == 'male' ? 'Мужской' : 'Женский';
+
+  // 👈 НОВОЕ: человекочитаемое расписание для карточки профиля,
+  // например "Вт, Пт". Пустой список → "Не выбрано".
+  String get trainingWeekdaysLabel {
+    if (trainingWeekdays.isEmpty) return 'Не выбрано';
+    const names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+    return trainingWeekdays.map((w) => names[w - 1]).join(', ');
+  }
+
   String get goalLabel {
     switch (goal) {
       case 'lose_weight': return 'Похудеть';
@@ -178,3 +215,4 @@ class UserProfile {
     }
   }
 }
+// ═══ КОНЕЦ ФАЙЛА user_profile.dart ═══

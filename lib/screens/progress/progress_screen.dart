@@ -109,10 +109,13 @@ class _ProgressScreenState extends State<ProgressScreen> {
     final monday = now.subtract(Duration(days: now.weekday - 1));
     final weekStart = DateTime(monday.year, monday.month, monday.day);
 
+
     final weekly = <int, int>{0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0};
     for (final w in completed) {
-      if (w.date.isAfter(weekStart.subtract(const Duration(days: 1)))) {
-        weekly[w.date.weekday - 1] = (weekly[w.date.weekday - 1] ?? 0) + 1;
+      // Факт тренировки важнее плана: если завершили позже плана — считаем по completedAt
+      final actual = w.completedAt ?? w.date;
+      if (actual.isAfter(weekStart.subtract(const Duration(days: 1)))) {
+        weekly[actual.weekday - 1] = (weekly[actual.weekday - 1] ?? 0) + 1;
       }
     }
 
@@ -218,29 +221,39 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
     return workouts;
   }
-
-  void _onCalendarDayTap(WorkoutDay workout) {
-    final status = workout.status == 'completed'
-        ? '✅ Завершена'
-        : '⏳ В процессе';
-    final minutes = workout.durationMinutes != null
-        ? ' · ${workout.durationMinutes} мин'
-        : '';
-
+  void _onCalendarDayTap(List<WorkoutDay> workouts) {
     final months = [
       'янв', 'фев', 'мар', 'апр', 'мая', 'июн',
       'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'
     ];
-    final dateStr = '${workout.date.day} '
-        '${months[workout.date.month - 1]}';
+    const weekDays = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
+    String fmt(DateTime d) =>
+        '${weekDays[d.weekday - 1]}, ${d.day} ${months[d.month - 1]}';
+
+    final lines = <String>[];
+    for (final workout in workouts) {
+      final status = switch (workout.status) {
+        'completed' => '✅ Завершена',
+        'in_progress' => '⏳ В процессе',
+        'skipped' => '⏭ Пропущена',
+        _ => '📋 Запланирована',
+      };
+      final minutes = workout.durationMinutes != null
+          ? ' · ${workout.durationMinutes} мин'
+          : '';
+      // Плановая дата vs дата выполнения
+      final dateStr =
+      workout.status == 'completed' && workout.completedAt != null
+          ? 'Выполнено: ${fmt(workout.completedAt!)}'
+          : fmt(workout.date);
+      lines.add('$dateStr\n${workout.name}\n$status$minutes');
+    }
 
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          '$dateStr — ${workout.name}\n$status$minutes',
-        ),
-        duration: const Duration(seconds: 3),
+        content: Text(lines.join('\n\n')),
+        duration: const Duration(seconds: 4),
       ),
     );
   }

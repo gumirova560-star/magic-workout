@@ -134,10 +134,16 @@ class WeekAnalyzer {
     return DateTime(monday.year, monday.month, monday.day);
   }
 
+  /// 👇 ИЗМЕНЕНО: пропуском считается явный 'skipped'/'missed'
+  /// или невыполненный 'planned' с прошедшей датой.
+  /// Будущие дни текущей недели больше не считаются пропущенными.
   static Future<WeekSummary> analyzeLastWeek(int profileId) async {
     final days = await DatabaseHelper.instance.getWorkoutDays(profileId: profileId, limit: 100);
     final thisMonday = currentWeekStart();
     final lastMonday = thisMonday.subtract(const Duration(days: 7));
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
 
     final lastWeek = days.where((d) {
       final dDate = DateTime(d.date.year, d.date.month, d.date.day);
@@ -145,7 +151,11 @@ class WeekAnalyzer {
     }).toList();
 
     final completed = lastWeek.where((d) => d.status == 'completed').toList();
-    final missed = lastWeek.where((d) => d.status != 'completed').toList();
+    final missed = lastWeek.where((d) {
+      if (d.status == 'skipped' || d.status == 'missed') return true;
+      final dDate = DateTime(d.date.year, d.date.month, d.date.day);
+      return d.status == 'planned' && dDate.isBefore(today);
+    }).toList();
     final totalMinutes = completed.fold<int>(0, (sum, d) => sum + (d.durationMinutes ?? 0));
 
     return WeekSummary(
@@ -203,20 +213,56 @@ class WeekAnalyzer {
       int totalSets = 0;
       int doneSets = 0;
       for (final we in exercises) {
-        // 👇 разминка и заминка не считаются
+        // разминка и заминка не считаются
         if (we.itemType != 'exercise' || we.isCoolDown || we.isWarmup) continue;
-        for (final s in await db.getWorkoutSets(we.id!)) { totalSets++; if (s.completed) doneSets++; }
+        for (final s in await db.getWorkoutSets(we.id!)) {
+          totalSets++;
+          if (s.completed) doneSets++;
+        }
       }
       if (totalSets == 0) continue;
       if (doneSets == totalSets) {
         fullyDone.add(day.templateId!);
-      } else if (doneSets > 0) partial.add(day.templateId!);
+      } else if (doneSets > 0) {
+        partial.add(day.templateId!);
+      }
     }
     partial.removeAll(fullyDone);
     return (fullyDone: fullyDone, partial: partial);
   }
 
-  static Future<int> missedLastWeek(int profileId) async => (await analyzeLastWeek(profileId)).missedCount;
+  /// 👇 ИЗМЕНЕНО: пропуски за последние 7 дней (скользящее окно,
+  /// а не календарная неделя). Раньше окно привязывалось к понедельнику,
+  /// из-за чего пропуски в начале текущей недели не учитывались и
+  /// метод всегда возвращал 0 — адаптация сетов не срабатывала.
+  ///
+  /// Пропуском считается день, который:
+  ///  - явно помечен 'skipped'/'missed', или
+  ///  - имеет статус 'planned', но его плановая дата уже прошла.
+  static Future<int> missedLastWeek(int profileId) async {
+    final db = DatabaseHelper.instance;
+    final days = await db.getWorkoutDays(profileId: profileId, limit: 100);
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final from = today.subtract(const Duration(days: 8));
+    final to = today.add(const Duration(days: 1)); // включаем весь сегодняшний день
+
+    int missed = 0;
+    for (final d in days) {
+      final dDate = DateTime(d.date.year, d.date.month, d.date.day);
+      if (dDate.isBefore(from) || !dDate.isBefore(to)) continue;
+
+      final status = d.status;
+      if (status == 'skipped' || status == 'missed') {
+        missed++;
+      } else if (status == 'planned' && dDate.isBefore(today)) {
+        // запланировано в прошлом и не выполнено — тоже пропуск
+        missed++;
+      }
+    }
+    return missed;
+  }
 
   static Future<List<ExerciseTrend>> analyzeExerciseTrends(int profileId) async {
     final db = DatabaseHelper.instance;
@@ -243,7 +289,7 @@ class WeekAnalyzer {
     for (final day in currentCycleDays) {
       final exercises = await db.getWorkoutExercises(day.id!);
       for (final we in exercises) {
-        // 👇 разминку и заминку в тренды не включаем
+        // разминку и заминку в тренды не включаем
         if (we.itemType != 'exercise' || we.isCoolDown || we.isWarmup) continue;
         final exId = we.replacedByItemId ?? we.itemId;
         final sets = (await db.getWorkoutSets(we.id!)).where((s) => s.completed).toList();
@@ -298,18 +344,26 @@ class WeekAnalyzer {
         final threshold = hasWeight ? 1.0 : 1.5;
         if (diff >= threshold) {
           dir = TrendDirection.up;
-        } else if (diff <= -threshold) dir = TrendDirection.down;
-        else dir = TrendDirection.stagnation;
+        } else if (diff <= -threshold) {
+          dir = TrendDirection.down;
+        } else {
+          dir = TrendDirection.stagnation;
+        }
       }
 
       final isCardio = _isCardio(ex);
       final isTimed = _isTimed(ex.name);
 
       trends.add(ExerciseTrend(
-        exerciseId: exId, exerciseName: ex.name,
-        avgValueThisWeek: avg3, avgValuePrevWeek: avg1,
-        timesUsed: sets1.length + sets3.length, direction: dir, isWeightBased: hasWeight,
-        isCardio: isCardio, isTimed: isTimed,
+        exerciseId: exId,
+        exerciseName: ex.name,
+        avgValueThisWeek: avg3,
+        avgValuePrevWeek: avg1,
+        timesUsed: sets1.length + sets3.length,
+        direction: dir,
+        isWeightBased: hasWeight,
+        isCardio: isCardio,
+        isTimed: isTimed,
       ));
     }
 

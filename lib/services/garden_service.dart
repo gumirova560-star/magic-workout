@@ -1,6 +1,8 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart'; // 👈 добавить: здесь живёт debugPrint
 import 'database_helper.dart';
 import 'energy_service.dart';
+
 
 class GardenService {
   static const String currentPattern = 'free_sandbox';
@@ -16,22 +18,51 @@ class GardenService {
   // 'legendary' покупается нельзя (только награда за легендарные упражнения),
   // поэтому его цена и возврат = 0.
   static const Map<String, int> decorCosts = {
-    'normal': 15,    // лотос
-    'stone': 10,     // тропинка
-    'bench': 20,     // скамейка
-    'bush': 25,      // цветущий куст
-    'swing': 30,     // качели
-    'pavilion': 40,  // беседка
-    'fountain': 50,  // фонтан
-    'tree': 60,      // волшебное дерево
-    'lamp': 70,      // волшебный фонарь
-    'pond': 80,      // магический пруд
-    'arch': 100,     // розовая арка
-    'legendary': 0,  // нельзя купить — только награда за легендарные упражнения
-    'wilted': 0,     // завядший — возврата нет
+    'normal': 15, // лотос
+    'stone': 10, // тропинка
+    'bench': 20, // скамейка
+    'bush': 25, // цветущий куст
+    'swing': 30, // качели
+    'pavilion': 40, // беседка
+    'fountain': 50, // фонтан
+    'tree': 60, // волшебное дерево
+    'lamp': 70, // волшебный фонарь
+    'pond': 80, // магический пруд
+    'arch': 100, // розовая арка
+    'legendary': 0, // нельзя купить — только награда за легендарные упражнения
+    'wilted': 0, // завядший — возврата нет
   };
 
   static int refundFor(String type) => decorCosts[type] ?? 10;
+
+  // ═══ СЛОИ: ПОЛ И ОБЪЕКТЫ ═══
+  // Типы-покрытия пола (тропинки, плитка): могут лежать ПОД объектами.
+  // Объект можно ставить на клетку, где уже есть пол — это легально.
+  // На одной клетке максимум: один пол + один объект.
+  static const Set<String> floorTypes = {'stone'};
+
+  /// Можно ли поставить предмет [type] в клетку [slotIndex].
+  /// Пол: запрещён только если на клетке уже другой пол.
+  /// Объект: запрещён, если на клетке уже другой объект (пол — можно).
+  static Future<bool> isSlotFreeFor({
+    required int profileId,
+    required int slotIndex,
+    required String type,
+  }) async {
+    final existing = await getGarden(profileId);
+    final bool placingFloor = floorTypes.contains(type);
+    for (final item in existing) {
+      if (item['slotIndex'] != slotIndex) continue;
+      final t = item['flowerType'] as String?;
+      if (placingFloor) {
+        if (t != null && floorTypes.contains(t)) return false; // пол на пол — нельзя
+      } else {
+        // объект на объект — нельзя, а тропинка под ним — можно
+        if (t == null || !floorTypes.contains(t)) return false;
+      }
+    }
+    return true;
+  }
 
   static Future<List<Map<String, dynamic>>> getGarden(int profileId) async {
     final db = await DatabaseHelper.instance.database;
@@ -42,14 +73,17 @@ class GardenService {
     );
   }
 
-  static Future<bool> plantNextFlower({required int profileId, String flowerType = 'normal'}) async {
+  static Future<bool> plantNextFlower({
+    required int profileId,
+    String flowerType = 'normal',
+  }) async {
     final db = await DatabaseHelper.instance.database;
     final existing = await getGarden(profileId);
     final existingSlots = existing.map((e) => e['slotIndex'] as int).toSet();
 
     // Ищем свободную клетку от центра (10, 20)
     const centerCol = gridColumns ~/ 2; // 10
-    const centerRow = gridRows ~/ 2;    // 20
+    const centerRow = gridRows ~/ 2; // 20
 
     int? nextSlot;
     for (int r = 0; r < max(gridRows, gridColumns); r++) {
@@ -94,37 +128,69 @@ class GardenService {
     return true;
   }
 
-  static Future<bool> buyFlowerAtSlot({required int profileId, required int slotIndex}) async {
+  /// Посадка лотоса в конкретную клетку за 15 ⚡️.
+  /// Возвращает null при успехе или текст причины отказа.
+  static Future<String?> buyFlowerAtSlot({
+    required int profileId,
+    required int slotIndex,
+  }) async {
     final db = await DatabaseHelper.instance.database;
     final cost = decorCosts['normal'] ?? 15;
 
+    if (!await isSlotFreeFor(profileId: profileId, slotIndex: slotIndex, type: 'normal')) {
+      return 'Клетка занята другим предметом';
+    }
+
     final currentBalance = await EnergyService.getBalance(profileId);
-    if (currentBalance < cost) return false;
+    if (currentBalance < cost) return 'Недостаточно энергии! 😢';
 
     final success = await EnergyService.addEnergy(
       profileId: profileId,
       delta: -cost,
       reason: 'garden_flower_buy',
-      refId: slotIndex,
+      // 👇 Траты повторяемы: не передаём refId, иначе UNIQUE
+      // (profileId, reason, refId) в energy_transactions заблокирует
+      // вторую покупку лотоса на тот же слот навсегда (после
+      // «поставил → убрал → поставил снова»)
+      refId: null,
     );
 
-    if (success) {
-      await db.insert('garden_flowers', {
-        'profileId': profileId,
-        'slotIndex': slotIndex,
-        'state': 'bloomed',
-        'flowerType': 'normal',
-        'rotation': 0,
-        'createdAt': DateTime.now().toIso8601String(),
-      });
-      return true;
+    if (!success) {
+      // Баланса хватило, а списание не прошло — чаще всего конфликт
+      // в истории энергии или внутренняя проверка сервиса
+      debugPrint('🪴 buyFlowerAtSlot: addEnergy вернул false, slot=$slotIndex, '
+          'balance=$currentBalance, cost=$cost');
+      return 'Не удалось списать энергию';
     }
-    return false;
+
+    await db.insert('garden_flowers', {
+      'profileId': profileId,
+      'slotIndex': slotIndex,
+      'state': 'bloomed',
+      'flowerType': 'normal',
+      'rotation': 0,
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+    return null; // успех
   }
 
-  static Future<bool> placeDecor({required int profileId, required int slotIndex, required String type}) async {
+  /// Покупка декора за энергию.
+  /// Возвращает null при успехе или текст причины отказа.
+  static Future<String?> placeDecor({
+    required int profileId,
+    required int slotIndex,
+    required String type,
+  }) async {
     // 👇 Защита: золотой цветок нельзя купить — он только награда
-    if (type == 'legendary' || type == 'wilted') return false;
+    if (type == 'legendary' || type == 'wilted') {
+      return 'Этот предмет нельзя купить';
+    }
+
+    // 👇 Проверка клетки с учётом слоёв: пол можно под объект,
+    // объект — на клетку с полом, но не на другой объект
+    if (!await isSlotFreeFor(profileId: profileId, slotIndex: slotIndex, type: type)) {
+      return 'Клетка занята другим предметом';
+    }
 
     final db = await DatabaseHelper.instance.database;
 
@@ -132,27 +198,36 @@ class GardenService {
     final cost = decorCosts[type] ?? 10;
 
     final currentBalance = await EnergyService.getBalance(profileId);
-    if (currentBalance < cost) return false;
+    if (currentBalance < cost) return 'Недостаточно энергии! 😢';
 
     final success = await EnergyService.addEnergy(
       profileId: profileId,
       delta: -cost,
       reason: 'garden_decor_$type',
-      refId: slotIndex,
+      // 👇 Траты повторяемы: не передаём refId, иначе UNIQUE
+      // (profileId, reason, refId) в energy_transactions заблокирует
+      // вторую покупку того же декора на тот же слот навсегда
+      // (после «поставил → убрал → поставил снова»)
+      refId: null,
     );
 
-    if (success) {
-      await db.insert('garden_flowers', {
-        'profileId': profileId,
-        'slotIndex': slotIndex,
-        'state': 'bloomed',
-        'flowerType': type,
-        'rotation': 0,
-        'createdAt': DateTime.now().toIso8601String(),
-      });
-      return true;
+    if (!success) {
+      // Баланса хватило, а списание не прошло — чаще всего конфликт
+      // в истории энергии или внутренняя проверка сервиса
+      debugPrint('🪴 placeDecor: addEnergy вернул false, slot=$slotIndex, '
+          'type=$type, balance=$currentBalance, cost=$cost');
+      return 'Не удалось списать энергию';
     }
-    return false;
+
+    await db.insert('garden_flowers', {
+      'profileId': profileId,
+      'slotIndex': slotIndex,
+      'state': 'bloomed',
+      'flowerType': type,
+      'rotation': 0,
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+    return null; // успех
   }
 
   static Future<void> setRotation(int profileId, int slotIndex, int rotation) async {
@@ -165,14 +240,44 @@ class GardenService {
     );
   }
 
-  static Future<void> moveItem(int profileId, int oldSlotIndex, int newSlotIndex) async {
+  static Future<bool> moveItem(int profileId, int oldSlotIndex, int newSlotIndex) async {
     final db = await DatabaseHelper.instance.database;
+
+    final rows = await db.query(
+      'garden_flowers',
+      where: 'profileId = ? AND slotIndex = ?',
+      whereArgs: [profileId, oldSlotIndex],
+    );
+    if (rows.isEmpty) return false;
+    final type = rows.first['flowerType'] as String? ?? 'normal';
+
+    // Целевая клетка должна быть свободна с учётом типа двигаемого предмета,
+    // при этом сам предмет на старой клетке проверке не мешает
+    final occupied = <int>{};
+    for (final item in await getGarden(profileId)) {
+      if (item['slotIndex'] == oldSlotIndex) continue; // сам себя не считаем
+      final t = item['flowerType'] as String?;
+      if (floorTypes.contains(type)) {
+        // двигаем пол: мешает только другой пол
+        if (t != null && floorTypes.contains(t)) {
+          occupied.add(item['slotIndex'] as int);
+        }
+      } else {
+        // двигаем объект: мешает только другой объект, тропинка — нет
+        if (t != null && !floorTypes.contains(t)) {
+          occupied.add(item['slotIndex'] as int);
+        }
+      }
+    }
+    if (occupied.contains(newSlotIndex)) return false;
+
     await db.update(
       'garden_flowers',
       {'slotIndex': newSlotIndex},
       where: 'profileId = ? AND slotIndex = ?',
       whereArgs: [profileId, oldSlotIndex],
     );
+    return true;
   }
 
   static Future<void> removeItem(int profileId, int slotIndex, int refundAmount) async {
@@ -182,7 +287,9 @@ class GardenService {
         profileId: profileId,
         delta: refundAmount,
         reason: 'garden_item_removed',
-        refId: slotIndex,
+        // 👇 Возвраты повторяемы: с refId UNIQUE заблокировал бы
+        // второй возврат с той же клетки после повторной покупки
+        refId: null,
       );
     }
     await db.delete(
@@ -199,9 +306,13 @@ class GardenService {
 
   static Future<void> witherOneFlower(int profileId) async {
     final db = await DatabaseHelper.instance.database;
-    final maps = await db.query('garden_flowers', where: 'profileId = ? AND flowerType = ?', whereArgs: [profileId, 'normal'], limit: 1);
+    final maps = await db.query('garden_flowers',
+        where: 'profileId = ? AND flowerType = ?',
+        whereArgs: [profileId, 'normal'],
+        limit: 1);
     if (maps.isNotEmpty) {
-      await db.update('garden_flowers', {'flowerType': 'wilted'}, where: 'id = ?', whereArgs: [maps.first['id']]);
+      await db.update('garden_flowers', {'flowerType': 'wilted'},
+          where: 'id = ?', whereArgs: [maps.first['id']]);
     }
   }
 }

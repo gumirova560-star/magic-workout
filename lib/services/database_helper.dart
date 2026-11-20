@@ -21,7 +21,7 @@ static Database? _database;
 DatabaseHelper._init();
 
 // 👇 ВЕРСИЯ 18 (Добавлен выбор дней недели тренировок в профиле)
-static const int _dbVersion = 18;
+static const int _dbVersion = 19;
 static const String _dbName = 'workout_tracker.db';
 
 Future<Database> get database async {
@@ -200,8 +200,7 @@ await db.execute('''
         flowerType TEXT DEFAULT 'normal',
         rotation INTEGER DEFAULT 0,
         createdAt TEXT NOT NULL,
-        UNIQUE(profileId, slotIndex)
-      )
+             )
     ''');
 
 await db.execute('CREATE INDEX idx_workout_days_profile ON workout_days (profileId, date)');
@@ -209,6 +208,7 @@ await db.execute('CREATE INDEX idx_workout_exercises_day ON workout_exercises (w
 await db.execute('CREATE INDEX idx_workout_sets_exercise ON workout_sets (workoutExerciseId)');
 await db.execute('CREATE INDEX idx_replacement_profile ON replacement_logs (profileId)');
 await db.execute('CREATE INDEX idx_energy_profile ON energy_transactions (profileId)');
+  await db.execute('CREATE INDEX idx_garden_slot ON garden_flowers (profileId, slotIndex)');
 }
 // ═══ КОНЕЦ ЧАСТИ 1 ═══
 
@@ -306,7 +306,33 @@ try {
 await db.execute('ALTER TABLE user_profiles ADD COLUMN trainingWeekdays TEXT');
 } catch (_) {}
 }
+// 👇 МИГРАЦИЯ ДЛЯ 19-й ВЕРСИИ (СЛОИ САДА)
+// UNIQUE(profileId, slotIndex) разрешал только одну запись на клетку,
+// а двухслойный сад требует двух (пол + объект). Пересоздаём таблицу
+// без ограничения, данные переносим как есть.
+  if (oldVersion < 19) {
+    await db.execute('ALTER TABLE garden_flowers RENAME TO garden_flowers_old');
+    await db.execute('''
+    CREATE TABLE garden_flowers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      profileId INTEGER NOT NULL,
+      slotIndex INTEGER NOT NULL,
+      state TEXT DEFAULT 'bloomed',
+      flowerType TEXT DEFAULT 'normal',
+      rotation INTEGER DEFAULT 0,
+      createdAt TEXT NOT NULL
+    )
+  ''');
+    await db.execute('''
+    INSERT INTO garden_flowers (id, profileId, slotIndex, state, flowerType, rotation, createdAt)
+    SELECT id, profileId, slotIndex, state, flowerType, rotation, createdAt FROM garden_flowers_old
+  ''');
+    await db.execute('DROP TABLE garden_flowers_old');
+    await db.execute('CREATE INDEX idx_garden_slot ON garden_flowers (profileId, slotIndex)');
+  }
+
 }
+
 
 // ═══════════════════════════════════════════════════════════
 //  ПРОФИЛИ

@@ -114,7 +114,10 @@ class _ChallengePlankScreenState extends State<ChallengePlankScreen> {
 
   Future<void> _generateIsolations(int workoutDayId, UserProfile profile, int count) async {
     final allExercises = await DatabaseHelper.instance.getExercises();
-    final blockedZones = profile.limitations.map((e) => e.toLowerCase()).toList();
+    // 👇 v21: ограничения → зоны через карту из base_exercises.dart.
+    // Раньше 'knees'/'neck'/'shoulders' с кодами зон не совпадали
+    // и фильтр зон не срабатывал никогда.
+    final blockedZones = zonesBlockedByLimitations(profile.limitations);
     final focusZones = profile.focusAreas.map((e) => e.toLowerCase()).toList();
 
     // 👇 ФИКСИРОВАННОЕ РАСПРЕДЕЛЕНИЕ ДЛЯ ПЛАНКИ (8 упражнений)

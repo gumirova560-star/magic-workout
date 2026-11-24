@@ -30,7 +30,8 @@ class WorkoutDetailScreen extends StatefulWidget {
   State<WorkoutDetailScreen> createState() => _WorkoutDetailScreenState();
 }
 
-class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
+class _WorkoutDetailScreenState extends State<WorkoutDetailScreen>
+    with WidgetsBindingObserver { // 👈 ИЗМЕНЕНО: добавлен with
   List<WorkoutExercise> _items = [];
   Map<int, Exercise> _exerciseMap = {};
   Map<int, Stretch> _stretchMap = {};
@@ -63,6 +64,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
   int _restTotalTime = 0;
   bool _isRestTimerRunning = false;
   bool _isRestTimerPaused = false;
+  DateTime? _restEndsAt; // 👈 НОВОЕ: дедлайн отдыха по настенным часам
 
   bool get _isViewMode => _completed;
   bool get _isInProgressMode => _started && !_completed;
@@ -73,6 +75,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this); // 👈 НОВОЕ
     _day = widget.workoutDay;
     _loadSavedRestTime();
     _init();
@@ -80,8 +83,42 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this); // 👈 НОВОЕ
     _restTimer?.cancel();
     super.dispose();
+  }
+
+  // 👈 НОВОЕ: гашение экрана / уход в фон больше не ломают отсчёт.
+  // При уходе дедлайн замораживается, при возврате — пересчитывается
+  // от сохранённого остатка, и первый тик сразу показывает верное время.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted) return;
+    if (state == AppLifecycleState.paused) {
+      // Уходим в сон: фиксируем остаток, дедлайн больше не валиден
+      if (_restEndsAt != null) {
+        _restEndsAt = null;
+        _tickRest(); // сохранит текущий _restTimeLeft без изменения
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      if (_isRestTimerRunning && !_isRestTimerPaused && _restEndsAt == null) {
+        _restEndsAt = DateTime.now().add(Duration(seconds: _restTimeLeft));
+        _tickRest();
+      }
+    }
+  }
+  // Тик таймера отдыха: остаток всегда вычисляется из дедлайна,
+  // поэтому сон экрана или сворачивание не искажают отсчёт
+  void _tickRest() {
+    if (!mounted || _isRestTimerPaused || _restEndsAt == null) return;
+    final left = _restEndsAt!.difference(DateTime.now()).inSeconds;
+    if (left <= 0) {
+      // Сюда же перенеси то, что было в старом колбэке таймера при нуле:
+      // звук, вибрация, переход к следующему подходу — до _stopRestTimer
+      _stopRestTimer();
+    } else if (left != _restTimeLeft) {
+      setState(() => _restTimeLeft = left);
+    }
   }
 
   Future<void> _loadSavedRestTime() async {
@@ -112,9 +149,21 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     return ex.muscleGroups.contains('cardio');
   }
 
+  // 👈 ИЗМЕНЕНО: синхронизировано с генератором — теперь статика на время
+  // (стульчик, лодочка, балансировка, вакуум) не попадает в силовую ветку с весом
   bool _isTimed(String name) {
     final lower = name.toLowerCase();
-    return lower.contains('планка') || lower.contains('plank') || _isCardioName(lower);
+    const keywords = [
+      'планка', 'plank', 'бег', 'дорожк', 'скакалк',
+      'велотренаж', 'эллипс', 'гребл', 'кардио',
+      'стульчик', 'уголок', 'лодочка',
+    ];
+    if (keywords.any((kw) => lower.contains(kw))) return true;
+    if (lower.contains('скалолаз')) return true;
+    if (lower.contains('канат') && (lower.contains('махи') || lower.contains('волны') || lower.contains('бэтл'))) return true;
+    if (lower.contains('балансировк') || lower.contains('вакуум')) return true;
+    if (lower.contains('внешней стороне стопы') || lower.contains('мячик под стопой')) return true;
+    return _isCardioName(lower);
   }
 
   bool _isCardioName(String lowerName) {
@@ -154,7 +203,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
         for (final ex in exs) {
           if (ex.itemId == exerciseId || ex.replacedByItemId == exerciseId) {
             final sets = await DatabaseHelper.instance.getWorkoutSets(ex.id!);
-            if (sets.isNotEmpty && sets.any((s) => s.completed || s.weight != null || s.reps != null)) {
+            if (sets.isNotEmpty && sets.any((s) => s.completed)) {
               return sets;
             }
           }
@@ -188,7 +237,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
             for (final ex in exs) {
               if (ex.itemId == exerciseId || ex.replacedByItemId == exerciseId) {
                 final sets = await DatabaseHelper.instance.getWorkoutSets(ex.id!);
-                if (sets.isNotEmpty) return sets;
+                if (sets.isNotEmpty && sets.any((s) => s.completed)) return sets;
               }
             }
           }
@@ -392,12 +441,16 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
       if (!item.isWarmup && !item.isCoolDown && item.itemType == 'exercise') {
         final lastSets = await _getSmartPrevSets(item.replacedByItemId ?? item.itemId, day.weekNumber ?? 1, day.cycleNumber);
         if (lastSets.isNotEmpty) {
-          final doneSets = lastSets.where((s) => s.completed || s.reps != null || s.weight != null).toList();
+          final doneSets = lastSets.where((s) => s.completed).toList();
           if (doneSets.isNotEmpty) {
             double? maxW = doneSets.map((s) => s.weight ?? 0).reduce((a, b) => a > b ? a : b);
             int? maxR = doneSets.map((s) => s.reps ?? 0).reduce((a, b) => a > b ? a : b);
             if (maxW == 0) maxW = null;
             if (maxR == 0) maxR = null;
+            // 👈 ВЕС: безвесовым (режим 0) вес из истории не показываем —
+            // глушим legacy-записи вида «планка 3 кг» на входе в кэш
+            final prevEx = exMap[item.replacedByItemId ?? item.itemId];
+            if (prevEx != null && weightModeFor(prevEx) == 0) maxW = null;
             if (maxW != null || maxR != null) {
               _lastRecords[item.id!] = {'weight': maxW, 'reps': maxR};
             }
@@ -410,13 +463,19 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
           final isTimed = ex != null && _isTimed(ex.name);
 
           if (!isCardio && !isTimed) {
+            // 👈 ВЕС: РЕЖИМ ВЕСА — 0 поле скрыто, 1 опционально, 2 обязательно
+            final wMode = ex != null ? weightModeFor(ex) : 2;
             double? baseWeight;
             int? prevReps;
             bool wasInPrevWeek = false;
 
             if (_lastRecords.containsKey(item.id!)) {
               wasInPrevWeek = true;
-              baseWeight = _lastRecords[item.id!]!['weight'] as double?;
+              // 👈 ВЕС: для безвесовых (режим 0) вес из истории не подтягиваем —
+              // прогрессия идёт по повторам, поле веса на экране скрыто
+              baseWeight = (wMode == 0)
+                  ? null
+                  : _lastRecords[item.id!]!['weight'] as double?;
               prevReps = _lastRecords[item.id!]!['reps'] as int?;
             }
 
@@ -645,18 +704,15 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
       _isRestTimerRunning = true;
       _isRestTimerPaused = false;
     });
-    _restTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted || _isRestTimerPaused) return;
-      if (_restTimeLeft > 0) {
-        setState(() => _restTimeLeft--);
-      } else {
-        _stopRestTimer();
-      }
-    });
+    // Дедлайн фиксируется один раз, остаток ВСЕГДА вычисляется из него —
+    // сон экрана или сворачивание не могут исказить отсчёт
+    _restEndsAt = DateTime.now().add(Duration(seconds: _globalRestSeconds));
+    _restTimer = Timer.periodic(const Duration(seconds: 1), (_) => _tickRest());
   }
 
   void _stopRestTimer() {
     _restTimer?.cancel();
+    _restEndsAt = null; // дедлайн больше не валиден
     if (!mounted) return;
     setState(() {
       _isRestTimerRunning = false;
@@ -664,7 +720,20 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     });
   }
 
-  void _togglePauseRestTimer() => setState(() => _isRestTimerPaused = !_isRestTimerPaused);
+  void _togglePauseRestTimer() {
+    setState(() {
+      if (_isRestTimerPaused) {
+        // Снимаем с паузы: дедлайн считаем заново от текущего остатка
+        _isRestTimerPaused = false;
+        _restEndsAt = DateTime.now().add(Duration(seconds: _restTimeLeft));
+      } else {
+        // Ставим на паузу: дедлайн замораживаем, время не течёт
+        _isRestTimerPaused = true;
+        _restEndsAt = null;
+      }
+    });
+  }
+
 
   Future<void> _showWeekNotification() async {
     final week = _day?.weekNumber;
@@ -1194,11 +1263,17 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     if (!mounted) return;
 
     // ══════════════════════════════════════════════════════════════════
-    // НАГРАДА: ЧЕЛЛЕНДЖ (3-я неделя) → 60⚡ + золотой лотос
-    //       Обычная тренировка → +20⚡ (как раньше)
-    // ══════════════════════════════════════════════════════════════════
-    final bool isChallengeDay = updated.weekNumber == 3
-        && updated.name.toLowerCase().contains('челлендж');
+    // Награда за челлендж (неделя 3) — только если пользователь его ПРИНЯЛ.
+// При отказе название дня не меняется, поэтому проверяем флаг из prefs.
+
+
+    // Награда — только за реальный челлендж. При отказе _decline в
+// challenge_dice_screen.dart переводит день в type: 'strength',
+// поэтому имя дня («День челленджа») больше не решает само по себе.
+    final bool isChallengeDay = updated.weekNumber == 3 &&
+        updated.type == 'challenge' &&
+        updated.name.toLowerCase().contains('челлендж');
+
 
     String snackMessage;
     Color snackColor;
@@ -1242,6 +1317,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
         ),
       );
     }
+
     // ══════════════════════════════════════════════════════════════════
     // КОНЕЦ БЛОКА НАГРАДЫ
     // ══════════════════════════════════════════════════════════════════
@@ -2016,7 +2092,10 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
       isViewMode: _isViewMode,
       started: _started,
       sets: sets,
-      lastWeight: _lastRecords[item.id]?['weight'] as double?,
+      // 👈 ВЕС: безвесовым (режим 0) вес из истории не показываем в плашке
+      lastWeight: (weightModeFor(ex) == 0)
+          ? null
+          : _lastRecords[item.id]?['weight'] as double?,
       lastReps: _lastRecords[item.id]?['reps'] as int?,
       onSetChanged: (index, data) async {
         if (item.id == null || _isViewMode) return;
@@ -2053,6 +2132,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
       groupLabel: _groupLabel,
       isCardio: _isCardio,
       isTimed: _isTimed,
+      weightMode: weightModeFor, // 👈 ВЕС: режим веса из base_exercises.dart
       parseReps: _parseReps,
     );
   }
@@ -2276,68 +2356,105 @@ class _StretchTimerDialog extends StatefulWidget {
   State<_StretchTimerDialog> createState() => _StretchTimerDialogState();
 }
 
-class _StretchTimerDialogState extends State<_StretchTimerDialog> {
-late int _remaining;
-Timer? _timer;
-bool _finished = false;
-bool _paused = false;
+class _StretchTimerDialogState extends State<_StretchTimerDialog>
+    with WidgetsBindingObserver {
+  late int _remaining;
+  Timer? _timer;
+  bool _finished = false;
+  bool _paused = false;
+  DateTime? _endsAt; // 👈 дедлайн по настенным часам
 
-@override
-void initState() {
-super.initState();
-_remaining = widget.totalSeconds;
-_startTimer();
-}
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _remaining = widget.totalSeconds;
+    _startTimer();
+  }
 
-void _startTimer() {
-_timer = Timer.periodic(const Duration(seconds: 1), (t) {
-if (!mounted || _paused) return;
-if (_remaining > 0) {
-setState(() => _remaining--);
-} else {
-setState(() => _finished = true);
-t.cancel();
-Future.delayed(const Duration(seconds: 1), () {
-if (mounted) Navigator.pop(context, true);
-});
-}
-});
-}
+  void _startTimer() {
+    _endsAt = DateTime.now().add(Duration(seconds: _remaining));
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+  }
 
-@override
-void dispose() {
-_timer?.cancel();
-super.dispose();
-}
+  void _tick() {
+    if (!mounted || _paused || _finished || _endsAt == null) return;
+    final left = _endsAt!.difference(DateTime.now()).inSeconds;
+    if (left <= 0) {
+      setState(() => _finished = true);
+      _timer?.cancel();
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) Navigator.pop(context, true);
+      });
+    } else if (left != _remaining) {
+      setState(() => _remaining = left);
+    }
+  }
 
-@override
-Widget build(BuildContext context) {
-final theme = Theme.of(context);
-final progress = widget.totalSeconds > 0 ? _remaining / widget.totalSeconds : 0.0;
-return Dialog(
-shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-child: Padding(
-padding: const EdgeInsets.all(24),
-child: Column(mainAxisSize: MainAxisSize.min, children: [
-Text(widget.name, style: theme.textTheme.headlineMedium, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-const SizedBox(height: 20),
-SizedBox(width: 140, height: 140, child: Stack(alignment: Alignment.center, children: [
-SizedBox(width: 140, height: 140, child: CircularProgressIndicator(value: progress, strokeWidth: 8, backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.15), valueColor: AlwaysStoppedAnimation(_finished ? const Color(0xFF00B894) : _paused ? const Color(0xFFFDCB6E) : theme.colorScheme.primary))),
-Text(_finished ? '✓' : '$_remaining', style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800, color: _finished ? const Color(0xFF00B894) : _paused ? const Color(0xFFFDCB6E) : theme.colorScheme.primary)),
-])),
-const SizedBox(height: 8),
-if (_paused && !_finished) Padding(padding: const EdgeInsets.only(top: 8), child: Text('⏸ Пауза', style: theme.textTheme.bodySmall?.copyWith(color: const Color(0xFFFDCB6E), fontWeight: FontWeight.w700))),
-if (widget.bothSides && !_finished) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Выполните для обеих сторон', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6)))),
-const SizedBox(height: 20),
-  if (!_finished) SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => setState(() => _paused = !_paused), icon: Icon(_paused ? Icons.play_arrow_rounded : Icons.pause_rounded, size: 22), label: Text(_paused ? 'Продолжить' : 'Пауза'), style: OutlinedButton.styleFrom(foregroundColor: _paused ? theme.colorScheme.primary : const Color(0xFFFDCB6E), side: BorderSide(color: _paused ? theme.colorScheme.primary.withValues(alpha: 0.5) : const Color(0xFFFDCB6E).withValues(alpha: 0.5)), padding: const EdgeInsets.symmetric(vertical: 12)))),
-  if (!_finished) const SizedBox(height: 12),
-  Row(children: [
-    Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена'))),
-    const SizedBox(width: 12),
-    Expanded(child: ElevatedButton(onPressed: () => Navigator.pop(context, true), style: ElevatedButton.styleFrom(backgroundColor: _finished ? const Color(0xFF00B894) : theme.colorScheme.primary), child: Text(_finished ? 'Готово ✓' : 'Завершить'))),
-  ]),
-]),
-),
-);
-}
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted) return;
+    if (state == AppLifecycleState.paused) {
+      _endsAt = null; // остаток заморожен в _remaining
+    } else if (state == AppLifecycleState.resumed) {
+      if (!_paused && !_finished && _endsAt == null) {
+        _endsAt = DateTime.now().add(Duration(seconds: _remaining));
+        _tick();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final progress = widget.totalSeconds > 0 ? _remaining / widget.totalSeconds : 0.0;
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(widget.name, style: theme.textTheme.headlineMedium, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 20),
+          SizedBox(width: 140, height: 140, child: Stack(alignment: Alignment.center, children: [
+            SizedBox(width: 140, height: 140, child: CircularProgressIndicator(value: progress, strokeWidth: 8, backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.15), valueColor: AlwaysStoppedAnimation(_finished ? const Color(0xFF00B894) : _paused ? const Color(0xFFFDCB6E) : theme.colorScheme.primary))),
+            Text(_finished ? '✓' : '$_remaining', style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800, color: _finished ? const Color(0xFF00B894) : _paused ? const Color(0xFFFDCB6E) : theme.colorScheme.primary)),
+          ])),
+          const SizedBox(height: 8),
+          if (_paused && !_finished) Padding(padding: const EdgeInsets.only(top: 8), child: Text('⏸ Пауза', style: theme.textTheme.bodySmall?.copyWith(color: const Color(0xFFFDCB6E), fontWeight: FontWeight.w700))),
+          if (widget.bothSides && !_finished) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Выполните для обеих сторон', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6)))),
+          const SizedBox(height: 20),
+          if (!_finished) SizedBox(width: double.infinity, child: OutlinedButton.icon(
+            onPressed: () {
+              setState(() {
+                if (_paused) {
+                  _paused = false;
+                  _endsAt = DateTime.now().add(Duration(seconds: _remaining));
+                } else {
+                  _paused = true;
+                  _endsAt = null;
+                }
+              });
+            },
+            icon: Icon(_paused ? Icons.play_arrow_rounded : Icons.pause_rounded, size: 22),
+            label: Text(_paused ? 'Продолжить' : 'Пауза'),
+            style: OutlinedButton.styleFrom(foregroundColor: _paused ? theme.colorScheme.primary : const Color(0xFFFDCB6E), side: BorderSide(color: _paused ? theme.colorScheme.primary.withValues(alpha: 0.5) : const Color(0xFFFDCB6E).withValues(alpha: 0.5)), padding: const EdgeInsets.symmetric(vertical: 12)),
+          )),
+          if (!_finished) const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена'))),
+            const SizedBox(width: 12),
+            Expanded(child: ElevatedButton(onPressed: () => Navigator.pop(context, true), style: ElevatedButton.styleFrom(backgroundColor: _finished ? const Color(0xFF00B894) : theme.colorScheme.primary), child: Text(_finished ? 'Готово ✓' : 'Завершить'))),
+          ]),
+        ]),
+      ),
+    );
+  }
 }

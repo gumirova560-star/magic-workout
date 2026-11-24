@@ -52,6 +52,11 @@ class _FairyBubbleState extends State<FairyBubble> {
       profileId = FairyReactionService().activeProfileId;
     } catch (_) {}
 
+    // 👇 Забираем отложенное сообщение (например, welcome-бонус после
+    // создания профиля). Оно важнее любой фразы экрана — и если
+    // отложенное есть, случайную фразу не показываем вовсе.
+    if (FairyReactionService().takePending(_show)) return;
+
     // ⚠️ ПРОВЕРКА: Есть ли уже план на экране тренировок
     if (widget.screenKey == 'workout' && profileId != null) {
       final allDays = await DatabaseHelper.instance.getWorkoutDays(
@@ -76,6 +81,7 @@ class _FairyBubbleState extends State<FairyBubble> {
       _show(selected.text, selected.mood);
     }
   }
+
 
   void _show(String text, FairyMood mood) {
     if (!mounted) return;

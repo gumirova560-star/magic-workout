@@ -275,7 +275,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     // 👇 ПОЛНАЯ ОЧИСТКА ВСЕХ ДНЕЙ (включая скрытые плановые)
     if (_activeProfile?.id != null) {
-      await DatabaseHelper.instance.deleteAllWorkoutDaysForProfile(_activeProfile!.id!);
+      await DatabaseHelper.instance.deleteHistoryWorkoutDays(_activeProfile!.id!);
     }
 
     if (!mounted) return;

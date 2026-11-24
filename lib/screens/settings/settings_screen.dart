@@ -3,6 +3,11 @@ import '../../services/database_helper.dart';
 import '../../services/theme_service.dart';
 import '../achievements/achievements_screen.dart';
 import '../profiles/profiles_screen.dart'; // ⚠️ ИМПОРТ ПРОФИЛЯ
+// 👇 ФИКС БАГА 5: живые счётчики из библиотек контента
+// (экран лежит в lib/screens/.../ — два ../ поднимают до lib/)
+import '../../data/exercises_data.dart';
+import '../../data/stretches_data.dart';
+import '../../data/yoga_data.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -43,7 +48,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Очистить историю?'),
-        content: Text('Все тренировки профиля «${profiles.first.name}» будут удалены.'),
+        content: const Text('Завершённые тренировки будут удалены. Текущий план останется.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Очистить', style: TextStyle(color: Colors.red))),
@@ -51,13 +56,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (confirmed != true) return;
-    final history = await DatabaseHelper.instance.getWorkoutDays(profileId: profiles.first.id!);
-    for (final w in history) {
-      await DatabaseHelper.instance.deleteWorkoutDay(w.id!);
-    }
+    await DatabaseHelper.instance.deleteHistoryWorkoutDays(profiles.first.id!);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('История очищена')));
   }
+
 
   Future<void> _deleteProfile() async {
     final profiles = await DatabaseHelper.instance.getProfiles();
@@ -81,17 +84,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Профиль удалён')));
   }
 
-  Future<void> _showAbout() async {
+  // 👇 ФИКС БАГА 5: все цифры считаются из библиотек вживую,
+  // а не захардкожены — при изменении контента счётчики всегда верны
+  void _showAbout() {
+    final exercises = getExercisesData();
+    // По уникальным названиям: Dead Bug, Bird Dog и Вакуум повторяются
+    // в разных частях библиотеки — без дедупликации цифра была бы завышена
+    final exerciseCount = exercises.map((e) => e.name).toSet().length;
+
+    final stretches = getStretchesData();
+    final stretchCount = stretches.where((s) => s.category == 'classic').length;
+    final yogaPoses = stretches
+        .where((s) => s.category == 'yoga' && s.muscleGroup != 'breathing')
+        .length;
+    final breathingCount = stretches.where((s) => s.muscleGroup == 'breathing').length;
+    final warmupCount = stretches.where((s) => s.category == 'warmup').length;
+
+    // Йога-сессии — из yoga_data.dart
+    final yogaSessions = getYogaSessionsData().length;
+
     showAboutDialog(
       context: context,
       applicationName: 'Magic Workout',
       applicationVersion: '1.0.0',
-      applicationIcon: Container(width: 64, height: 64, decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF6C5CE7), Color(0xFFA29BFE)]), borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.fitness_center, color: Colors.white, size: 32)),
+      applicationIcon: Container(
+        width: 64,
+        height: 64,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(colors: [Color(0xFF6C5CE7), Color(0xFFA29BFE)]),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Icon(Icons.fitness_center, color: Colors.white, size: 32),
+      ),
       children: [
         const SizedBox(height: 12),
-        const Text('Magic Workout - Приложение для составления и ведения плана тренировок.', style: TextStyle(fontSize: 14)),
+        const Text('Magic Workout - Приложение для составления и ведения плана тренировок.',
+            style: TextStyle(fontSize: 14)),
         const SizedBox(height: 12),
-        const Text('• 73 упражнения\n• 55 растяжек и йога-поз\n• 7 йога-сессий\n• Автоматический подбор плана', style: TextStyle(fontSize: 13)),
+        Text(
+          '• Упражнений: $exerciseCount\n'
+              '• Растяжек: $stretchCount\n'
+              '• Йога-поз: $yogaPoses\n'
+              '• Йога-сессий: $yogaSessions\n'
+              '• Дыхательных практик: $breathingCount\n'
+              '• Разминочных движений: $warmupCount\n'
+              '• Автоматический подбор плана',
+          style: const TextStyle(fontSize: 13),
+        ),
       ],
     );
   }

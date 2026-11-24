@@ -200,10 +200,14 @@ class _ChallengeWheelScreenState extends State<ChallengeWheelScreen> with Single
     }
 
     final allExercises = await DatabaseHelper.instance.getExercises();
-    final blockedZones = profile.limitations.map((e) => e.toLowerCase()).toList();
+    // 👇 v21: ограничения → зоны через карту из base_exercises.dart.
+    // Раньше 'knees'/'neck'/'shoulders' с кодами зон не совпадали
+    // и фильтр зон не срабатывал никогда.
+    final blockedZones = zonesBlockedByLimitations(profile.limitations);
 
     bool isExerciseAllowed(Exercise e) {
-      if (e.contraindications.any((c) => blockedZones.contains(c.toLowerCase()))) return false;
+      // 👇 v21: точное пересечение кодов вместо substring-матчинга
+      if (exerciseBlockedByLimitations(e, profile.limitations)) return false;
       if (!WorkoutGenerator.matchesEquipment(e, profile.equipment)) return false;
       if (profile.level == 'beginner') {
         final lowerName = e.name.toLowerCase();

@@ -184,6 +184,37 @@ class FairyReactionService {
   void setMood(FairyMood mood) {
     _currentMood = mood;
   }
+  // ═══════════════════════════════════════════════════════════
+  //  PENDING-СООБЩЕНИЕ
+  // ═══════════════════════════════════════════════════════════
+  //
+  // Сообщение, которое никто не услышал (например, фея отправлена
+  // до перехода на новый экран). Хранится до первого FairyBubble,
+  // который заберёт его через takePending в initState.
+
+  String? _pendingMessage;
+  FairyMood _pendingMood = FairyMood.happy;
+
+  /// Отложить сообщение до появления следующего FairyBubble.
+  void sayOnNext(String message, {FairyMood? mood}) {
+    _pendingMessage = FairyPhrases.apply(
+      message,
+      _profileName,
+      gender: _profileGender,
+    );
+    _pendingMood = mood ?? FairyMood.happy;
+  }
+
+  /// Вызывается из FairyBubble в initState. Если есть отложенное —
+  /// показывает его через переданный колбэк и возвращает true.
+  bool takePending(void Function(String message, FairyMood mood) show) {
+    final m = _pendingMessage;
+    if (m == null) return false;
+    _pendingMessage = null;
+    _currentMood = _pendingMood;
+    show(m, _pendingMood);
+    return true;
+  }
 
   // ═══════════════════════════════════════════════════════════
   //  HOLD SCREEN PHRASES

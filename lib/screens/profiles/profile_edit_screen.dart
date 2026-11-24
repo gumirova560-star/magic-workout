@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/user_profile.dart';
 import '../../services/database_helper.dart';
+import '../../services/energy_service.dart';
+import '../../services/fairy_reaction_service.dart'; // 👇 ДОБАВЛЕНО
+import '../../data/fairy_mood.dart';                 // 👇 ДОБАВЛЕНО
 import '../main_screen.dart';
 
 class ProfileEditScreen extends StatefulWidget {
@@ -14,417 +17,441 @@ class ProfileEditScreen extends StatefulWidget {
 }
 
 class _ProfileEditScreenState extends State<ProfileEditScreen> {
-final _formKey = GlobalKey<FormState>();
-final _nameController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
 
-late TextEditingController _ageController;
-late TextEditingController _heightController;
-late TextEditingController _weightController;
+  late TextEditingController _ageController;
+  late TextEditingController _heightController;
+  late TextEditingController _weightController;
 
-String _gender = 'female';
-int _age = 30;
-double _height = 170;
-double _weight = 65;
-String _level = 'beginner';
-String _goal = 'tone';
-String _equipment = 'dumbbells';
-int _daysPerWeek = 3;
-// 👇 НОВОЕ ПОЛЕ: выбранные дни недели (1=Пн … 7=Вс)
-List<int> _selectedWeekdays = [];
-int _sessionMinutes = 45;
-String? _timeRangeLabel = '45-60 мин';
-String? _bodyType;
+  String _gender = 'female';
+  int _age = 30;
+  double _height = 170;
+  double _weight = 65;
+  String _level = 'beginner';
+  String _goal = 'tone';
+  String _equipment = 'dumbbells';
+  int _daysPerWeek = 3;
+  // 👇 выбранные дни недели (1=Пн … 7=Вс)
+  List<int> _selectedWeekdays = [];
+  int _sessionMinutes = 45;
+  String? _timeRangeLabel = '45-60 мин';
+  String? _bodyType;
 
-bool _focusAutoFilled = false;
+  bool _focusAutoFilled = false;
 
-final Set<String> _focusAreas = {};
-final Set<String> _limitations = {};
+  final Set<String> _focusAreas = {};
+  final Set<String> _limitations = {};
 
-// 👇 ДИНАМИЧЕСКОЕ ОГРАНИЧЕНИЕ ФОКУСНЫХ ЗОН
-int get _maxFocusAreas => _level == 'beginner' ? 2 : 3;
+  // 👇 ДИНАМИЧЕСКОЕ ОГРАНИЧЕНИЕ ФОКУСНЫХ ЗОН
+  int get _maxFocusAreas => _level == 'beginner' ? 2 : 3;
 
-@override
-void initState() {
-super.initState();
-if (widget.profile != null) {
-final p = widget.profile!;
-_nameController.text = p.name;
-_gender = p.gender;
-_age = p.age;
-_height = p.height;
-_weight = p.weight;
-_level = p.level;
-_goal = p.goal;
-_equipment = p.equipment;
-_daysPerWeek = p.daysPerWeek;
-// 👇 НОВОЕ: подтягиваем сохранённое расписание, лишнее обрезаем
-_selectedWeekdays = List<int>.from(p.trainingWeekdays.take(_daysPerWeek));
-_sessionMinutes = p.sessionMinutes;
-_timeRangeLabel = p.timeRangeLabel ?? '45-60 мин'; // Фолбэк для старых профилей
-_focusAreas.addAll(p.focusAreas.take(_maxFocusAreas));
-_limitations.addAll(p.limitations);
-_bodyType = p.bodyType;
-}
+  @override
+  void initState() {
+    super.initState();
+    if (widget.profile != null) {
+      final p = widget.profile!;
+      _nameController.text = p.name;
+      _gender = p.gender;
+      _age = p.age;
+      _height = p.height;
+      _weight = p.weight;
+      _level = p.level;
+      _goal = p.goal;
+      _equipment = p.equipment;
+      _daysPerWeek = p.daysPerWeek;
+      // 👇 подтягиваем сохранённое расписание, лишнее обрезаем
+      _selectedWeekdays = List<int>.from(p.trainingWeekdays.take(_daysPerWeek));
+      _sessionMinutes = p.sessionMinutes;
+      _timeRangeLabel = p.timeRangeLabel ?? '45-60 мин'; // Фолбэк для старых профилей
+      _focusAreas.addAll(p.focusAreas.take(_maxFocusAreas));
+      _limitations.addAll(p.limitations);
+      _bodyType = p.bodyType;
+    }
 
-_ageController = TextEditingController(text: _age.toString());
-_heightController = TextEditingController(text: _height.toInt().toString());
-_weightController = TextEditingController(text: _weight.toStringAsFixed(_weight % 1 == 0 ? 0 : 1));
-}
+    _ageController = TextEditingController(text: _age.toString());
+    _heightController = TextEditingController(text: _height.toInt().toString());
+    _weightController = TextEditingController(text: _weight.toStringAsFixed(_weight % 1 == 0 ? 0 : 1));
+  }
 
-@override
-void dispose() {
-_nameController.dispose();
-_ageController.dispose();
-_heightController.dispose();
-_weightController.dispose();
-super.dispose();
-}
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _ageController.dispose();
+    _heightController.dispose();
+    _weightController.dispose();
+    super.dispose();
+  }
 
-Future<void> _save() async {
-if (!_formKey.currentState!.validate()) return;
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
 
-if (_focusAreas.isEmpty) {
-ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Выберите хотя бы одну фокусную зону')));
-return;
-}
+    if (_focusAreas.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Выберите хотя бы одну фокусную зону')));
+      return;
+    }
 
-final finalFocusAreas = _focusAreas.take(_maxFocusAreas).toList();
+    final finalFocusAreas = _focusAreas.take(_maxFocusAreas).toList();
 
-final profile = UserProfile(
-id: widget.profile?.id,
-name: _nameController.text.trim(),
-gender: _gender,
-age: _age,
-height: _height,
-weight: _weight,
-level: _level,
-goal: _goal,
-focusAreas: finalFocusAreas,
-limitations: _limitations.toList(),
-equipment: _equipment,
-daysPerWeek: _daysPerWeek,
-// 👇 НОВОЕ: сохраняем выбранные дни недели
-trainingWeekdays: _selectedWeekdays,
-sessionMinutes: _sessionMinutes,
-timeRangeLabel: _timeRangeLabel,
-createdAt: widget.profile?.createdAt,
-bodyType: _bodyType,
+    final profile = UserProfile(
+      id: widget.profile?.id,
+      name: _nameController.text.trim(),
+      gender: _gender,
+      age: _age,
+      height: _height,
+      weight: _weight,
+      level: _level,
+      goal: _goal,
+      focusAreas: finalFocusAreas,
+      limitations: _limitations.toList(),
+      equipment: _equipment,
+      daysPerWeek: _daysPerWeek,
+      trainingWeekdays: _selectedWeekdays,
+      sessionMinutes: _sessionMinutes,
+      timeRangeLabel: _timeRangeLabel,
+      createdAt: widget.profile?.createdAt,
+      bodyType: _bodyType,
 
-// ФИКС: Передаем старые картинки, чтобы они не затирались при сохранении
-avatarPath: widget.profile?.avatarPath,
-beforePhotoPath: widget.profile?.beforePhotoPath,
-beforeSidePath: widget.profile?.beforeSidePath,
-beforeBackPath: widget.profile?.beforeBackPath,
-);
+      // ФИКС: Передаем старые картинки, чтобы они не затирались при сохранении
+      avatarPath: widget.profile?.avatarPath,
+      beforePhotoPath: widget.profile?.beforePhotoPath,
+      beforeSidePath: widget.profile?.beforeSidePath,
+      beforeBackPath: widget.profile?.beforeBackPath,
+    );
 
-try {
-if (widget.profile == null) {
-await DatabaseHelper.instance.addProfile(profile);
-} else {
-await DatabaseHelper.instance.updateProfile(profile);
-}
+    try {
+      if (widget.profile == null) {
+        final newId = await DatabaseHelper.instance.addProfile(profile);
+        // 👇 Приветственные 30⚡ на сад. refId = id профиля: UNIQUE-констрейнт
+        // в energy_transactions гарантирует, что повторный вызов ничего
+        // не начислит — даже если сюда попасть дважды.
+        await EnergyService.grantWelcomeBonus(newId);
 
-if (!mounted) return;
+        // 👇 Сообщение покажет фея на MainScreen: сейчас слушателей нет
+        // (pushAndRemoveUntil снесёт этот экран), поэтому откладываем его
+        // до первого FairyBubble, который заберёт через takePending.
+        FairyReactionService().sayOnNext(
+          'Профиль создан! Тебе начислено 30 единиц жизненной энергии. '
+              'Загляни в Сад Феи и посади свой первый цветок 🌱',
+          mood: FairyMood.party,
+        );
+      } else {
+        await DatabaseHelper.instance.updateProfile(profile);
+      }
 
-if (widget.profile == null) {
-Navigator.of(context).pushAndRemoveUntil(
-MaterialPageRoute(builder: (_) => const MainScreen()),
-(route) => false,
-);
-} else {
-Navigator.pop(context, true);
-}
-} catch (e) {
-if (mounted) {
-ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
-}
-}
-}
+      if (!mounted) return;
 
-@override
-Widget build(BuildContext context) {
-final isEdit = widget.profile != null;
+      if (widget.profile == null) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainScreen()),
+              (route) => false,
+        );
+      } else {
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+      }
+    }
+  }
 
-return Scaffold(
-appBar: AppBar(title: Text(isEdit ? 'Редактировать' : 'Создать профиль')),
-body: Form(
-key: _formKey,
-child: ListView(
-padding: const EdgeInsets.all(16),
-children: [
-TextFormField(
-controller: _nameController,
-decoration: const InputDecoration(labelText: 'Имя профиля', hintText: 'Я, Жена, Муж...', prefixIcon: Icon(Icons.person_rounded)),
-validator: (v) => v?.isEmpty ?? true ? 'Введите имя' : null,
-),
-const SizedBox(height: 24),
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.profile != null;
 
-_sectionTitle('Пол'),
-Row(
-children: [
-Expanded(child: _choiceButton(label: 'Женский', icon: Icons.female_rounded, isSelected: _gender == 'female', onTap: () => setState(() => _gender = 'female'))),
-const SizedBox(width: 12),
-Expanded(child: _choiceButton(label: 'Мужской', icon: Icons.male_rounded, isSelected: _gender == 'male', onTap: () => setState(() => _gender = 'male'))),
-],
-),
-const SizedBox(height: 24),
+    return Scaffold(
+      appBar: AppBar(title: Text(isEdit ? 'Редактировать' : 'Создать профиль')),
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            TextFormField(
+              controller: _nameController,
+              decoration: const InputDecoration(labelText: 'Имя профиля', hintText: 'Я, Жена, Муж...', prefixIcon: Icon(Icons.person_rounded)),
+              validator: (v) => v?.isEmpty ?? true ? 'Введите имя' : null,
+            ),
+            const SizedBox(height: 24),
 
-_sectionTitle('Параметры'),
-_buildHybridSlider(
-label: 'Возраст',
-controller: _ageController,
-value: _age.toDouble(),
-min: 14, max: 90, divisions: 76, unit: 'лет',
-onChanged: (v) { setState(() => _age = v.toInt()); _ageController.text = _age.toString(); },
-onTextChanged: (text) { final parsed = int.tryParse(text); if (parsed != null && parsed >= 14 && parsed <= 90) setState(() => _age = parsed); },
-),
-_buildHybridSlider(
-label: 'Рост',
-controller: _heightController,
-value: _height,
-min: 130, max: 220, divisions: 90, unit: 'см',
-onChanged: (v) { setState(() => _height = v); _heightController.text = _height.toInt().toString(); },
-onTextChanged: (text) { final parsed = double.tryParse(text); if (parsed != null && parsed >= 130 && parsed <= 220) setState(() => _height = parsed); },
-),
-_buildHybridSlider(
-label: 'Вес',
-controller: _weightController,
-value: _weight,
-min: 35, max: 200, divisions: 165, unit: 'кг',
-onChanged: (v) { setState(() => _weight = v); _weightController.text = _weight.toStringAsFixed(_weight % 1 == 0 ? 0 : 1); },
-onTextChanged: (text) { final parsed = double.tryParse(text); if (parsed != null && parsed >= 35 && parsed <= 200) setState(() => _weight = parsed); },
-),
-const SizedBox(height: 24),
+            _sectionTitle('Пол'),
+            Row(
+              children: [
+                Expanded(child: _choiceButton(label: 'Женский', icon: Icons.female_rounded, isSelected: _gender == 'female', onTap: () => setState(() => _gender = 'female'))),
+                const SizedBox(width: 12),
+                Expanded(child: _choiceButton(label: 'Мужской', icon: Icons.male_rounded, isSelected: _gender == 'male', onTap: () => setState(() => _gender = 'male'))),
+              ],
+            ),
+            const SizedBox(height: 24),
 
-_sectionTitle('Уровень подготовки'),
-..._buildOptions(
-options: const [
-('beginner', 'Новичок', Icons.looks_one_rounded),
-('intermediate', 'Средний', Icons.looks_two_rounded),
-('advanced', 'Продвинутый', Icons.looks_3_rounded),
-],
-selected: _level,
-onSelected: (v) => setState(() {
-_level = v;
-if (_focusAreas.length > _maxFocusAreas) {
-final list = _focusAreas.toList();
-_focusAreas.clear();
-_focusAreas.addAll(list.take(_maxFocusAreas));
-ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Для этого уровня доступно не более $_maxFocusAreas фокусных зон')));
-}
-if (_focusAutoFilled && _bodyType != null) {
-final Map<String, List<String>> bodyTypeZones = {
-'pear': ['glutes', 'shoulders', 'legs'],
-'apple': ['abs', 'legs', 'back'],
-'hourglass': ['glutes', 'abs', 'legs'],
-'rectangle': ['glutes', 'shoulders', 'legs'],
-'inverted_triangle': ['glutes', 'legs', 'abs'],
-};
-if (bodyTypeZones.containsKey(_bodyType)) {
-_focusAreas.clear();
-_focusAreas.addAll(bodyTypeZones[_bodyType]!.take(_maxFocusAreas));
-}
-}
-}),
-),
-const SizedBox(height: 24),
+            _sectionTitle('Параметры'),
+            _buildHybridSlider(
+              label: 'Возраст',
+              controller: _ageController,
+              value: _age.toDouble(),
+              min: 14, max: 90, divisions: 76, unit: 'лет',
+              onChanged: (v) { setState(() => _age = v.toInt()); _ageController.text = _age.toString(); },
+              onTextChanged: (text) { final parsed = int.tryParse(text); if (parsed != null && parsed >= 14 && parsed <= 90) setState(() => _age = parsed); },
+            ),
+            _buildHybridSlider(
+              label: 'Рост',
+              controller: _heightController,
+              value: _height,
+              min: 130, max: 220, divisions: 90, unit: 'см',
+              onChanged: (v) { setState(() => _height = v); _heightController.text = _height.toInt().toString(); },
+              onTextChanged: (text) { final parsed = double.tryParse(text); if (parsed != null && parsed >= 130 && parsed <= 220) setState(() => _height = parsed); },
+            ),
+            _buildHybridSlider(
+              label: 'Вес',
+              controller: _weightController,
+              value: _weight,
+              min: 35, max: 200, divisions: 165, unit: 'кг',
+              onChanged: (v) { setState(() => _weight = v); _weightController.text = _weight.toStringAsFixed(_weight % 1 == 0 ? 0 : 1); },
+              onTextChanged: (text) { final parsed = double.tryParse(text); if (parsed != null && parsed >= 35 && parsed <= 200) setState(() => _weight = parsed); },
+            ),
+            const SizedBox(height: 24),
 
-_sectionTitle('Тип фигуры'),
-Container(
-padding: const EdgeInsets.all(12),
-decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber.shade200)),
-child: Row(
-crossAxisAlignment: CrossAxisAlignment.start,
-children: [
-Icon(Icons.info_outline_rounded, size: 20, color: Colors.amber.shade800),
-const SizedBox(width: 8),
-Expanded(child: Text('Тип фигуры — это генетика. Тренировки не изменят её на 100%, но помогут подчеркнуть достоинства и создать гармоничные пропорции.', style: TextStyle(fontSize: 12, color: Colors.amber.shade900))),
-],
-),
-),
-const SizedBox(height: 12),
-..._buildBodyTypeOptions(),
-const SizedBox(height: 24),
+            _sectionTitle('Уровень подготовки'),
+            ..._buildOptions(
+              options: const [
+                ('beginner', 'Новичок', Icons.looks_one_rounded),
+                ('intermediate', 'Средний', Icons.looks_two_rounded),
+                ('advanced', 'Продвинутый', Icons.looks_3_rounded),
+              ],
+              selected: _level,
+              onSelected: (v) => setState(() {
+                _level = v;
+                if (_focusAreas.length > _maxFocusAreas) {
+                  final list = _focusAreas.toList();
+                  _focusAreas.clear();
+                  _focusAreas.addAll(list.take(_maxFocusAreas));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Для этого уровня доступно не более $_maxFocusAreas фокусных зон')));
+                }
+                if (_focusAutoFilled && _bodyType != null) {
+                  final Map<String, List<String>> bodyTypeZones = {
+                    'pear': ['glutes', 'shoulders', 'legs'],
+                    'apple': ['abs', 'legs', 'back'],
+                    'hourglass': ['glutes', 'abs', 'legs'],
+                    'rectangle': ['glutes', 'shoulders', 'legs'],
+                    'inverted_triangle': ['glutes', 'legs', 'abs'],
+                  };
+                  if (bodyTypeZones.containsKey(_bodyType)) {
+                    _focusAreas.clear();
+                    _focusAreas.addAll(bodyTypeZones[_bodyType]!.take(_maxFocusAreas));
+                  }
+                }
+              }),
+            ),
+            const SizedBox(height: 24),
 
-_sectionTitle('Фокусные зоны (макс. $_maxFocusAreas)'),
-Wrap(
-spacing: 8, runSpacing: 8,
-children: [
-_focusChip('glutes', 'Ягодицы'),
-_focusChip('legs', 'Ноги'),
-_focusChip('abs', 'Пресс'),
-_focusChip('chest', 'Грудь'),
-_focusChip('back', 'Спина'),
-_focusChip('arms', 'Руки'),
-_focusChip('shoulders', 'Плечи'),
-_focusChip('cardio', 'Кардио-день', isDisabled: _daysPerWeek < 3),
-],
-),
-const SizedBox(height: 8),
-Container(
-padding: const EdgeInsets.all(12),
-decoration: BoxDecoration(
-color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
-borderRadius: BorderRadius.circular(12),
-border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
-),
-child: Column(
-crossAxisAlignment: CrossAxisAlignment.start,
-children: [
-Row(
-children: [
-Icon(_focusAreas.isEmpty ? Icons.info_outline_rounded : Icons.check_circle_outline_rounded, size: 18, color: Theme.of(context).colorScheme.primary),
-const SizedBox(width: 8),
-Expanded(child: Text(
-_focusAreas.isEmpty
-? 'Для уровня «${_getLevelLabel(_level)}» доступно до $_maxFocusAreas зон.'
-: 'Для уровня «${_getLevelLabel(_level)}» выбрано ${_focusAreas.length} из $_maxFocusAreas: ${_focusAreas.map(_getZoneLabel).join(', ')}',
-style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary),
-)),
-],
-),
-if (_focusAutoFilled) ...[
-const SizedBox(height: 6),
-Text('Зоны подобраны по типу фигуры «${_getBodyTypeLabel(_bodyType)}». Ты можешь их подтвердить или выбрать вручную.', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8))),
-const SizedBox(height: 8),
-Row(
-children: [
-Expanded(child: OutlinedButton(onPressed: () => setState(() => _focusAutoFilled = false), child: const Text('Подтвердить', style: TextStyle(fontSize: 13)))),
-const SizedBox(width: 8),
-Expanded(child: TextButton(onPressed: () => setState(() { _focusAreas.clear(); _focusAutoFilled = false; }), child: const Text('Выбрать вручную', style: TextStyle(fontSize: 13)))),
-],
-),
-],
-],
-),
-),
-const SizedBox(height: 24),
+            _sectionTitle('Тип фигуры'),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber.shade200)),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline_rounded, size: 20, color: Colors.amber.shade800),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text('Тип фигуры — это генетика. Тренировки не изменят её на 100%, но помогут подчеркнуть достоинства и создать гармоничные пропорции.', style: TextStyle(fontSize: 12, color: Colors.amber.shade900))),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            ..._buildBodyTypeOptions(),
+            const SizedBox(height: 24),
 
-_sectionTitle('Цель'),
-..._buildOptions(
-options: const [
-('lose_weight', 'Похудеть', Icons.trending_down_rounded),
-('gain_mass', 'Набрать массу', Icons.trending_up_rounded),
-('tone', 'Тонус', Icons.favorite_rounded),
-('strength', 'Сила', Icons.bolt_rounded),
-],
-selected: _goal,
-onSelected: (v) => setState(() => _goal = v),
-),
-const SizedBox(height: 24),
+            _sectionTitle('Фокусные зоны (макс. $_maxFocusAreas)'),
+            Wrap(
+              spacing: 8, runSpacing: 8,
+              children: [
+                _focusChip('glutes', 'Ягодицы'),
+                _focusChip('legs', 'Ноги'),
+                _focusChip('abs', 'Пресс'),
+                _focusChip('chest', 'Грудь'),
+                _focusChip('back', 'Спина'),
+                _focusChip('arms', 'Руки'),
+                _focusChip('shoulders', 'Плечи'),
+                _focusChip('cardio', 'Кардио-день', isDisabled: _daysPerWeek < 3),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(_focusAreas.isEmpty ? Icons.info_outline_rounded : Icons.check_circle_outline_rounded, size: 18, color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(
+                        _focusAreas.isEmpty
+                            ? 'Для уровня «${_getLevelLabel(_level)}» доступно до $_maxFocusAreas зон.'
+                            : 'Для уровня «${_getLevelLabel(_level)}» выбрано ${_focusAreas.length} из $_maxFocusAreas: ${_focusAreas.map(_getZoneLabel).join(', ')}',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary),
+                      )),
+                    ],
+                  ),
+                  if (_focusAutoFilled) ...[
+                    const SizedBox(height: 6),
+                    Text('Зоны подобраны по типу фигуры «${_getBodyTypeLabel(_bodyType)}». Ты можешь их подтвердить или выбрать вручную.', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8))),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(child: OutlinedButton(onPressed: () => setState(() => _focusAutoFilled = false), child: const Text('Подтвердить', style: TextStyle(fontSize: 13)))),
+                        const SizedBox(width: 8),
+                        Expanded(child: TextButton(onPressed: () => setState(() { _focusAreas.clear(); _focusAutoFilled = false; }), child: const Text('Выбрать вручную', style: TextStyle(fontSize: 13)))),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
 
-_sectionTitle('Ограничения / травмы'),
-Wrap(
-spacing: 8, runSpacing: 8,
-children: [
-_chip('back', 'Спина', _limitations),
-_chip('knees', 'Колени', _limitations),
-_chip('shoulders', 'Плечи', _limitations),
-_chip('neck', 'Шея', _limitations),
-],
-),
-const SizedBox(height: 24),
+            _sectionTitle('Цель'),
+            ..._buildOptions(
+              options: const [
+                ('lose_weight', 'Похудеть', Icons.trending_down_rounded),
+                ('gain_mass', 'Набрать массу', Icons.trending_up_rounded),
+                ('tone', 'Тонус', Icons.favorite_rounded),
+                ('strength', 'Сила', Icons.bolt_rounded),
+              ],
+              selected: _goal,
+              onSelected: (v) => setState(() => _goal = v),
+            ),
+            const SizedBox(height: 24),
 
-_sectionTitle('Инвентарь'),
-..._buildOptions(
-options: const [
-('gym', 'Зал', Icons.fitness_center_rounded),
-('dumbbells', 'Гантели', Icons.sports_gymnastics_rounded),
-('bodyweight', 'Своё тело', Icons.accessibility_new_rounded),
-('mixed', 'Смешанно', Icons.shuffle_rounded),
-],
-selected: _equipment,
-onSelected: (v) => setState(() => _equipment = v),
-),
-const SizedBox(height: 24),
+            _sectionTitle('Ограничения / травмы'),
+            Wrap(
+              spacing: 8, runSpacing: 8,
+              children: [
+                _chip('back', 'Спина', _limitations),
+                _chip('knees', 'Колени', _limitations),
+                _chip('shoulders', 'Плечи', _limitations),
+                _chip('neck', 'Шея', _limitations),
+              ],
+            ),
+            const SizedBox(height: 24),
 
-_sectionTitle('Дней в неделю'),
-_buildSlider(
-label: 'Тренировок',
-value: _daysPerWeek.toDouble(),
-min: 2, max: 6, divisions: 4, unit: 'дн',
-onChanged: (v) => setState(() {
-_daysPerWeek = v.toInt();
-if (_daysPerWeek < 3) _focusAreas.remove('cardio');
-// 👇 НОВОЕ: если дней стало меньше, обрезаем лишние выбранные
-if (_selectedWeekdays.length > _daysPerWeek) {
-_selectedWeekdays = _selectedWeekdays.take(_daysPerWeek).toList();
-}
-}),
-),
-const SizedBox(height: 24),
+            _sectionTitle('Инвентарь'),
+            ..._buildOptions(
+              options: const [
+                ('gym', 'Зал', Icons.fitness_center_rounded),
+                ('dumbbells', 'Гантели', Icons.sports_gymnastics_rounded),
+                ('bodyweight', 'Своё тело', Icons.accessibility_new_rounded),
+                ('mixed', 'Смешанно', Icons.shuffle_rounded),
+              ],
+              selected: _equipment,
+              onSelected: (v) => setState(() => _equipment = v),
+            ),
+            const SizedBox(height: 24),
 
-// 👇 НОВЫЙ БЛОК: выбор дней недели ═══
-_sectionTitle('Дни тренировок'),
-Container(
-padding: const EdgeInsets.all(12),
-decoration: BoxDecoration(
-color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
-borderRadius: BorderRadius.circular(12),
-border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
-),
-child: Column(
-crossAxisAlignment: CrossAxisAlignment.start,
-children: [
-Row(
-children: [
-Icon(
-_selectedWeekdays.length == _daysPerWeek ? Icons.check_circle_outline_rounded : Icons.info_outline_rounded,
-size: 18,
-color: Theme.of(context).colorScheme.primary,
-),
-const SizedBox(width: 8),
-Expanded(
-child: Text(
-_selectedWeekdays.isEmpty
-? 'Выберите $_daysPerWeek день(ей) — план ляжет именно на них'
-: 'Выбрано ${_selectedWeekdays.length} из $_daysPerWeek. Не сможете в день — перенесёте тренировку прямо из плана',
-style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary),
-),
-),
-],
-),
-const SizedBox(height: 10),
-Wrap(
-spacing: 8, runSpacing: 8,
-children: List.generate(7, (i) => _weekdayChip(i + 1)),
-),
-],
-),
-),
-const SizedBox(height: 24),
+            _sectionTitle('Дней в неделю'),
+            _buildSlider(
+              label: 'Тренировок',
+              value: _daysPerWeek.toDouble(),
+              min: 2, max: 6, divisions: 4, unit: 'дн',
+              onChanged: (v) => setState(() {
+                _daysPerWeek = v.toInt();
+                if (_daysPerWeek < 3) _focusAreas.remove('cardio');
+                // 👇 если дней стало меньше, обрезаем лишние выбранные
+                if (_selectedWeekdays.length > _daysPerWeek) {
+                  _selectedWeekdays = _selectedWeekdays.take(_daysPerWeek).toList();
+                }
+              }),
+            ),
+            const SizedBox(height: 24),
 
-_sectionTitle('Время тренировки'),
-Wrap(
-spacing: 8, runSpacing: 8,
-children: [
-_timeChip('45-60 мин', 45),
-_timeChip('60-75 мин', 60),
-_timeChip('75-90 мин', 75),
-_timeChip('90+ мин', 90),
-],
-),
-const SizedBox(height: 32),
+            // ═══ БЛОК: выбор дней недели ═══
+            _sectionTitle('Дни тренировок'),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        _selectedWeekdays.length == _daysPerWeek ? Icons.check_circle_outline_rounded : Icons.info_outline_rounded,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _selectedWeekdays.isEmpty
+                              ? 'Выберите $_daysPerWeek день(ей) — план ляжет именно на них'
+                              : 'Выбрано ${_selectedWeekdays.length} из $_daysPerWeek. Не сможете в день — перенесёте тренировку прямо из плана',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8, runSpacing: 8,
+                    children: List.generate(7, (i) => _weekdayChip(i + 1)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
 
-ElevatedButton.icon(
-onPressed: _save,
-icon: const Icon(Icons.check_rounded),
-label: Text(isEdit ? 'Сохранить' : 'Создать профиль'),
-),
-const SizedBox(height: 24),
-],
-),
-),
-);
-}
-  // ═══ 👇 НОВОЕ: ЧИП ДНЯ НЕДЕЛИ ═══
+            _sectionTitle('Время тренировки'),
+            Wrap(
+              spacing: 8, runSpacing: 8,
+              children: [
+                _timeChip('45-60 мин', 45),
+                _timeChip('60-75 мин', 60),
+                _timeChip('75-90 мин', 75),
+                _timeChip('90+ мин', 90),
+              ],
+            ),
+            const SizedBox(height: 32),
+
+            ElevatedButton.icon(
+              onPressed: _save,
+              icon: const Icon(Icons.check_rounded),
+              label: Text(isEdit ? 'Сохранить' : 'Создать профиль'),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══ ЧИП ДНЯ НЕДЕЛИ ═══
   Widget _weekdayChip(int weekday) {
+    final theme = Theme.of(context);
     const names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
     final isSelected = _selectedWeekdays.contains(weekday);
     final isMax = _selectedWeekdays.length >= _daysPerWeek;
 
     return FilterChip(
-      label: Text(names[weekday - 1]),
+      label: Text(
+        names[weekday - 1],
+        style: TextStyle(
+          color: (!isSelected && isMax)
+              ? theme.colorScheme.onSurface.withValues(alpha: 0.35)
+              : isSelected
+              ? Colors.white
+              : theme.colorScheme.onSurface,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+        ),
+      ),
       selected: isSelected,
       onSelected: (v) => setState(() {
         if (v) {
@@ -440,17 +467,29 @@ const SizedBox(height: 24),
           _selectedWeekdays.remove(weekday);
         }
       }),
-      labelStyle: (!isSelected && isMax)
-          ? TextStyle(color: Theme.of(context).disabledColor)
-          : null,
+      backgroundColor: theme.colorScheme.surface,
+      selectedColor: theme.colorScheme.primary,
+      checkmarkColor: Colors.white,
+      side: BorderSide(
+        color: isSelected
+            ? theme.colorScheme.primary
+            : theme.colorScheme.onSurface.withValues(alpha: 0.3),
+      ),
     );
   }
 
   // 👇 ВИДЖЕТ КНОПКИ ВРЕМЕНИ
   Widget _timeChip(String label, int minutes) {
+    final theme = Theme.of(context);
     final isSelected = _timeRangeLabel == label;
     return ChoiceChip(
-      label: Text(label),
+      label: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? Colors.white : theme.colorScheme.onSurface,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+        ),
+      ),
       selected: isSelected,
       onSelected: (v) {
         if (v) {
@@ -460,13 +499,32 @@ const SizedBox(height: 24),
           });
         }
       },
+      backgroundColor: theme.colorScheme.surface,
+      selectedColor: theme.colorScheme.primary,
+      checkmarkColor: Colors.white,
+      side: BorderSide(
+        color: isSelected
+            ? theme.colorScheme.primary
+            : theme.colorScheme.onSurface.withValues(alpha: 0.3),
+      ),
     );
   }
 
   Widget _focusChip(String code, String label, {bool isDisabled = false}) {
+    final theme = Theme.of(context);
     final isSelected = _focusAreas.contains(code);
     return FilterChip(
-      label: Text(label),
+      label: Text(
+        label,
+        style: TextStyle(
+          color: isDisabled
+              ? theme.colorScheme.onSurface.withValues(alpha: 0.35)
+              : isSelected
+              ? Colors.white
+              : theme.colorScheme.onSurface,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+        ),
+      ),
       selected: isSelected,
       onSelected: isDisabled ? null : (v) {
         setState(() {
@@ -482,7 +540,14 @@ const SizedBox(height: 24),
           _focusAutoFilled = false;
         });
       },
-      labelStyle: isDisabled ? TextStyle(color: Theme.of(context).disabledColor) : null,
+      backgroundColor: theme.colorScheme.surface,
+      selectedColor: theme.colorScheme.primary,
+      checkmarkColor: Colors.white,
+      side: BorderSide(
+        color: isSelected
+            ? theme.colorScheme.primary
+            : theme.colorScheme.onSurface.withValues(alpha: 0.3),
+      ),
     );
   }
 
@@ -660,11 +725,26 @@ const SizedBox(height: 24),
   }
 
   Widget _chip(String value, String label, Set<String> collection) {
+    final theme = Theme.of(context);
     final isSelected = collection.contains(value);
     return FilterChip(
-      label: Text(label),
+      label: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? Colors.white : theme.colorScheme.onSurface,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+        ),
+      ),
       selected: isSelected,
       onSelected: (v) => setState(() { if (v) { collection.add(value); } else { collection.remove(value); } }),
+      backgroundColor: theme.colorScheme.surface,
+      selectedColor: theme.colorScheme.primary,
+      checkmarkColor: Colors.white,
+      side: BorderSide(
+        color: isSelected
+            ? theme.colorScheme.primary
+            : theme.colorScheme.onSurface.withValues(alpha: 0.3),
+      ),
     );
   }
 

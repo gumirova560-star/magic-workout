@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,14 +17,23 @@ import 'screens/main_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/profiles/profile_edit_screen.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   setPathUrlStrategy();
 
-  // ИНИЦИАЛИЗАЦИЯ FIREBASE
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // ИНИЦИАЛИЗАЦИЯ FIREBASE — только на мобильных платформах,
+  // где есть сгенерированная конфигурация
+  if (!kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS)) {
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    } catch (e) {
+      debugPrint('Firebase не инициализирован: $e');
+    }
+  }
 
   // Инициализируем БД до запуска приложения
   await DataInitializer.initialize();

@@ -153,7 +153,10 @@ class _ChallengeAmrapScreenState extends State<ChallengeAmrapScreen> {
   Future<void> _generateIsolations(int workoutDayId, UserProfile profile, int count) async {
     final allExercises = await DatabaseHelper.instance.getExercises();
     final allZones = ['chest', 'back', 'arms', 'shoulders', 'glutes', 'legs', 'abs'];
-    final blockedZones = profile.limitations.map((e) => e.toLowerCase()).toList();
+    // 👇 v21: ограничения → зоны через карту из base_exercises.dart.
+    // Раньше 'knees'/'neck'/'shoulders' сравнивались с кодами зон напрямую
+    // и не срабатывали никогда — забытые зоны считались без учёта ограничений.
+    final blockedZones = zonesBlockedByLimitations(profile.limitations);
     final focusZones = profile.focusAreas.map((e) => e.toLowerCase()).toList();
 
     final forgottenZones = allZones.where((z) =>

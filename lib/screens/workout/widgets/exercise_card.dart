@@ -39,6 +39,7 @@ class ExerciseCard extends StatelessWidget {
   final String Function(String) groupLabel;
   final bool Function(Exercise) isCardio;
   final bool Function(String) isTimed;
+  final int Function(Exercise) weightMode; // 👈 ВЕС: 0 — без веса, 1 — опционально, 2 — обязательно
   final int? Function(String) parseReps;
 
   const ExerciseCard({
@@ -62,6 +63,7 @@ class ExerciseCard extends StatelessWidget {
     required this.groupLabel,
     required this.isCardio,
     required this.isTimed,
+    required this.weightMode, // 👈 ВЕС
     required this.parseReps,
     this.lastWeight,
     this.lastReps,
@@ -72,6 +74,7 @@ class ExerciseCard extends StatelessWidget {
     final theme = Theme.of(context);
     final isCardio = this.isCardio(ex);
     final isTimedEx = isTimed(ex.name);
+    final wMode = weightMode(ex); // 👈 ВЕС: режим веса этого упражнения
     final baseZone = getBaseZone(ex);
     final isThisBase = isBase(ex);
     final defaultReps = parseReps(item.reps);
@@ -196,16 +199,25 @@ class ExerciseCard extends StatelessWidget {
                                 Row(
                                   children: [
                                     if (isThisBase)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(color: const Color(0xFF6C5CE7).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
-                                        child: Text('БАЗА - ${groupLabel(baseZone ?? '').toUpperCase()}', style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF6C5CE7))),
+                                      Flexible(
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(color: const Color(0xFF6C5CE7).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+                                          child: Text(
+                                            'БАЗА - ${groupLabel(baseZone ?? '').toUpperCase()}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF6C5CE7)),
+                                          ),
+                                        ),
                                       )
                                     else ...[
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(color: const Color(0xFF00B894).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
-                                        child: const Text('ИЗОЛЯЦИЯ', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF00B894))),
+                                      Flexible(
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(color: const Color(0xFF00B894).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+                                          child: const Text('ИЗОЛЯЦИЯ', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF00B894))),
+                                        ),
                                       ),
                                       const SizedBox(width: 4),
                                       Expanded(
@@ -273,6 +285,10 @@ class ExerciseCard extends StatelessWidget {
                   readOnly: isViewMode,
                   isCardio: isCardio,
                   isTimed: isTimedEx,
+                  // 👈 ВЕС: безвесовые (режим 0) не получают поле веса,
+                  // опциональные (режим 1) получают поле с пометкой «кг опц.»
+                  hasWeight: wMode > 0,
+                  optionalWeight: wMode == 1,
                   targetReps: item.reps,
                   onChanged: (index, data) {
                     if (item.id == null || isViewMode) return;

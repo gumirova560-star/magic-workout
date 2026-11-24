@@ -1,5 +1,5 @@
 import 'dart:math';
-import 'package:flutter/foundation.dart'; // 👈 добавить: здесь живёт debugPrint
+import 'package:flutter/foundation.dart'; // debugPrint живёт здесь
 import 'database_helper.dart';
 import 'energy_service.dart';
 
@@ -11,6 +11,9 @@ class GardenService {
   static const int gridColumns = 20;
   static const int gridRows = 40;
   static const int totalGridCells = gridColumns * gridRows;
+
+  // 👇 НОВОЕ: стоимость оживления завядшего цветка
+  static const int reviveCost = 30;
 
   // ═══ ЦЕНЫ И ВОЗВРАТЫ ДЕКОРА ═══
   // Единственный источник цен: меню покупки в саду и возврат при удалении
@@ -30,7 +33,7 @@ class GardenService {
     'pond': 80, // магический пруд
     'arch': 100, // розовая арка
     'legendary': 0, // нельзя купить — только награда за легендарные упражнения
-    'wilted': 0, // завядший — возврата нет
+    'wilted': 0, // завядший — возврата нет, только оживление за 30 ⚡
   };
 
   static int refundFor(String type) => decorCosts[type] ?? 10;
@@ -156,8 +159,6 @@ class GardenService {
     );
 
     if (!success) {
-      // Баланса хватило, а списание не прошло — чаще всего конфликт
-      // в истории энергии или внутренняя проверка сервиса
       debugPrint('🪴 buyFlowerAtSlot: addEnergy вернул false, slot=$slotIndex, '
           'balance=$currentBalance, cost=$cost');
       return 'Не удалось списать энергию';
@@ -181,7 +182,7 @@ class GardenService {
     required int slotIndex,
     required String type,
   }) async {
-    // 👇 Защита: золотой цветок нельзя купить — он только награда
+    // 👇 Защита: золотой цветок и завядший нельзя купить — только награда/оживление
     if (type == 'legendary' || type == 'wilted') {
       return 'Этот предмет нельзя купить';
     }
@@ -212,8 +213,6 @@ class GardenService {
     );
 
     if (!success) {
-      // Баланса хватило, а списание не прошло — чаще всего конфликт
-      // в истории энергии или внутренняя проверка сервиса
       debugPrint('🪴 placeDecor: addEnergy вернул false, slot=$slotIndex, '
           'type=$type, balance=$currentBalance, cost=$cost');
       return 'Не удалось списать энергию';
@@ -251,6 +250,9 @@ class GardenService {
     if (rows.isEmpty) return false;
     final type = rows.first['flowerType'] as String? ?? 'normal';
 
+    // 👈 НОВОЕ: завядший цветок не перемещается — только оживляется на месте
+    if (type == 'wilted') return false;
+
     // Целевая клетка должна быть свободна с учётом типа двигаемого предмета,
     // при этом сам предмет на старой клетке проверке не мешает
     final occupied = <int>{};
@@ -271,17 +273,59 @@ class GardenService {
     }
     if (occupied.contains(newSlotIndex)) return false;
 
-    await db.update(
-      'garden_flowers',
-      {'slotIndex': newSlotIndex},
-      where: 'profileId = ? AND slotIndex = ?',
-      whereArgs: [profileId, oldSlotIndex],
-    );
+    // 👇 ФИКС БАГА 7: переносим только свой слой. Если на клетке лежат
+    // и объект, и тропинка — тащим тот предмет, что виден сверху
+    // (объект). Тропинка остаётся на прежнем месте.
+    final bool movingFloor = floorTypes.contains(type);
+    String? carryingType;
+    if (rows.length > 1) {
+      // На клетке две записи: объект + пол. Смотрим тип верхнего
+      // (не-пол) предмета — его и тащим, если тащим не пол.
+      final other = rows.firstWhere(
+            (r) => !floorTypes.contains(r['flowerType'] as String?),
+        orElse: () => rows.first,
+      );
+      carryingType = other['flowerType'] as String?;
+      if (movingFloor) carryingType = type;
+    }
+
+    if (carryingType != null) {
+      await db.update(
+        'garden_flowers',
+        {'slotIndex': newSlotIndex},
+        where: 'profileId = ? AND slotIndex = ? AND flowerType = ?',
+        whereArgs: [profileId, oldSlotIndex, carryingType],
+      );
+    } else {
+      // Обычный случай: на клетке одна запись
+      await db.update(
+        'garden_flowers',
+        {'slotIndex': newSlotIndex},
+        where: 'profileId = ? AND slotIndex = ? AND flowerType = ?',
+        whereArgs: [profileId, oldSlotIndex, type],
+      );
+    }
     return true;
   }
 
-  static Future<void> removeItem(int profileId, int slotIndex, int refundAmount) async {
+  static Future<void> removeItem(int profileId, int slotIndex, int refundAmount,
+      {String? type}) async {
     final db = await DatabaseHelper.instance.database;
+
+    // 👇 ФИКС БАГА 7: удаляем только указанный слой (type), а не всё на клетке.
+    // Убираешь предмет — тропинка под ним остаётся; убираешь тропинку —
+    // предмет остаётся. Проверка «завядший» тоже работает по своей строке.
+    final rows = await db.query('garden_flowers',
+        where: type != null
+            ? 'profileId = ? AND slotIndex = ? AND flowerType = ?'
+            : 'profileId = ? AND slotIndex = ?',
+        whereArgs: type != null
+            ? [profileId, slotIndex, type]
+            : [profileId, slotIndex],
+        limit: 1);
+    if (rows.isEmpty) return; // нечего удалять (уже удалено или слой не тот)
+    if ((rows.first['flowerType'] as String?) == 'wilted') return;
+
     if (refundAmount > 0) {
       await EnergyService.addEnergy(
         profileId: profileId,
@@ -294,9 +338,53 @@ class GardenService {
     }
     await db.delete(
       'garden_flowers',
+      where: type != null
+          ? 'profileId = ? AND slotIndex = ? AND flowerType = ?'
+          : 'profileId = ? AND slotIndex = ?',
+      whereArgs: type != null
+          ? [profileId, slotIndex, type]
+          : [profileId, slotIndex],
+    );
+  }
+
+  // 👇 НОВОЕ: оживление завядшего цветка за 30 ⚡.
+  // Возвращает null при успехе или текст причины отказа.
+  static Future<String?> reviveWiltedFlower({
+    required int profileId,
+    required int slotIndex,
+  }) async {
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.query(
+      'garden_flowers',
       where: 'profileId = ? AND slotIndex = ?',
       whereArgs: [profileId, slotIndex],
+      limit: 1,
     );
+    if (rows.isEmpty) return 'Цветок не найден';
+    if ((rows.first['flowerType'] as String?) != 'wilted') {
+      return 'Этот цветок не завял';
+    }
+
+    final balance = await EnergyService.getBalance(profileId);
+    if (balance < reviveCost) return 'Недостаточно энергии! 😢';
+
+    final ok = await EnergyService.addEnergy(
+      profileId: profileId,
+      delta: -reviveCost,
+      reason: 'garden_flower_revive',
+      // 👇 Трата повторяемая: цветок может завять снова и снова,
+      // refId с UNIQUE заблокировал бы второе оживление навсегда
+      refId: null,
+    );
+    if (!ok) return 'Не удалось списать энергию';
+
+    await db.update(
+      'garden_flowers',
+      {'flowerType': 'normal', 'state': 'bloomed'},
+      where: 'id = ?',
+      whereArgs: [rows.first['id']],
+    );
+    return null;
   }
 
   static Future<void> clearGarden(int profileId) async {

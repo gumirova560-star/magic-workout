@@ -99,15 +99,16 @@ void main() {
     return slots.map((o) => ((todayWeekday - 1 + o) % 7) + 1).toSet();
   }
 
-  // 👇 ИСПРАВЛЕНО: исключаем резинки и упражнения с собственным весом
+  // 👇 ИСПРАВЛЕНО: единый источник истины — классификация из миграции v20.
+  // Раньше фильтр угадывал «весовость» по названиям и ошибался
+  // (например, на «Отжимания от скамьи (обратные)»: тест записывал ей
+  // историю в кг, а генератор по weightModeOf честно не проставлял вес).
+  // Теперь тест и генератор смотрят на один и тот же признак:
+  // вес проставляется только упражнениям с обязательным весом (mode 2).
+  // Timed-упражнения (планка и т.п.) тоже без веса — это согласовано.
   bool isWeightExercise(Exercise ex) {
-    final lower = ex.name.toLowerCase();
-    if (lower.contains('бег') || lower.contains('дорожк') ||
-        lower.contains('скакалк') || lower.contains('эллипс') ||
-        lower.contains('планка') || lower.contains('стульчик')) return false;
-    if (lower.contains('резинк') || lower.contains('собственным весом') || lower.contains('без веса')) return false;
     if (ex.muscleGroups.contains('cardio')) return false;
-    return true;
+    return weightModeOf(ex) == 2;
   }
 
   bool isPlainStrength(Exercise ex) {
@@ -194,7 +195,7 @@ void main() {
           expect(adjacentRepeats * 2, lessThanOrEqualTo(minFamilyTotal),
               reason: 'Цикл $cycle: соседние дни совпадают по семействам больше '
                   'наполовину ($adjacentRepeats из $minFamilyTotal)');
-                    if (cycle > 1) {
+          if (cycle > 1) {
             for (final day in plan.where((d) => d.weekNumber == 1 && d.type == 'strength')) {
               final exs = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
               for (final we in exs) {
@@ -632,11 +633,21 @@ void main() {
       expect(result, false, reason: 'Сад заполнен — должен вернуть false');
     });
 
+    // 👇 ИСПРАВЛЕНО: у нового профиля баланс 0 — покупка честно отказывала,
+    // цветок не садился, и удалять было нечего. Даём энергию и проверяем,
+    // что покупка прошла, прежде чем мерить возврат.
     testWidgets('Удаление возвращает энергию', (tester) async {
       await cleanDB();
       final p = await createGymProfile();
       final profileId = p.id!;
-      await GardenService.buyFlowerAtSlot(profileId: profileId, slotIndex: 0);
+
+      await EnergyService.addEnergy(
+        profileId: profileId, delta: 100, reason: 'test_topup', refId: null,
+      );
+
+      final bought = await GardenService.buyFlowerAtSlot(
+          profileId: profileId, slotIndex: 0);
+      expect(bought, isNull, reason: 'Покупка должна пройти: $bought');
 
       final before = await EnergyService.getBalance(profileId);
       await GardenService.removeItem(profileId, 0, 15);
@@ -813,14 +824,17 @@ void main() {
       expect(() => WorkoutGenerator.generateMonthPlan(bad), throwsA(anything));
     });
 
-    // 👇 ИСПРАВЛЕНО: Проверяем только, что цветок не появился в саду,
-    // неважно, что вернула функция (false или строку ошибки)
+    // 👇 ИСПРАВЛЕНО: проверяем не только отсутствие цветка, но и то,
+    // что сервис отказал с понятной причиной, а не «тихо что-то сломалось».
     testWidgets('Покупка без энергии — цветок не появляется', (tester) async {
       await cleanDB();
       final p = await createGymProfile();
       final before = (await GardenService.getGarden(p.id!)).length;
 
-      await GardenService.buyFlowerAtSlot(profileId: p.id!, slotIndex: 0);
+      final error = await GardenService.buyFlowerAtSlot(
+          profileId: p.id!, slotIndex: 0);
+      expect(error, isNotNull,
+          reason: 'Без энергии покупка должна отказать с причиной: $error');
 
       final after = (await GardenService.getGarden(p.id!)).length;
       expect(after, before, reason: 'Цветок не должен появиться без энергии');
@@ -1574,5 +1588,4 @@ void main() {
         });
   });
 }
-// ═══ КОНЕЦ ЧАСТИ 3 ═══
 // ═══ КОНЕЦ ФАЙЛА интеграционных тестов ═══

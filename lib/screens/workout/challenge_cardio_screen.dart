@@ -188,7 +188,10 @@ class _ChallengeCardioScreenState extends State<ChallengeCardioScreen> {
   Future<void> _generateIsolations(int workoutDayId, UserProfile profile, int count, Set<int> selectedBaseIds) async {
     final allExercises = await DatabaseHelper.instance.getExercises();
     final allZones = ['chest', 'back', 'arms', 'shoulders', 'glutes', 'legs', 'abs'];
-    final blockedZones = profile.limitations.map((e) => e.toLowerCase()).toList();
+    // 👇 v21: ограничения → зоны через карту из base_exercises.dart.
+    // Раньше 'knees'/'neck'/'shoulders' с кодами зон не совпадали
+    // и фильтр зон не срабатывал никогда.
+    final blockedZones = zonesBlockedByLimitations(profile.limitations);
     final focusZones = profile.focusAreas.map((e) => e.toLowerCase()).toList();
 
     int added = 0;
@@ -199,12 +202,8 @@ class _ChallengeCardioScreenState extends State<ChallengeCardioScreen> {
     bool isSafe(Exercise e) {
       final primaryZone = getExerciseZone(e).toLowerCase();
       if (blockedZones.contains(primaryZone)) return false;
-      for (final c in e.contraindications) {
-        for (final b in blockedZones) {
-          if (c.toLowerCase().contains(b) || b.contains(c.toLowerCase())) return false;
-        }
-      }
-      return true;
+      // 👇 v21: точное пересечение кодов вместо substring-матчинга
+      return !exerciseBlockedByLimitations(e, profile.limitations);
     }
 
     Future<void> tryAdd(Exercise ex) async {

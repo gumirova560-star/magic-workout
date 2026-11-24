@@ -20,6 +20,13 @@ class ChallengeService {
       return DailyChallenge.fromMap(maps.first);
     }
 
+    // 👈 НОВОЕ: наступил новый день (или первый запуск после пропуска) —
+    // если последний челлендж не был закрыт, один цветок в Саду вянет.
+    // Вызов ДО создания новой записи: сам факт создания нового дня —
+    // и есть защита от повторного вяления (второй раз за день метод
+    // вернёт существующую запись и до вяления не дойдёт).
+    await _wiltIfPrevChallengeFailed(db, profileId, today);
+
     final randomConfig = (List.from(kDailyChallenges)..shuffle()).first;
 
     final prefs = await SharedPreferences.getInstance();
@@ -137,6 +144,37 @@ class ChallengeService {
     } catch (e) {
       print('ОШИБКА ВЫДАЧИ НАГРАДЫ: $e');
       return false;
+    }
+  }
+
+  // 👈 НОВОЕ: провал дневного мини-челленджа. Прошлая цель не достигнута —
+  // вянет один обычный цветок. Прогресс читаем честно из БД
+  // (currentProgress vs targetValue), а не по флагу isCompleted:
+  // если цель достигнута, но награда не успела записаться (сбой
+  // приложения), челлендж провалом не считается — tryAwardReward
+  // при следующем вызове всё ещё выдаст награду.
+  // Пропустил 3 дня подряд — вянуть один цветок за всю серию
+  // (проверка идёт только по последней записи).
+  static Future<void> _wiltIfPrevChallengeFailed(
+      dynamic db, // Database из sqflite (DatabaseHelper.instance.database)
+      int profileId,
+      String today) async {
+    try {
+      final prev = await db.query(
+        'daily_challenges',
+        where: 'profileId = ? AND date < ?',
+        whereArgs: [profileId, today],
+        orderBy: 'date DESC',
+        limit: 1,
+      );
+      if (prev.isEmpty) return;
+
+      final c = DailyChallenge.fromMap(prev.first);
+      if ((c.currentProgress ?? 0) >= c.targetValue) return; // выполнен — не вянем
+
+      await GardenService.witherOneFlower(profileId);
+    } catch (e) {
+      print('ОШИБКА ВЯЛЕНИЯ ЗА ПРОПУЩЕННЫЙ ЧЕЛЛЕНДЖ: $e');
     }
   }
 }

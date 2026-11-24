@@ -97,8 +97,8 @@ class FairyPhrases {
 
     // 👇 НОВЫЕ СОБЫТИЯ ДЛЯ ТРЕНИРОВОК
     'workout_completed': 'Супер, {name}! Ты {сделал_а} это! План выполнен на 100%! 🎉',
-    'workout_partial': 'Не расстраивайся, {name}! Даже часть тренировки — это шаг вперёд. Главное — ты пришёл! 💪',
-    'workout_overperformed': 'Вот это мощь, {name}! Ты поднял больше, чем мы планировали! Настоящий герой! 🔥',
+    'workout_partial': 'Не расстраивайся, {name}! Даже часть тренировки — это шаг вперёд. Главное — ты {пришёл_а}! 💪',
+    'workout_overperformed': 'Вот это мощь, {name}! Ты {поднял_а} больше, чем мы планировали! Настоящий герой! 🔥',
   };
 
   static FairyMood eventMood(String eventKey) {
@@ -176,7 +176,7 @@ class FairyPhrases {
   ];
 
   static const List<String> streak7 = [
-    '🏆 Неделя тренировок, {name}! Ты чемпион!',
+    '🏆 Неделя тренировок, {name}! Ты {чемпион_ка}!',
     'Целая неделя! {name}, ты супер! 💎',
   ];
 
@@ -187,7 +187,7 @@ class FairyPhrases {
 
   static const List<String> comeback = [
     'Скучаю, {name}! Давай лёгкую тренировку?',
-    'Ты давно не заходил, {name} 🥺',
+    'Ты давно не {заходил_а}, {name} 🥺',
   ];
 
   // ═══════════════════════════════════════════════════════════
@@ -280,7 +280,11 @@ class FairyPhrases {
         .replaceAll('{начал_а}', isMale ? 'начал' : 'начала')
         .replaceAll('{закончил_а}', isMale ? 'закончил' : 'закончила')
         .replaceAll('{рад_а}', isMale ? 'рад' : 'рада')
-        .replaceAll('{должен_должна}', isMale ? 'должен' : 'должна');
+        .replaceAll('{должен_должна}', isMale ? 'должен' : 'должна')
+        .replaceAll('{пришёл_а}', isMale ? 'пришёл' : 'пришла')
+        .replaceAll('{поднял_а}', isMale ? 'поднял' : 'подняла')
+        .replaceAll('{заходил_а}', isMale ? 'заходил' : 'заходила')
+        .replaceAll('{чемпион_ка}', isMale ? 'чемпион' : 'чемпионка');
   }
 
   static List<String> forScreen(

@@ -10,11 +10,11 @@ class SetData {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is SetData &&
-          runtimeType == other.runtimeType &&
-          weight == other.weight &&
-          reps == other.reps &&
-          completed == other.completed;
+          other is SetData &&
+              runtimeType == other.runtimeType &&
+              weight == other.weight &&
+              reps == other.reps &&
+              completed == other.completed;
 
   @override
   int get hashCode => weight.hashCode ^ reps.hashCode ^ completed.hashCode;
@@ -33,6 +33,8 @@ class SetRow extends StatefulWidget {
   final VoidCallback? onDelete;
   final bool isCardio;
   final bool isTimed;
+  final bool hasWeight;      // 👈 НОВОЕ: false = поля веса нет вообще
+  final bool optionalWeight; // 👈 НОВОЕ: true = вес опционален (утяжелители)
   final String? targetReps;
 
   const SetRow({
@@ -49,6 +51,8 @@ class SetRow extends StatefulWidget {
     this.onDelete,
     this.isCardio = false,
     this.isTimed = false,
+    this.hasWeight = true,      // 👈
+    this.optionalWeight = false, // 👈
     this.targetReps,
   });
 
@@ -161,6 +165,11 @@ class _SetRowState extends State<SetRow> {
 
     final isTimeBased = widget.isCardio || widget.isTimed || isTargetMinutes || isTargetSeconds;
 
+    // 👇 поле веса показываем только если упражнение весомое и не timed.
+    // hasWeight=false (безвесовые, кардио, статика) — поле скрыто полностью.
+    // optionalWeight=true (махи, отведения) — поле есть, но помечено «опц.».
+    final bool showWeight = widget.hasWeight && !isTimeBased;
+
     String repsHint = isTargetMinutes ? 'мин' : isTargetSeconds ? 'сек' : isTargetReps ? 'повт.' : widget.isCardio ? 'мин' : widget.isTimed ? 'сек' : 'повт.';
     String repsSuffix = isTargetMinutes ? 'мин' : isTargetSeconds ? 'сек' : isTargetReps ? 'повт.' : widget.isCardio ? 'мин' : widget.isTimed ? 'сек' : 'повт.';
 
@@ -200,28 +209,29 @@ class _SetRowState extends State<SetRow> {
             ),
             const SizedBox(width: 10),
 
-            if (!isTimeBased) ...[
+            if (showWeight) ...[
               Expanded(
                 child: ro
                     ? _readOnlyBox(theme, text: widget.initialWeight != null ? '${_formatWeight(widget.initialWeight)} кг' : '— кг')
                     : TextField(
-                        controller: _weightController,
-                        focusNode: _weightFocus,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-                        ],
-                        decoration: InputDecoration(
-                          hintText: 'кг',
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                          filled: true,
-                          fillColor: theme.colorScheme.surface,
-                        ),
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                        onChanged: (_) => _notifyChanged(),
-                      ),
+                  controller: _weightController,
+                  focusNode: _weightFocus,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                  ],
+                  decoration: InputDecoration(
+                    // 👈 для опционального веса (утяжелители, резинки) — явная пометка
+                    hintText: widget.optionalWeight ? 'кг опц.' : 'кг',
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                    filled: true,
+                    fillColor: theme.colorScheme.surface,
+                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                  onChanged: (_) => _notifyChanged(),
+                ),
               ),
               const SizedBox(width: 8),
             ],
@@ -230,27 +240,27 @@ class _SetRowState extends State<SetRow> {
               child: ro
                   ? _readOnlyBox(theme, text: widget.initialReps != null ? '${widget.initialReps} $repsSuffix' : '— $repsHint')
                   : TextField(
-                      controller: _repsController,
-                      focusNode: _repsFocus,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: InputDecoration(
-                        hintText: repsHint,
-                        suffixText: repsSuffix,
-                        suffixStyle: TextStyle(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                        filled: true,
-                        fillColor: theme.colorScheme.surface,
-                      ),
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                      onChanged: (_) => _notifyChanged(),
-                    ),
+                controller: _repsController,
+                focusNode: _repsFocus,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: InputDecoration(
+                  hintText: repsHint,
+                  suffixText: repsSuffix,
+                  suffixStyle: TextStyle(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                  filled: true,
+                  fillColor: theme.colorScheme.surface,
+                ),
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                onChanged: (_) => _notifyChanged(),
+              ),
             ),
             const SizedBox(width: 8),
 

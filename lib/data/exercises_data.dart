@@ -481,6 +481,62 @@ List<Exercise> getExercisesPart1() {
       tips: '• 15-20 повторений\n• Колени смотрят в стороны носков',
       imagePath: 'assets/exercises/sumo_squat_bodyweight.jpg',
     ),
+    Exercise(
+      name: 'Приседания сумо',
+      muscleGroups: ['quads', 'glutes', 'adductors'],
+      equipment: ['barbell'],
+      difficulty: 'intermediate',
+      description: 'Сумо со штангой: акцент на приводящие и ягодицы.',
+      technique: '1. Широкая постановка, носки в стороны\n2. Штанга на трапециях\n3. Присядьте\n4. Вернитесь',
+      mistakes: '❌ Сведение коленей внутрь\n❌ Отрыв пяток от пола',
+      tips: '• 8-12 повторений\n• Колени смотрят по носкам',
+      imagePath: 'assets/exercises/sumo_squat.jpg',
+    ),
+    Exercise(
+      name: 'Выпады назад с гантелями',
+      muscleGroups: ['quads', 'glutes'],
+      equipment: ['dumbbells'],
+      difficulty: 'intermediate',
+      description: 'Выпады назад с весом — щадящий вариант для коленей.',
+      technique: '1. Гантели в руках\n2. Сделайте шаг назад\n3. Опуститесь до прямого угла\n4. Вернитесь',
+      mistakes: '❌ Заваливание колена внутрь\n❌ Наклон корпуса вперед',
+      tips: '• 10-12 повторений на ногу\n• Спина прямая',
+      imagePath: 'assets/exercises/reverse_lunge_dumbbells.jpg',
+    ),
+    Exercise(
+      name: 'Болгарский выпад',
+      muscleGroups: ['quads', 'glutes'],
+      equipment: ['dumbbells'],
+      difficulty: 'intermediate',
+      description: 'Выпад с ногой на опоре — мощная база на ноги.',
+      technique: '1. Задняя стопа на скамье\n2. Гантели в руках\n3. Опуститесь\n4. Вернитесь',
+      mistakes: '❌ Потеря равновесия\n❌ Слишком большой шаг',
+      tips: '• 8-10 повторений на ногу\n• Корпус слегка вперёд',
+      imagePath: 'assets/exercises/bulgarian_split_squat.jpg',
+    ),
+    Exercise(
+      name: 'Боковые выпады',
+      muscleGroups: ['quads', 'glutes', 'adductors'],
+      equipment: ['dumbbells'],
+      difficulty: 'intermediate',
+      description: 'Выпад в сторону с весом.',
+      technique: '1. Широкий шаг в сторону\n2. Опуститесь на одну ногу\n3. Вернитесь',
+      mistakes: '❌ Округление спины\n❌ Колено выходит за носок',
+      tips: '• 10-12 повторений на сторону\n• Носок опорной ноги вперёд',
+      imagePath: 'assets/exercises/side_lunge.jpg',
+    ),
+    Exercise(
+      name: 'Румынская тяга на одной ноге',
+      muscleGroups: ['hamstrings', 'glutes'],
+      equipment: ['dumbbells'],
+      difficulty: 'advanced',
+      description: 'Односторонняя румынская тяга: баланс и задняя цепь.',
+      technique: '1. Гантель в одной руке\n2. Наклонитесь, вторая нога назад\n3. Вернитесь',
+      mistakes: '❌ Круглая спина\n❌ Потеря равновесия',
+      tips: '• 10-12 повторений на ногу\n• Смотрите в пол',
+      imagePath: 'assets/exercises/single_leg_rdl_db.jpg',
+    ),
+
     // ═══════════════════════════════════════════════════════════
     //  СТОПЫ И ГОЛЕНОСТОП
     // ═══════════════════════════════════════════════════════════
@@ -1792,45 +1848,13 @@ List<Exercise> getExercisesPart5() {
       imagePath: 'assets/exercises/ytw.jpg',
     ),
 
-    // ═══════════════════════════════════════════════════════════
-    //  КОР
-    // ═══════════════════════════════════════════════════════════
-    Exercise(
-      name: 'Dead Bug',
-      muscleGroups: ['core', 'abs'],
-      equipment: ['bodyweight'],
-      difficulty: 'beginner',
-      description: 'Упражнение на глубокий кор.',
-      technique: '1. Лягте на спину\n2. Опускайте противоположные руку и ногу\n3. Вернитесь',
-      mistakes: '❌ Прогиб в пояснице\n❌ Слишком быстро',
-      tips: '• 10 повторений на сторону',
-      imagePath: 'assets/exercises/dead_bug.jpg',
-    ),
-    Exercise(
-      name: 'Bird Dog',
-      muscleGroups: ['core', 'lower_back', 'glutes'],
-      equipment: ['bodyweight'],
-      difficulty: 'beginner',
-      description: 'Стабилизация кора.',
-      technique: '1. На четвереньках\n2. Поднимите противоположные руку и ногу\n3. Задержитесь',
-      mistakes: '❌ Прогиб\n❌ Раскачивание',
-      tips: '• 10 повторений на сторону',
-      imagePath: 'assets/exercises/bird_dog.jpg',
-    ),
-    Exercise(
-      name: 'Вакуум живота',
-      muscleGroups: ['core', 'abs'],
-      equipment: ['bodyweight'],
-      difficulty: 'intermediate',
-      description: 'Упражнение для глубоких мышц живота.',
-      technique: '1. Сделайте глубокий вдох\n2. На выдохе втяните живот\n3. Задержите',
-      mistakes: '❌ Задержка дыхания\n❌ Короткая задержка',
-      tips: '• 10 повторений\n• Натощак',
-      imagePath: 'assets/exercises/stomach_vacuum.jpg',
-    ),
+    // 👇 v21.2: секция КОР удалена — Dead Bug, Bird Dog и Вакуум живота
+    // уже объявлены в части 2 (пресс). Дубликаты провоцировали
+    // двойные записи в базе и «Bird Dog» в зоне glutes.
   ];
 }
 // ═══ КОНЕЦ ЧАСТИ 5 ═══
+
 
 // ═══════════════════════════════════════════════════════════════
 //  ГЛАВНАЯ ФУНКЦИЯ (ОБЪЕДИНЯЕТ ВСЕ ЧАСТИ)

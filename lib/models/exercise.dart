@@ -14,6 +14,14 @@ class Exercise {
   List<int> alternativeIds;       // id других упражнений
   bool isCustom;                  // true — добавлено пользователем
 
+  // ═══ Классификация каталога (миграция v20) ═══
+  // Заполняются syncExercises() для встроенных упражнений.
+  // null — у пользовательских: для них работает фолбэк-эвристика
+  // (isCardioExercise / isBaseExercise / getExerciseFamily / weightModeFor).
+  String? exType;                 // 'base' | 'isolation' | 'cardio'
+  String? family;                 // семейство для защиты от дубликатов
+  int? weightMode;                // 0 — без веса, 1 — опционально, 2 — обязательно
+
   Exercise({
     this.id,
     required this.name,
@@ -29,12 +37,15 @@ class Exercise {
     this.videoUrl,
     List<int>? alternativeIds,
     this.isCustom = false,
+    this.exType,
+    this.family,
+    this.weightMode,
   })  : contraindications = contraindications ?? [],
         alternativeIds = alternativeIds ?? [];
 
   // ═══ Сериализация для БД ═══
   Map<String, dynamic> toMap() {
-    return {
+    final map = <String, dynamic>{
       'id': id,
       'name': name,
       'muscleGroups': muscleGroups.join(','),
@@ -50,6 +61,13 @@ class Exercise {
       'alternativeIds': alternativeIds.join(','),
       'isCustom': isCustom ? 1 : 0,
     };
+    // Классификация пишется только если заполнена — чтобы
+    // случайно не затереть её значением null (например, при
+    // сохранении пользовательского упражнения с пустыми полями).
+    if (exType != null) map['exType'] = exType;
+    if (family != null) map['family'] = family;
+    if (weightMode != null) map['weightMode'] = weightMode;
+    return map;
   }
 
   factory Exercise.fromMap(Map<String, dynamic> map) {
@@ -57,20 +75,20 @@ class Exercise {
       id: map['id'],
       name: map['name'] ?? '',
       muscleGroups: (map['muscleGroups'] as String?)
-              ?.split(',')
-              .where((s) => s.isNotEmpty)
-              .toList() ??
+          ?.split(',')
+          .where((s) => s.isNotEmpty)
+          .toList() ??
           [],
       equipment: (map['equipment'] as String?)
-              ?.split(',')
-              .where((s) => s.isNotEmpty)
-              .toList() ??
+          ?.split(',')
+          .where((s) => s.isNotEmpty)
+          .toList() ??
           [],
       difficulty: map['difficulty'] ?? 'beginner',
       contraindications: (map['contraindications'] as String?)
-              ?.split(',')
-              .where((s) => s.isNotEmpty)
-              .toList() ??
+          ?.split(',')
+          .where((s) => s.isNotEmpty)
+          .toList() ??
           [],
       description: map['description'] ?? '',
       technique: map['technique'] ?? '',
@@ -79,13 +97,18 @@ class Exercise {
       imagePath: map['imagePath'],
       videoUrl: map['videoUrl'],
       alternativeIds: (map['alternativeIds'] as String?)
-              ?.split(',')
-              .where((s) => s.isNotEmpty)
-              .map((s) => int.tryParse(s) ?? 0)
-              .where((i) => i > 0)
-              .toList() ??
+          ?.split(',')
+          .where((s) => s.isNotEmpty)
+          .map((s) => int.tryParse(s) ?? 0)
+          .where((i) => i > 0)
+          .toList() ??
           [],
       isCustom: map['isCustom'] == 1,
+      // Колонки могут отсутствовать, если миграция 20 не применена —
+      // поэтому безопасное чтение с дефолтом null
+      exType: map['exType'] as String?,
+      family: map['family'] as String?,
+      weightMode: map['weightMode'] as int?,
     );
   }
 
@@ -104,6 +127,9 @@ class Exercise {
     String? videoUrl,
     List<int>? alternativeIds,
     bool? isCustom,
+    String? exType,
+    String? family,
+    int? weightMode,
   }) {
     return Exercise(
       id: id ?? this.id,
@@ -120,6 +146,9 @@ class Exercise {
       videoUrl: videoUrl ?? this.videoUrl,
       alternativeIds: alternativeIds ?? this.alternativeIds,
       isCustom: isCustom ?? this.isCustom,
+      exType: exType ?? this.exType,
+      family: family ?? this.family,
+      weightMode: weightMode ?? this.weightMode,
     );
   }
 

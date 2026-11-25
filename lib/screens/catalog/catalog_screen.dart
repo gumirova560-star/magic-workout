@@ -345,6 +345,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
       'quads': 'Бёдра',
       'hamstrings': 'Задняя поверхность',
       'calves': 'Голень',
+      'adductors': 'Приводящие', // 👈 ФИКС 14: перевод кода приводящих мышц
       'back': 'Спина',
       'lats': 'Широчайшие',
       'traps': 'Трапеции',

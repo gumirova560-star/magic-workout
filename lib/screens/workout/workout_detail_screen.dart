@@ -40,6 +40,8 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen>
   bool _started = false;
   bool _completed = false;
   bool _loading = true;
+  bool _dayLoadBusy = false; // 🛡 предохранитель от повторной загрузки дня
+
 
   bool _hasBlocks = false;
   bool _blocksReady = false;
@@ -302,384 +304,415 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen>
   }
 
   Future<void> _loadExistingDay(WorkoutDay day) async {
-    if (day.type == 'challenge') {
-      _workoutDayId = day.id;
-      _completed = false;
-      _started = true;
+    if (_dayLoadBusy) return; // 🛡 правка 2: повторный вызов — выходим
+    _dayLoadBusy = true;
+    try {
+      if (day.type == 'challenge') {
+        _workoutDayId = day.id;
+        _completed = false;
+        _started = true;
 
-      final allWorkoutExs = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
-      _items = allWorkoutExs.where((we) => we.blockNumber == 1).toList();
+        final allWorkoutExs = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
+        _items = allWorkoutExs.where((we) => we.blockNumber == 1).toList();
+
+        final exMap = <int, Exercise>{};
+        final stMap = <int, Stretch>{};
+
+        for (final we in _items) {
+          if (we.itemType == 'exercise') {
+            final ex = await DatabaseHelper.instance.getExerciseById(we.replacedByItemId ?? we.itemId);
+            if (ex != null) exMap[ex.id!] = ex;
+          } else {
+            final st = await DatabaseHelper.instance.getStretchById(we.itemId);
+            if (st != null) stMap[we.itemId] = st;
+          }
+        }
+
+        final setsData = <int, List<SetData>>{};
+        final setIds = <int, List<int>>{};
+
+        for (final item in _items) {
+          if (item.id == null) continue;
+          final sets = await DatabaseHelper.instance.getWorkoutSets(item.id!);
+          final list = <SetData>[];
+          final ids = <int>[];
+
+          for (final s in sets) {
+            list.add(SetData(weight: s.weight, reps: s.reps, completed: s.completed));
+            ids.add(s.id!);
+          }
+
+          setsData[item.id!] = list;
+          setIds[item.id!] = ids;
+        }
+
+        _exerciseMap = exMap;
+        _stretchMap = stMap;
+        _setsData.addAll(setsData);
+        _setIds.addAll(setIds);
+
+        return;
+      }
+
+      _workoutDayId = day.id;
+      _completed = day.status == 'completed';
+      _started = day.status == 'completed' || day.status == 'in_progress';
+      final workoutExs = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
+
+      final Map<String, List<WorkoutExercise>> groupedExs = {};
+      for (final we in workoutExs) {
+        String prefix = we.isWarmup ? 'warmup_' : (we.isCoolDown ? 'cooldown_' : 'main_');
+        String key = '$prefix${we.itemType}_${we.itemId}';
+
+        if (we.itemType == 'exercise') {
+          final ex = await DatabaseHelper.instance.getExerciseById(we.replacedByItemId ?? we.itemId);
+          if (ex != null) {
+            final cleanName = ex.name.toLowerCase().replaceAll('ё', 'е').replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
+            key = '${prefix}exercise_$cleanName';
+          }
+        } else {
+          final st = await DatabaseHelper.instance.getStretchById(we.itemId);
+          if (st != null) {
+            final cleanName = st.name.toLowerCase().replaceAll('ё', 'е').replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
+            key = '${prefix}stretch_$cleanName';
+          }
+        }
+        groupedExs.putIfAbsent(key, () => []).add(we);
+      }
+
+      final List<WorkoutExercise> uniqueExs = [];
+      for (final entry in groupedExs.entries) {
+        final list = entry.value;
+        if (list.length == 1) {
+          uniqueExs.add(list.first);
+        } else {
+          WorkoutExercise? keeper;
+          for (final we in list) {
+            final sets = await DatabaseHelper.instance.getWorkoutSets(we.id!);
+            final hasCompleted = sets.any((s) => s.completed || s.weight != null);
+            if (hasCompleted) {
+              keeper = we;
+              break;
+            }
+          }
+          keeper ??= list.first;
+          uniqueExs.add(keeper);
+          for (final we in list) {
+            if (we.id != keeper.id) await DatabaseHelper.instance.deleteWorkoutExercise(we.id!);
+          }
+        }
+      }
+      uniqueExs.sort((a, b) => a.order.compareTo(b.order));
+
+      _hasBlocks = uniqueExs.any((we) => we.blockNumber != null && !we.isWarmup);
+      _pendingBlocks.clear();
+      for (int i = 0; i < uniqueExs.length; i++) {
+        final bn = uniqueExs[i].blockNumber;
+        if (bn != null && !uniqueExs[i].isWarmup) _pendingBlocks[i] = bn;
+      }
+      _items = uniqueExs;
 
       final exMap = <int, Exercise>{};
       final stMap = <int, Stretch>{};
-
       for (final we in _items) {
         if (we.itemType == 'exercise') {
-          final ex = await DatabaseHelper.instance.getExerciseById(we.replacedByItemId ?? we.itemId);
-          if (ex != null) exMap[ex.id!] = ex;
+          final effId = we.replacedByItemId ?? we.itemId;
+          final ex = await DatabaseHelper.instance.getExerciseById(effId);
+          if (ex != null) exMap[effId] = ex;
         } else {
           final st = await DatabaseHelper.instance.getStretchById(we.itemId);
           if (st != null) stMap[we.itemId] = st;
         }
       }
-
       final setsData = <int, List<SetData>>{};
       final setIds = <int, List<int>>{};
 
       for (final item in _items) {
         if (item.id == null) continue;
-        final sets = await DatabaseHelper.instance.getWorkoutSets(item.id!);
-        final list = <SetData>[];
-        final ids = <int>[];
+        var sets = await DatabaseHelper.instance.getWorkoutSets(item.id!);
 
-        for (final s in sets) {
-          list.add(SetData(weight: s.weight, reps: s.reps, completed: s.completed));
-          ids.add(s.id!);
+        // 👇 ДЕДУПЛИКАЦИЯ byOrder: в базе могут лежать дубли подходов
+        // с одинаковым order. Оставляем «ценную» строку (выполненную
+        // или с весом), остальные удаляем через deleteWorkoutSet.
+        if (sets.length > 1) {
+          final byOrder = <int, WorkoutSet>{};
+          for (final s in sets) {
+            final kept = byOrder[s.order];
+            if (kept == null) {
+              byOrder[s.order] = s;
+            } else {
+              final keptValuable = kept.completed || kept.weight != null;
+              final sValuable = s.completed || s.weight != null;
+              if (sValuable && !keptValuable) {
+                await DatabaseHelper.instance.deleteWorkoutSet(kept.id!);
+                byOrder[s.order] = s;
+              } else {
+                await DatabaseHelper.instance.deleteWorkoutSet(s.id!);
+              }
+            }
+          }
+          final deduped = byOrder.values.toList()
+            ..sort((a, b) => a.order.compareTo(b.order));
+          sets = deduped;
+        }
+
+        var list = <SetData>[];
+        var ids = <int>[];
+
+        bool needsPulling = true;
+        if (sets.isNotEmpty) {
+          for (final s in sets) {
+            if (s.completed || s.weight != null) needsPulling = false;
+            list.add(SetData(weight: s.weight, reps: s.reps, completed: s.completed));
+            ids.add(s.id!);
+          }
+        }
+
+        if (!item.isWarmup && !item.isCoolDown && item.itemType == 'exercise') {
+          final lastSets = await _getSmartPrevSets(item.replacedByItemId ?? item.itemId, day.weekNumber ?? 1, day.cycleNumber);
+          if (lastSets.isNotEmpty) {
+            final doneSets = lastSets.where((s) => s.completed).toList();
+            if (doneSets.isNotEmpty) {
+              double? maxW = doneSets.map((s) => s.weight ?? 0).reduce((a, b) => a > b ? a : b);
+              int? maxR = doneSets.map((s) => s.reps ?? 0).reduce((a, b) => a > b ? a : b);
+              if (maxW == 0) maxW = null;
+              if (maxR == 0) maxR = null;
+              // 👈 ВЕС: безвесовым (режим 0) вес из истории не показываем —
+              // глушим legacy-записи вида «планка 3 кг» на входе в кэш
+              final prevEx = exMap[item.replacedByItemId ?? item.itemId];
+              if (prevEx != null && weightModeFor(prevEx) == 0) maxW = null;
+              if (maxW != null || maxR != null) {
+                _lastRecords[item.id!] = {'weight': maxW, 'reps': maxR};
+              }
+            }
+          }
+
+          if (needsPulling && !item.isWarmup && !item.isCoolDown && day.weekNumber != null && day.weekNumber! > 1) {
+            final ex = exMap[item.replacedByItemId ?? item.itemId];
+            final isCardio = ex != null && _isCardio(ex);
+            final isTimed = ex != null && _isTimed(ex.name);
+
+            if (!isCardio && !isTimed) {
+              // 👈 ВЕС: РЕЖИМ ВЕСА — 0 поле скрыто, 1 опционально, 2 обязательно
+              final wMode = ex != null ? weightModeFor(ex) : 2;
+              double? baseWeight;
+              int? prevReps;
+              bool wasInPrevWeek = false;
+
+              if (_lastRecords.containsKey(item.id!)) {
+                wasInPrevWeek = true;
+                // 👈 ВЕС: для безвесовых (режим 0) вес из истории не подтягиваем —
+                // прогрессия идёт по повторам, поле веса на экране скрыто
+                baseWeight = (wMode == 0)
+                    ? null
+                    : _lastRecords[item.id!]!['weight'] as double?;
+                prevReps = _lastRecords[item.id!]!['reps'] as int?;
+              }
+
+              double? targetWeight = baseWeight;
+              final step = (_profile?.level == 'beginner') ? 1.5 : 2.5;
+
+              final prevTarget = await _getPrevTarget(item.itemId, day.weekNumber!, day.cycleNumber);
+              final planMin = _parseReps(item.reps) ?? 10;
+              final planMax = _parseMaxReps(item.reps) ?? planMin;
+              final effectivePrevTarget = prevTarget ?? planMin;
+
+              int? targetReps = planMax;
+              final isBaseEx = ex != null && isBaseExercise(ex);
+
+              if (isBaseEx) {
+                if (baseWeight != null && baseWeight > 0) {
+                  if (day.weekNumber == 3 && wasInPrevWeek) {
+                    targetWeight = baseWeight + step;
+                  } else {
+                    targetWeight = baseWeight;
+                  }
+                }
+
+                if (wasInPrevWeek && prevReps != null) {
+                  bool isSuccessful = prevReps >= (effectivePrevTarget - 2);
+
+                  if (day.weekNumber == 3) {
+                    targetReps = prevReps;
+                  } else if (day.weekNumber == 4) {
+                    // 👈 ИЗМЕНЕНО: неделя 4 — фактический максимум, если выше 15
+                    final actualReps = await _getMaxCompletedReps(item.replacedByItemId ?? item.itemId, day.cycleNumber);
+                    targetReps = (actualReps != null && actualReps > 15) ? actualReps : 15;
+                  } else if (isSuccessful) {
+                    targetReps = planMax;
+                  } else {
+                    targetReps = effectivePrevTarget;
+                  }
+                } else {
+                  targetReps = planMax;
+                }
+              } else {
+                targetWeight = baseWeight;
+                if (wasInPrevWeek && prevReps != null) {
+                  if (day.weekNumber == 3) {
+                    targetReps = prevReps;
+                  } else if (day.weekNumber == 4) {
+                    // 👈 ИЗМЕНЕНО: та же логика для изоляции
+                    final actualReps = await _getMaxCompletedReps(item.replacedByItemId ?? item.itemId, day.cycleNumber);
+                    targetReps = (actualReps != null && actualReps > 15) ? actualReps : 15;
+                  } else if (prevReps >= (effectivePrevTarget - 2)) {
+                    targetReps = (prevReps > planMax) ? prevReps : planMax;
+                  } else {
+                    targetReps = effectivePrevTarget;
+                  }
+                } else {
+                  targetReps = planMax;
+                }
+              }
+
+              // 👈 НОВОЕ: подтяжка плана до факта.
+              // Для упражнений с весом — не выше планового максимума
+              // (рост идёт через вес на неделе 3),
+              // для упражнений без веса — без ограничений.
+              // Неделя 1 сюда не попадает: у неё всегда план.
+              if (day.weekNumber != null && day.weekNumber! > 1) {
+                final isWeighted = baseWeight != null && baseWeight > 0;
+                final cap = isWeighted ? planMax : null;
+                final actualReps = await _getMaxCompletedReps(item.replacedByItemId ?? item.itemId, day.cycleNumber);
+                if (actualReps != null && actualReps > targetReps && (cap == null || actualReps <= cap)) {
+                  targetReps = actualReps;
+                }
+              }
+
+              if (targetWeight != null) _targetWeights[item.id!] = targetWeight;
+
+              for (int i = 0; i < list.length; i++) {
+                list[i] = SetData(weight: targetWeight, reps: targetReps, completed: false);
+                if (ids[i] > 0) {
+                  await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
+                      id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: targetWeight, reps: targetReps, completed: false
+                  ));
+                }
+              }
+            }
+
+            if (isTimed && !isCardio) {
+              int? prevSeconds;
+              bool wasTimedInPrevWeek = false;
+              if (_lastRecords.containsKey(item.id!) && _lastRecords[item.id!]!['reps'] != null) {
+                wasTimedInPrevWeek = true;
+                prevSeconds = _lastRecords[item.id!]!['reps'] as int?;
+              }
+
+              int? targetSeconds = _parseReps(item.reps);
+              final bool isBaseEx = isBaseExercise(ex);
+              if (isBaseEx && prevSeconds != null) {
+                bool isSuccessful = prevSeconds >= (targetSeconds ?? 0);
+                if (day.weekNumber == 1 && prevSeconds >= 100) {
+                  targetSeconds = prevSeconds;
+                } else if (day.weekNumber == 2) targetSeconds = isSuccessful ? (prevSeconds + 20) : (targetSeconds ?? 80);
+                else if (day.weekNumber == 3) targetSeconds = isSuccessful ? (prevSeconds + 20) : (targetSeconds ?? 100);
+                else if (day.weekNumber == 4) targetSeconds = isSuccessful ? prevSeconds : (targetSeconds ?? 100);
+              }
+
+              // 👈 НОВОЕ: подтяжка секунд до факта (стандартная прогрессия
+              // при успехе даёт prev + 20 — выше факта, подтяжка не сработает;
+              // сработает только если факт выше того, что насчитала формула)
+              if (day.weekNumber != null && day.weekNumber! > 1) {
+                final actualReps = await _getMaxCompletedReps(item.replacedByItemId ?? item.itemId, day.cycleNumber);
+                if (actualReps != null && actualReps > (targetSeconds ?? 0)) {
+                  targetSeconds = actualReps;
+                }
+              }
+
+              for (int i = 0; i < list.length; i++) {
+                list[i] = SetData(weight: null, reps: targetSeconds, completed: false);
+                if (ids[i] > 0) {
+                  await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
+                      id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: null, reps: targetSeconds, completed: false
+                  ));
+                }
+              }
+            }
+          }
+
+          // 👈 НОВОЕ: неделя 1 нового цикла — переносим фактический результат
+          // из прошлого цикла. Если упражнения там не было — остаётся план.
+          // Кардио исключено (там «повторы» — это минуты).
+          // Упражнения на время переносятся автоматически: секунды хранятся в reps.
+          if (day.weekNumber == 1 &&
+              day.cycleNumber != null && day.cycleNumber! > 1) {
+            final ex = exMap[item.replacedByItemId ?? item.itemId];
+            final isCardio = ex != null && _isCardio(ex);
+            if (!isCardio) {
+              final planMin = _parseReps(item.reps) ?? 15;
+              final prevMax = await _getMaxCompletedRepsInCycle(
+                  item.replacedByItemId ?? item.itemId, day.cycleNumber! - 1);
+              if (prevMax != null && prevMax > planMin) {
+                for (int i = 0; i < list.length; i++) {
+                  if (!list[i].completed) {
+                    list[i] = SetData(weight: list[i].weight, reps: prevMax, completed: false);
+                    if (ids[i] > 0) {
+                      await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
+                          id: ids[i], workoutExerciseId: item.id!, order: i + 1,
+                          weight: list[i].weight, reps: prevMax, completed: false
+                      ));
+                    }
+                  }
+                }
+                // запоминаем в кэше — неделя 2 увидит это как «прошлый результат»
+                _lastRecords[item.id!] = {
+                  'weight': _lastRecords[item.id!]?['weight'],
+                  'reps': prevMax,
+                };
+              }
+            }
+          }
+
+          // 👈 ИЗМЕНЕНО: на неделе 4 вместо слепого прижима к плану —
+          // фактический максимум из цикла, если он выше плана.
+          // Вниз по плану не опускаем: закрепление не должно наказывать.
+          if (day.weekNumber == 4 && !item.isWarmup && !item.isCoolDown) {
+            final planMin = _parseReps(item.reps) ?? 15;
+            final actualReps = await _getMaxCompletedReps(item.replacedByItemId ?? item.itemId, day.cycleNumber);
+            final int target4 = (actualReps != null && actualReps > planMin) ? actualReps : planMin;
+            for (int i = 0; i < list.length; i++) {
+              if (!list[i].completed) {
+                list[i] = SetData(weight: list[i].weight, reps: target4, completed: false);
+                if (ids[i] > 0) {
+                  await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
+                      id: ids[i], workoutExerciseId: item.id!, order: i + 1,
+                      weight: list[i].weight, reps: target4, completed: false
+                  ));
+                }
+              }
+            }
+          }
+        }
+
+        if (!_completed) {
+          final int targetSets = item.sets > 0 ? item.sets : 3;
+          if (list.length > targetSets) {
+            for (int i = targetSets; i < list.length; i++) {
+              if (ids[i] > 0) await DatabaseHelper.instance.deleteWorkoutSet(ids[i]);
+            }
+            list = list.sublist(0, targetSets);
+            ids = ids.sublist(0, targetSets);
+          }
+          while (list.length < targetSets && list.length < 10) {
+            final newSetId = await DatabaseHelper.instance.addWorkoutSet(WorkoutSet(
+                workoutExerciseId: item.id!, order: list.length + 1, weight: null, reps: _parseReps(item.reps), completed: false
+            ));
+            list.add(SetData(reps: _parseReps(item.reps), completed: false));
+            ids.add(newSetId);
+          }
         }
 
         setsData[item.id!] = list;
         setIds[item.id!] = ids;
       }
-
       _exerciseMap = exMap;
       _stretchMap = stMap;
       _setsData.addAll(setsData);
       _setIds.addAll(setIds);
-
-      return;
+    } finally {
+      _dayLoadBusy = false; // 🛡 правка 2: guard снимается в любом исходе
     }
-
-    _workoutDayId = day.id;
-    _completed = day.status == 'completed';
-    _started = day.status == 'completed' || day.status == 'in_progress';
-    final workoutExs = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
-
-    final Map<String, List<WorkoutExercise>> groupedExs = {};
-    for (final we in workoutExs) {
-      String prefix = we.isWarmup ? 'warmup_' : (we.isCoolDown ? 'cooldown_' : 'main_');
-      String key = '$prefix${we.itemType}_${we.itemId}';
-
-      if (we.itemType == 'exercise') {
-        final ex = await DatabaseHelper.instance.getExerciseById(we.replacedByItemId ?? we.itemId);
-        if (ex != null) {
-          final cleanName = ex.name.toLowerCase().replaceAll('ё', 'е').replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
-          key = '${prefix}exercise_$cleanName';
-        }
-      } else {
-        final st = await DatabaseHelper.instance.getStretchById(we.itemId);
-        if (st != null) {
-          final cleanName = st.name.toLowerCase().replaceAll('ё', 'е').replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
-          key = '${prefix}stretch_$cleanName';
-        }
-      }
-      groupedExs.putIfAbsent(key, () => []).add(we);
-    }
-
-    final List<WorkoutExercise> uniqueExs = [];
-    for (final entry in groupedExs.entries) {
-      final list = entry.value;
-      if (list.length == 1) {
-        uniqueExs.add(list.first);
-      } else {
-        WorkoutExercise? keeper;
-        for (final we in list) {
-          final sets = await DatabaseHelper.instance.getWorkoutSets(we.id!);
-          final hasCompleted = sets.any((s) => s.completed || s.weight != null);
-          if (hasCompleted) {
-            keeper = we;
-            break;
-          }
-        }
-        keeper ??= list.first;
-        uniqueExs.add(keeper);
-        for (final we in list) {
-          if (we.id != keeper.id) await DatabaseHelper.instance.deleteWorkoutExercise(we.id!);
-        }
-      }
-    }
-    uniqueExs.sort((a, b) => a.order.compareTo(b.order));
-
-    _hasBlocks = uniqueExs.any((we) => we.blockNumber != null && !we.isWarmup);
-    _pendingBlocks.clear();
-    for (int i = 0; i < uniqueExs.length; i++) {
-      final bn = uniqueExs[i].blockNumber;
-      if (bn != null && !uniqueExs[i].isWarmup) _pendingBlocks[i] = bn;
-    }
-    _items = uniqueExs;
-
-    final exMap = <int, Exercise>{};
-    final stMap = <int, Stretch>{};
-    for (final we in _items) {
-      if (we.itemType == 'exercise') {
-        final effId = we.replacedByItemId ?? we.itemId;
-        final ex = await DatabaseHelper.instance.getExerciseById(effId);
-        if (ex != null) exMap[effId] = ex;
-      } else {
-        final st = await DatabaseHelper.instance.getStretchById(we.itemId);
-        if (st != null) stMap[we.itemId] = st;
-      }
-    }
-    final setsData = <int, List<SetData>>{};
-    final setIds = <int, List<int>>{};
-
-    for (final item in _items) {
-      if (item.id == null) continue;
-      final sets = await DatabaseHelper.instance.getWorkoutSets(item.id!);
-
-      var list = <SetData>[];
-      var ids = <int>[];
-
-      bool needsPulling = true;
-      if (sets.isNotEmpty) {
-        for (final s in sets) {
-          if (s.completed || s.weight != null) needsPulling = false;
-          list.add(SetData(weight: s.weight, reps: s.reps, completed: s.completed));
-          ids.add(s.id!);
-        }
-      }
-
-      if (!item.isWarmup && !item.isCoolDown && item.itemType == 'exercise') {
-        final lastSets = await _getSmartPrevSets(item.replacedByItemId ?? item.itemId, day.weekNumber ?? 1, day.cycleNumber);
-        if (lastSets.isNotEmpty) {
-          final doneSets = lastSets.where((s) => s.completed).toList();
-          if (doneSets.isNotEmpty) {
-            double? maxW = doneSets.map((s) => s.weight ?? 0).reduce((a, b) => a > b ? a : b);
-            int? maxR = doneSets.map((s) => s.reps ?? 0).reduce((a, b) => a > b ? a : b);
-            if (maxW == 0) maxW = null;
-            if (maxR == 0) maxR = null;
-            // 👈 ВЕС: безвесовым (режим 0) вес из истории не показываем —
-            // глушим legacy-записи вида «планка 3 кг» на входе в кэш
-            final prevEx = exMap[item.replacedByItemId ?? item.itemId];
-            if (prevEx != null && weightModeFor(prevEx) == 0) maxW = null;
-            if (maxW != null || maxR != null) {
-              _lastRecords[item.id!] = {'weight': maxW, 'reps': maxR};
-            }
-          }
-        }
-
-        if (needsPulling && !item.isWarmup && !item.isCoolDown && day.weekNumber != null && day.weekNumber! > 1) {
-          final ex = exMap[item.replacedByItemId ?? item.itemId];
-          final isCardio = ex != null && _isCardio(ex);
-          final isTimed = ex != null && _isTimed(ex.name);
-
-          if (!isCardio && !isTimed) {
-            // 👈 ВЕС: РЕЖИМ ВЕСА — 0 поле скрыто, 1 опционально, 2 обязательно
-            final wMode = ex != null ? weightModeFor(ex) : 2;
-            double? baseWeight;
-            int? prevReps;
-            bool wasInPrevWeek = false;
-
-            if (_lastRecords.containsKey(item.id!)) {
-              wasInPrevWeek = true;
-              // 👈 ВЕС: для безвесовых (режим 0) вес из истории не подтягиваем —
-              // прогрессия идёт по повторам, поле веса на экране скрыто
-              baseWeight = (wMode == 0)
-                  ? null
-                  : _lastRecords[item.id!]!['weight'] as double?;
-              prevReps = _lastRecords[item.id!]!['reps'] as int?;
-            }
-
-            double? targetWeight = baseWeight;
-            final step = (_profile?.level == 'beginner') ? 1.5 : 2.5;
-
-            final prevTarget = await _getPrevTarget(item.itemId, day.weekNumber!, day.cycleNumber);
-            final planMin = _parseReps(item.reps) ?? 10;
-            final planMax = _parseMaxReps(item.reps) ?? planMin;
-            final effectivePrevTarget = prevTarget ?? planMin;
-
-            int? targetReps = planMax;
-            final isBaseEx = ex != null && isBaseExercise(ex);
-
-            if (isBaseEx) {
-              if (baseWeight != null && baseWeight > 0) {
-                if (day.weekNumber == 3 && wasInPrevWeek) {
-                  targetWeight = baseWeight + step;
-                } else {
-                  targetWeight = baseWeight;
-                }
-              }
-
-              if (wasInPrevWeek && prevReps != null) {
-                bool isSuccessful = prevReps >= (effectivePrevTarget - 2);
-
-                if (day.weekNumber == 3) {
-                  targetReps = prevReps;
-                } else if (day.weekNumber == 4) {
-                  // 👈 ИЗМЕНЕНО: неделя 4 — фактический максимум, если выше 15
-                  final actualReps = await _getMaxCompletedReps(item.replacedByItemId ?? item.itemId, day.cycleNumber);
-                  targetReps = (actualReps != null && actualReps > 15) ? actualReps : 15;
-                } else if (isSuccessful) {
-                  targetReps = planMax;
-                } else {
-                  targetReps = effectivePrevTarget;
-                }
-              } else {
-                targetReps = planMax;
-              }
-            } else {
-              targetWeight = baseWeight;
-              if (wasInPrevWeek && prevReps != null) {
-                if (day.weekNumber == 3) {
-                  targetReps = prevReps;
-                } else if (day.weekNumber == 4) {
-                  // 👈 ИЗМЕНЕНО: та же логика для изоляции
-                  final actualReps = await _getMaxCompletedReps(item.replacedByItemId ?? item.itemId, day.cycleNumber);
-                  targetReps = (actualReps != null && actualReps > 15) ? actualReps : 15;
-                } else if (prevReps >= (effectivePrevTarget - 2)) {
-                  targetReps = (prevReps > planMax) ? prevReps : planMax;
-                } else {
-                  targetReps = effectivePrevTarget;
-                }
-              } else {
-                targetReps = planMax;
-              }
-            }
-
-            // 👈 НОВОЕ: подтяжка плана до факта.
-            // Для упражнений с весом — не выше планового максимума
-            // (рост идёт через вес на неделе 3),
-            // для упражнений без веса — без ограничений.
-            // Неделя 1 сюда не попадает: у неё всегда план.
-            if (day.weekNumber != null && day.weekNumber! > 1) {
-              final isWeighted = baseWeight != null && baseWeight > 0;
-              final cap = isWeighted ? planMax : null;
-              final actualReps = await _getMaxCompletedReps(item.replacedByItemId ?? item.itemId, day.cycleNumber);
-              if (actualReps != null && actualReps > targetReps && (cap == null || actualReps <= cap)) {
-                targetReps = actualReps;
-              }
-            }
-
-            if (targetWeight != null) _targetWeights[item.id!] = targetWeight;
-
-            for (int i = 0; i < list.length; i++) {
-              list[i] = SetData(weight: targetWeight, reps: targetReps, completed: false);
-              if (ids[i] > 0) {
-                await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
-                    id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: targetWeight, reps: targetReps, completed: false
-                ));
-              }
-            }
-          }
-
-          if (isTimed && !isCardio) {
-            int? prevSeconds;
-            bool wasTimedInPrevWeek = false;
-            if (_lastRecords.containsKey(item.id!) && _lastRecords[item.id!]!['reps'] != null) {
-              wasTimedInPrevWeek = true;
-              prevSeconds = _lastRecords[item.id!]!['reps'] as int?;
-            }
-
-            int? targetSeconds = _parseReps(item.reps);
-            final bool isBaseEx = isBaseExercise(ex);
-            if (isBaseEx && prevSeconds != null) {
-              bool isSuccessful = prevSeconds >= (targetSeconds ?? 0);
-              if (day.weekNumber == 1 && prevSeconds >= 100) {
-                targetSeconds = prevSeconds;
-              } else if (day.weekNumber == 2) targetSeconds = isSuccessful ? (prevSeconds + 20) : (targetSeconds ?? 80);
-              else if (day.weekNumber == 3) targetSeconds = isSuccessful ? (prevSeconds + 20) : (targetSeconds ?? 100);
-              else if (day.weekNumber == 4) targetSeconds = isSuccessful ? prevSeconds : (targetSeconds ?? 100);
-            }
-
-            // 👈 НОВОЕ: подтяжка секунд до факта (стандартная прогрессия
-            // при успехе даёт prev + 20 — выше факта, подтяжка не сработает;
-            // сработает только если факт выше того, что насчитала формула)
-            if (day.weekNumber != null && day.weekNumber! > 1) {
-              final actualReps = await _getMaxCompletedReps(item.replacedByItemId ?? item.itemId, day.cycleNumber);
-              if (actualReps != null && actualReps > (targetSeconds ?? 0)) {
-                targetSeconds = actualReps;
-              }
-            }
-
-            for (int i = 0; i < list.length; i++) {
-              list[i] = SetData(weight: null, reps: targetSeconds, completed: false);
-              if (ids[i] > 0) {
-                await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
-                    id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: null, reps: targetSeconds, completed: false
-                ));
-              }
-            }
-          }
-        }
-
-        // 👈 НОВОЕ: неделя 1 нового цикла — переносим фактический результат
-        // из прошлого цикла. Если упражнения там не было — остаётся план.
-        // Кардио исключено (там «повторы» — это минуты).
-        // Упражнения на время переносятся автоматически: секунды хранятся в reps.
-        if (day.weekNumber == 1 &&
-            day.cycleNumber != null && day.cycleNumber! > 1) {
-          final ex = exMap[item.replacedByItemId ?? item.itemId];
-          final isCardio = ex != null && _isCardio(ex);
-          if (!isCardio) {
-            final planMin = _parseReps(item.reps) ?? 15;
-            final prevMax = await _getMaxCompletedRepsInCycle(
-                item.replacedByItemId ?? item.itemId, day.cycleNumber! - 1);
-            if (prevMax != null && prevMax > planMin) {
-              for (int i = 0; i < list.length; i++) {
-                if (!list[i].completed) {
-                  list[i] = SetData(weight: list[i].weight, reps: prevMax, completed: false);
-                  if (ids[i] > 0) {
-                    await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
-                        id: ids[i], workoutExerciseId: item.id!, order: i + 1,
-                        weight: list[i].weight, reps: prevMax, completed: false
-                    ));
-                  }
-                }
-              }
-              // запоминаем в кэше — неделя 2 увидит это как «прошлый результат»
-              _lastRecords[item.id!] = {
-                'weight': _lastRecords[item.id!]?['weight'],
-                'reps': prevMax,
-              };
-            }
-          }
-        }
-
-        // 👈 ИЗМЕНЕНО: на неделе 4 вместо слепого прижима к плану —
-        // фактический максимум из цикла, если он выше плана.
-        // Вниз по плану не опускаем: закрепление не должно наказывать.
-        if (day.weekNumber == 4 && !item.isWarmup && !item.isCoolDown) {
-          final planMin = _parseReps(item.reps) ?? 15;
-          final actualReps = await _getMaxCompletedReps(item.replacedByItemId ?? item.itemId, day.cycleNumber);
-          final int target4 = (actualReps != null && actualReps > planMin) ? actualReps : planMin;
-          for (int i = 0; i < list.length; i++) {
-            if (!list[i].completed) {
-              list[i] = SetData(weight: list[i].weight, reps: target4, completed: false);
-              if (ids[i] > 0) {
-                await DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(
-                    id: ids[i], workoutExerciseId: item.id!, order: i + 1,
-                    weight: list[i].weight, reps: target4, completed: false
-                ));
-              }
-            }
-          }
-        }
-      }
-
-      if (!_completed) {
-        final int targetSets = item.sets > 0 ? item.sets : 3;
-        if (list.length > targetSets) {
-          for (int i = targetSets; i < list.length; i++) {
-            if (ids[i] > 0) await DatabaseHelper.instance.deleteWorkoutSet(ids[i]);
-          }
-          list = list.sublist(0, targetSets);
-          ids = ids.sublist(0, targetSets);
-        }
-        while (list.length < targetSets && list.length < 10) {
-          final newSetId = await DatabaseHelper.instance.addWorkoutSet(WorkoutSet(
-              workoutExerciseId: item.id!, order: list.length + 1, weight: null, reps: _parseReps(item.reps), completed: false
-          ));
-          list.add(SetData(reps: _parseReps(item.reps), completed: false));
-          ids.add(newSetId);
-        }
-      }
-
-      setsData[item.id!] = list;
-      setIds[item.id!] = ids;
-    }
-    _exerciseMap = exMap;
-    _stretchMap = stMap;
-    _setsData.addAll(setsData);
-    _setIds.addAll(setIds);
   }
 
   int? _parseReps(String repsStr) {
@@ -801,6 +834,10 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen>
       }
 
       if (!isBaseExercise(ex)) continue;
+      // 🛡 правка 5: упражнения на время (планка, стульчик и т. д.) не сравниваем
+      // по «повторам» — в reps лежат секунды, и отчёт читался как «0 из 42».
+      // Их недоделки и так видны выше в notDoneExercises по подходам.
+      if (_isTimed(ex.name)) continue;
 
       double avgReps = completed.isNotEmpty ? completed.map((s) => s.reps ?? 0).reduce((a, b) => a + b) / completed.length : 0;
       final actualTargetReps = _parseReps(we.reps) ?? 0;
@@ -1236,7 +1273,14 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen>
       if (sets == null) continue;
       for (int i = 0; i < sets.length; i++) {
         final ids = _setIds[item.id!];
-        if (ids != null && i < ids.length) {
+        if (ids == null || i >= ids.length || ids[i] <= 0) {
+          // 🛡 правка 4: валидного id нет — создаём строку в БД заново,
+          // чтобы финальное сохранение не потеряло подход
+          updates.add(DatabaseHelper.instance.addWorkoutSet(WorkoutSet(
+            workoutExerciseId: item.id!, order: i + 1,
+            weight: sets[i].weight, reps: sets[i].reps, completed: true,
+          )));
+        } else {
           updates.add(DatabaseHelper.instance.updateWorkoutSet(WorkoutSet(id: ids[i], workoutExerciseId: item.id!, order: i + 1, weight: sets[i].weight, reps: sets[i].reps, completed: true)));
         }
       }
@@ -1488,6 +1532,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen>
       original: original,
       reasonCode: reason,
       allowPermanent: isBase, // 👈 Передаем флаг
+      limitations: _profile?.limitations ?? const [], // 👈 правка 8
     )));
     if (result == null) return;
 
@@ -1505,6 +1550,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen>
           original: original,
           reasonCode: null,
           allowPermanent: isBase, // 👈 Передаем флаг
+          limitations: _profile?.limitations ?? const [], // 👈 правка 8 only — новая строка
         ),
       ),
     );
@@ -2122,6 +2168,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen>
         }
       },
       onSetComplete: () => _startRestTimer(),
+      allowComplete: _started && !_isViewMode,
       onAddSet: () => _addSetToExercise(item),
       onDeleteSet: (i) => _deleteSetFromExercise(item, i),
       onOpenMenu: () => _openExerciseMenu(item, ex),

@@ -107,6 +107,8 @@ class _ChallengePlankScreenState extends State<ChallengePlankScreen> {
           isChallenge: true,
           userName: profile?.name ?? 'Спортсмен',
           challengeStat: '5 мин',
+          challengeName: 'Планка-марафон (5 минут)',
+
         ),
       ),
     );

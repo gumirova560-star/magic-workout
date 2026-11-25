@@ -515,7 +515,7 @@ List<Exercise> getExercisesPart1() {
       imagePath: 'assets/exercises/bulgarian_split_squat.jpg',
     ),
     Exercise(
-      name: 'Боковые выпады',
+      name: 'Боковые выпады с гантелями',
       muscleGroups: ['quads', 'glutes', 'adductors'],
       equipment: ['dumbbells'],
       difficulty: 'intermediate',

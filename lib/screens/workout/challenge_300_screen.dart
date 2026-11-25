@@ -127,6 +127,7 @@ class _Challenge300ScreenState extends State<Challenge300Screen> {
           isChallenge: true,
           userName: profile?.name ?? 'Спортсмен',
           challengeStat: '300 раз',
+          challengeName: 'Челлендж 300',
         ),
       ),
     );

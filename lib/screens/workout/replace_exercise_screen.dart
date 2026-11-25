@@ -7,14 +7,17 @@ import '../exercise/exercise_detail_screen.dart';
 class ReplaceExerciseScreen extends StatefulWidget {
   final Exercise original;
   final String? reasonCode;
-  final bool allowPermanent; // 👈 НОВЫЙ ПАРАМЕТР
+  final bool allowPermanent;
+  final List<String> limitations; // 👈 правка 8: ограничения профиля
 
   const ReplaceExerciseScreen({
     super.key,
     required this.original,
     this.reasonCode,
-    this.allowPermanent = true, // По умолчанию разрешаем (для базы)
+    this.allowPermanent = true,
+    this.limitations = const [], // пусто = фильтр не работает (back-compat)
   });
+
 
   @override
   State<ReplaceExerciseScreen> createState() => _ReplaceExerciseScreenState();
@@ -44,7 +47,13 @@ class _ReplaceExerciseScreenState extends State<ReplaceExerciseScreen> {
   Future<void> _loadData() async {
     setState(() => _loading = true);
     final all = await DatabaseHelper.instance.getExercises();
-    final others = all.where((e) => e.id != widget.original.id).toList();
+    // 👇 правка 8: отсекаем заблокированные ограничения сразу —
+    // фильтр наследуют и рекомендации, и общий список
+    final others = all.where((e) {
+      if (e.id == widget.original.id) return false;
+      if (widget.limitations.isEmpty) return true;
+      return !exerciseViolatesLimitations(e, widget.limitations);
+    }).toList();
 
     setState(() {
       _allExercises = others;
@@ -52,6 +61,7 @@ class _ReplaceExerciseScreenState extends State<ReplaceExerciseScreen> {
     });
     _updateRecommendations();
   }
+
 
   void _updateRecommendations() {
     setState(() {

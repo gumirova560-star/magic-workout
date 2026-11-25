@@ -41,7 +41,7 @@ const Map<String, ExerciseMeta> kAbsoluteExerciseDictionary = {
   'Болгарский выпад': ExerciseMeta('legs', ExerciseType.base),
   'Зашагивания на платформу': ExerciseMeta('legs', ExerciseType.base),
   'Приседания на одной ноге': ExerciseMeta('legs', ExerciseType.base),
-  'Боковые выпады': ExerciseMeta('legs', ExerciseType.base),
+  'Боковые выпады гантелями': ExerciseMeta('legs', ExerciseType.base),
   'Жим ногами в тренажёре': ExerciseMeta('legs', ExerciseType.base),
   'Румынская тяга со штангой': ExerciseMeta('legs', ExerciseType.base),
   'Румынская тяга на одной ноге': ExerciseMeta('legs', ExerciseType.base),
@@ -423,7 +423,7 @@ const Map<String, List<String>> kContraindications = {
     'Гакк-приседания (Hack Squat)', 'Приседания в тренажере Смита',
     'Выпады вперёд с гантелями', 'Выпады назад с гантелями',
     'Реверанс-выпад', 'Болгарский выпад',
-    'Боковые выпады', 'Боковые выпады с собственным весом',
+    'Боковые выпады с гантелями', 'Боковые выпады с собственным весом',
     'Обратные выпады с собственным весом',
     'Зашагивания на платформу', 'Зашагивания на платформу с гантелями',
     'Стульчик у стены', 'Прыжки на тумбу', 'Скакалка',
@@ -445,12 +445,18 @@ const Map<String, List<String>> kContraindications = {
   // Плечи: жимы над головой, тяга к подбородку, брусья.
   // Махи и разведения не блокируются — дельты там не под нагрузкой сжатия.
   'shoulders': [
-    'Жим гантелей сидя', 'Жим штанги стоя', 'Жим Арнольда',
+    'Жим гантелей сидя', 'Жим гантелей сидя (для верха груди)',
+    'Жим штанги стоя', 'Жим Арнольда',
     'Жим гантелей в тренажёре Смита', 'Жим в тренажере на плечи (Shoulder Press)',
     'Тяга штанги к подбородку', 'Тяга гантелей к подбородку',
     'Отжимания на брусьях (акцент на грудь)',
     'Французский жим лёжа', 'Разгибание руки из-за головы',
+    // 👇 правка 7: гребля нагружает передние дельты в каждом гребке,
+    // а в muscleGroups плечей у неё нет — зональный фильтр её не видит.
+    // Имя в базе ровно «Гребной тренажер» (с «е»).
+    'Гребной тренажер',
   ],
+
   // Шея: прямых нагружателей шеи в каталоге нет — оставляем пустым,
   // ограничение пока ни на что не влияет (честнее фантомного фильтра).
   'neck': [],
@@ -502,4 +508,34 @@ List<String> zonesBlockedByLimitations(List<String> limitations) {
     zones.addAll(kLimitationZones[lim.toLowerCase().trim()] ?? const <String>[]);
   }
   return zones.toList();
+}
+
+// ═══ ЕДИНАЯ ПРОВЕРКА ДЛЯ ЭКРАНОВ (правка 8) ═══
+// Расширение зоны → подзоны. Дубликат приватной _zoneExpand
+// из workout_generator — позже генератор можно перевести на неё.
+const Map<String, List<String>> kZoneExpand = {
+  'legs': ['quads', 'hamstrings', 'legs', 'calves', 'feet'],
+  'glutes': ['glutes', 'hamstrings'],
+  'abs': ['abs', 'obliques', 'core'],
+  'chest': ['chest'],
+  'back': ['back', 'lats', 'traps', 'lower_back'],
+  'arms': ['arms', 'biceps', 'triceps', 'forearms'],
+  'shoulders': ['shoulders', 'traps'],
+};
+
+/// Упражнение нарушает ограничения профиля? Объединяет табличную
+/// проверку (по имени из kContraindications) и зональную (по
+/// muscleGroups). Один источник истины для replace-экрана —
+/// генератор фильтрует ровно так же.
+bool exerciseViolatesLimitations(Exercise e, List<String> limitations) {
+  if (limitations.isEmpty) return false;
+  if (exerciseBlockedByLimitations(e, limitations)) return true;
+  final blockedZones = zonesBlockedByLimitations(limitations).toSet();
+  for (final m in e.muscleGroups) {
+    if (blockedZones.contains(m)) return true;
+    for (final zone in blockedZones) {
+      if ((kZoneExpand[zone] ?? const <String>[]).contains(m)) return true;
+    }
+  }
+  return false;
 }

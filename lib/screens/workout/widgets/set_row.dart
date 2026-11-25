@@ -29,6 +29,7 @@ class SetRow extends StatefulWidget {
   final void Function(int index, SetData data) onChanged; // 👈 ИЗМЕНИЛИ СИГНАТУРУ
   final VoidCallback? onComplete;
   final VoidCallback? onUncomplete;
+  final bool allowComplete; // 👈 правка 9: разрешено ли отмечать (старт тренировки)
   final bool readOnly;
   final VoidCallback? onDelete;
   final bool isCardio;
@@ -47,6 +48,7 @@ class SetRow extends StatefulWidget {
     required this.onChanged,
     this.onComplete,
     this.onUncomplete,
+    this.allowComplete = true, // по умолчанию как раньше (back-compat)
     this.readOnly = false,
     this.onDelete,
     this.isCardio = false,
@@ -123,15 +125,25 @@ class _SetRowState extends State<SetRow> {
   }
 
   void _toggleComplete() {
-    if (widget.readOnly) return;
+    if (!widget.allowComplete) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Сначала нажмите «Начать тренировку»'),
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     setState(() => _completed = !_completed);
+    _notifyChanged(); // 👈 ВОССТАНОВЛЕНИЕ: отправляем данные наверх для сохранения
     if (_completed) {
       widget.onComplete?.call();
     } else {
       widget.onUncomplete?.call();
     }
-    _notifyChanged();
   }
+
 
   Future<void> _confirmDelete() async {
     final ok = await showDialog<bool>(
@@ -271,10 +283,17 @@ class _SetRowState extends State<SetRow> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: _completed ? theme.colorScheme.primary : Colors.transparent,
+                  // 👈 правка 9.4: до старта тренировки галочка приглушена
+                  color: !widget.allowComplete
+                      ? theme.colorScheme.onSurface.withValues(alpha: 0.08)
+                      : _completed
+                      ? theme.colorScheme.primary
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: _completed
+                    color: !widget.allowComplete
+                        ? theme.colorScheme.onSurface.withValues(alpha: 0.15)
+                        : _completed
                         ? theme.colorScheme.primary
                         : theme.colorScheme.onSurface.withValues(alpha: 0.2),
                     width: 2,

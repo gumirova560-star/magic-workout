@@ -9,15 +9,28 @@ class ShareCard extends StatelessWidget {
   final int minutes;
   final int exercisesCount;
   final int workoutsCount;
-  final int streakWeeks;
+  final int streakWeeks; // 👇 Остался только для недельного прогресса «X из Y»
 
-  // 👇 НОВЫЕ ПАРАМЕТРЫ ДЛЯ ЧЕЛЛЕНДЖЕЙ
+  // 👇 Честный недельный стрик: недели без пропусков подряд
+  final int realStreak;
+  // 👇 Номер недели цикла
+  final int? weekNumber;
+  // 👇 День недели для плашки «Неделя N · День M»
+  final int? dayNumber;
+  // 👇 Идеальный месяц: весь запланированный план выполнен без пропусков
+  final bool perfectMonth;
+  // 👇 Название челленджа
+  final String? challengeName;
+  // 👇 Пол пользователя: 'male' / 'female'
+  final String? gender;
+
+  // 👇 ПАРАМЕТРЫ ДЛЯ ЧЕЛЛЕНДЖЕЙ
   final String? challengeStat;
   final String? challengeMainStat;
   final String? challengeSubStat;
   final String? challengeTimeStat;
 
-  // 👇 НОВЫЕ ПАРАМЕТРЫ ДЛЯ НЕДЕЛЬ
+  // 👇 ПАРАМЕТРЫ ДЛЯ НЕДЕЛЬ
   final bool isWeekInProgress;
   final int plannedDays;
 
@@ -30,6 +43,12 @@ class ShareCard extends StatelessWidget {
     required this.exercisesCount,
     required this.workoutsCount,
     required this.streakWeeks,
+    this.realStreak = 0,
+    this.weekNumber,
+    this.dayNumber,
+    this.perfectMonth = false,
+    this.challengeName,
+    this.gender,
     this.challengeStat,
     this.challengeMainStat,
     this.challengeSubStat,
@@ -65,19 +84,37 @@ class ShareCard extends StatelessWidget {
     return '$workoutsCount тренировок';
   }
 
-  String get _streakLabel {
-    final n = streakWeeks.abs() % 100;
-    if (n >= 11 && n <= 19) return '$streakWeeks недель подряд';
+  /// Слово «неделя/недели/недель» для числа недель.
+  String _weeksWord(int weeks) {
+    final n = weeks.abs() % 100;
+    if (n >= 11 && n <= 19) return 'недель';
     final i = n % 10;
-    if (i == 1) return '$streakWeeks неделя подряд';
-    if (i >= 2 && i <= 4) return '$streakWeeks недели подряд';
-    return '$streakWeeks недель подряд';
+    if (i == 1) return 'неделя';
+    if (i >= 2 && i <= 4) return 'недели';
+    return 'недель';
+  }
+
+  /// Честная плашка стрика: считает от realStreak, а не от streakWeeks.
+  String get _streakLabel {
+    if (realStreak <= 0) return 'Серия началась!';
+    return '$realStreak ${_weeksWord(realStreak)} подряд';
+  }
+
+  /// 👇 Плашка под заголовком: для недель — «Неделя N · День M»,
+  /// для остальных режимов — прежний title.
+  String get _pillText {
+    if (mode == ShareCardMode.week && weekNumber != null) {
+      return dayNumber != null
+          ? 'Неделя $weekNumber · День $dayNumber'
+          : 'Неделя $weekNumber';
+    }
+    return title;
   }
 
   String get _headline {
     switch (mode) {
       case ShareCardMode.workout: return 'Тренировка завершена!';
-      case ShareCardMode.week: return 'Неделя завершена! 🔥';
+      case ShareCardMode.week: return 'Неделя завершена!'; // 👇 огонёк переехал в подзаголовок
       case ShareCardMode.cycle: return 'Цикл завершён! 🏆';
       case ShareCardMode.challenge: return 'Челлендж пройден! 🔥';
     }
@@ -85,10 +122,18 @@ class ShareCard extends StatelessWidget {
 
   String get _subheadline {
     switch (mode) {
-      case ShareCardMode.workout: return 'Ещё один шаг к цели';
-      case ShareCardMode.week: return 'Отличная работа, продолжай!';
-      case ShareCardMode.cycle: return 'Ты прошла весь месяц. Горжусь!';
-      case ShareCardMode.challenge: return 'Это было мощно. Настоящий вызов!';
+      case ShareCardMode.workout:
+        return 'Ещё один шаг к цели';
+      case ShareCardMode.week:
+      // 👇 Огонёк теперь живёт здесь — заголовок недели без эмодзи
+        return realStreak >= 2
+            ? 'Уже $realStreak ${_weeksWord(realStreak)} без пропусков! 🔥'
+            : 'Отличная работа, продолжай! 🔥';
+      case ShareCardMode.cycle:
+        if (perfectMonth) return 'Весь месяц без единого пропуска. Горжусь!';
+        return gender == 'male' ? 'Ты прошёл весь месяц. Горжусь!' : 'Ты прошла весь месяц. Горжусь!';
+      case ShareCardMode.challenge:
+        return 'Это было мощно. Настоящий вызов!';
     }
   }
 
@@ -194,39 +239,74 @@ class ShareCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
-                  child: Text(title, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  child: Text(_pillText, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis), // 👇 _pillText вместо title
                 ),
                 const SizedBox(height: 24),
 
                 // 👇 УМНАЯ ЛОГИКА ПЛАШЕК
-                Row(
-                  children: [
-                    if (mode == ShareCardMode.challenge) ...[
-                      // ЧЕЛЛЕНДЖИ
-                      Expanded(child: _buildStatTile(Icons.emoji_events_rounded, challengeMainStat ?? 'Готово')),
-                      const SizedBox(width: 10),
-                      Expanded(child: _buildStatTile(Icons.timer_rounded, challengeSubStat ?? '—')),
-                      const SizedBox(width: 10),
-                      Expanded(child: _buildStatTile(Icons.local_fire_department_rounded, challengeTimeStat ?? '1-й раз')),
-                    ] else ...[
-                      // ОБЫЧНЫЕ ТРЕНИРОВКИ
-                      Expanded(
-                          child: _buildStatTile(
+                // IntrinsicHeight + stretch: все три плашки одной высоты,
+                // даже если в одной есть подпись сверху, а в соседях — нет
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (mode == ShareCardMode.challenge) ...[
+                        // ЧЕЛЛЕНДЖИ
+                        Expanded(child: _buildStatTile(Icons.emoji_events_rounded, challengeMainStat ?? 'Готово')),
+                        const SizedBox(width: 10),
+                        Expanded(child: _buildStatTile(Icons.timer_rounded, challengeSubStat ?? '—')),
+                        const SizedBox(width: 10),
+                        Expanded(child: _buildStatTile(Icons.local_fire_department_rounded, challengeTimeStat ?? '1-й раз')),
+                      ] else ...[
+                        // ОБЫЧНЫЕ ТРЕНИРОВКИ
+                        Expanded(
+                            child: _buildStatTile(
                               mode == ShareCardMode.workout ? Icons.timer_rounded : Icons.fitness_center_rounded,
-                              mode == ShareCardMode.workout ? _minutesLabel : _workoutsLabel
-                          )
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(child: _buildStatTile(Icons.fitness_center_rounded, _exercisesLabel)),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _buildStatTile(
-                          Icons.local_fire_department_rounded,
-                          isWeekInProgress ? '$streakWeeks из $plannedDays' : _streakLabel,
+                              mode == ShareCardMode.workout ? _minutesLabel : _workoutsLabel,
+                              topLabel: mode == ShareCardMode.week ? 'За неделю' : null, // 👇 снимает двусмысленность
+                            )
                         ),
-                      ),
-                    ]
-                  ],
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _buildStatTile(
+                            Icons.fitness_center_rounded,
+                            _exercisesLabel,
+                            topLabel: mode == ShareCardMode.week ? 'За неделю' : null, // 👇
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        // 👇 Карточка дня при активной неделе: зелёная галочка
+                        // и подпись «Тренировка» — теперь ясно, из чего «1 из 3»
+                        if (mode == ShareCardMode.workout && isWeekInProgress)
+                          Expanded(
+                            child: _buildStatTile(
+                              Icons.check_circle_rounded,
+                              '$streakWeeks из $plannedDays',
+                              iconColor: const Color(0xFF2ECC71),
+                              topLabel: 'Тренировка',
+                            ),
+                          )
+                        // 👇 Неделя завершена: серия — отдельная сущность.
+                        // Подпись «Серия» прячется при нулевом стрике,
+                        // чтобы не было «Серия / Серия началась»
+                        else if (mode == ShareCardMode.week)
+                          Expanded(
+                            child: _buildStatTile(
+                              Icons.local_fire_department_rounded,
+                              _streakLabel,
+                              topLabel: realStreak > 0 ? 'Серия' : null, // 👇 ИЗМЕНЕНО
+                            ),
+                          )
+                        else
+                          Expanded(
+                            child: _buildStatTile(
+                              Icons.local_fire_department_rounded,
+                              isWeekInProgress ? '$streakWeeks из $plannedDays' : _streakLabel,
+                            ),
+                          ),
+                      ]
+                    ],
+                  ),
                 ),
                 const Spacer(),
 
@@ -262,7 +342,7 @@ class ShareCard extends StatelessWidget {
     );
   }
 
-  Widget _buildStatTile(IconData icon, String value) {
+  Widget _buildStatTile(IconData icon, String value, {Color? iconColor, String? topLabel}) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       decoration: BoxDecoration(
@@ -272,7 +352,19 @@ class ShareCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(icon, color: Colors.white, size: 22),
+          Icon(icon, color: iconColor ?? Colors.white, size: 22),
+          if (topLabel != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              topLabel,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.7),
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
           const SizedBox(height: 6),
           Text(
             value,

@@ -145,6 +145,7 @@ class _ChallengeAmrapScreenState extends State<ChallengeAmrapScreen> {
           isChallenge: true,
           userName: profile?.name ?? 'Спортсмен',
           challengeStat: '10 мин',
+          challengeName: 'Круг на время (10 минут)',
         ),
       ),
     );

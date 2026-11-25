@@ -28,6 +28,7 @@ class ExerciseCard extends StatelessWidget {
 
   final void Function(int index, SetData data) onSetChanged;
   final Function() onSetComplete;
+  final bool allowComplete; // 👈 правка 9: прокидываем до SetRow
   final Function() onAddSet;
   final Function(int) onDeleteSet;
   final Function() onOpenMenu;
@@ -53,6 +54,8 @@ class ExerciseCard extends StatelessWidget {
     required this.sets,
     required this.onSetChanged,
     required this.onSetComplete,
+    this.allowComplete = true, // back-compat: по умолчанию разрешено
+
     required this.onAddSet,
     required this.onDeleteSet,
     required this.onOpenMenu,
@@ -283,6 +286,7 @@ class ExerciseCard extends StatelessWidget {
                   initialWeight: sets.isNotEmpty && i < sets.length ? sets[i].weight : null,
                   initialReps: sets.isNotEmpty && i < sets.length ? sets[i].reps ?? defaultReps : defaultReps,
                   readOnly: isViewMode,
+                  allowComplete: allowComplete, // 👈 правка 9: прокидываем флаг в галочку
                   isCardio: isCardio,
                   isTimed: isTimedEx,
                   // 👈 ВЕС: безвесовые (режим 0) не получают поле веса,

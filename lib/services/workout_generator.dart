@@ -367,10 +367,12 @@ recentDayFamilies: recentIsolationFamilies,
 );
 
 final dayExercises = [...baseExercises, ...isolationExercises];
+    // 👇 правка 6: blocked поднимаем на уровень дня — он нужен
+    // кардио-фолбэку, добору силовых и бонусу за забытую зону
+    final blocked = _buildBlockedZones(profile.limitations);
 
 final dayCardios = <Exercise>[];
 if (cardioMode == 'every_day' && dayGroups.isNotEmpty) {
-final blocked = _buildBlockedZones(profile.limitations);
 
 final uniqueCardio = allExercises.where((e) {
 if (e.id == null || usedCardioThisWeek.contains(e.id)) return false;
@@ -457,6 +459,7 @@ final extras = allExercises.where((e) {
 if (strengthList.any((u) => u.id == e.id)) return false;
 if (recentIds.contains(e.id)) return false;
 if (_isCardio(e)) return false;
+if (_isBlocked(e, blocked)) return false;   // 👈 правка 6: добавить
 if (dayGroups.isNotEmpty &&
 !e.muscleGroups.any((m) => dayGroups.contains(m))) return false;
 if (dayFamilies.contains(familyOf(e))) return false;
@@ -497,6 +500,7 @@ final extras = allExercises.where((e) {
 if (cardioList.any((u) => u.id == e.id)) return false;
 if (warmupCardioEx != null && e.id == warmupCardioEx.id) return false;
 if (!_isCardio(e)) return false;
+if (_isBlocked(e, blocked)) return false;   // 👈 правка 6: добавить
 if (!_isDifficultyAllowed(e, profile.level, profile.equipment)) return false;
 if ((profile.equipment == 'gym' || profile.equipment == 'mixed') &&
 _isExcludedForGym(e.name)) return false;
@@ -786,6 +790,7 @@ if (usedBonusIds.contains(e.id)) return false;
 if ((profile.equipment == 'gym' || profile.equipment == 'mixed') &&
 _isExcludedForGym(e.name)) return false;
 if (dayFamiliesForBonus.contains(familyOf(e))) return false;
+if (_isBlocked(e, blocked)) return false;   // 👈 правка 6: добавить
 return e.muscleGroups.contains(randomZone);
 }).toList();
 
@@ -799,6 +804,7 @@ if (!_isDifficultyAllowed(e, profile.level, profile.equipment)) return false;
 if ((profile.equipment == 'gym' || profile.equipment == 'mixed') &&
 _isExcludedForGym(e.name)) return false;
 if (dayFamiliesForBonus.contains(familyOf(e))) return false;
+if (_isBlocked(e, blocked)) return false;   // 👈 правка 6: добавить
 return e.muscleGroups.contains(randomZone);
 }).toList();
 }

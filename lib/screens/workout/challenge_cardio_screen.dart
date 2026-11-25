@@ -179,6 +179,7 @@ class _ChallengeCardioScreenState extends State<ChallengeCardioScreen> {
           isChallenge: true,
           userName: profile?.name ?? 'Спортсмен',
           challengeStat: 'HIIT',
+          challengeName: 'Кардио-взрыв (HIIT)',
         ),
       ),
     );

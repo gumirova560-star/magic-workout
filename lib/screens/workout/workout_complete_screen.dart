@@ -17,6 +17,7 @@ class WorkoutCompleteScreen extends StatefulWidget {
   final bool isChallenge;
   final String userName;
   final String? challengeStat;
+  final String? challengeName;
 
   const WorkoutCompleteScreen({
     super.key,
@@ -27,6 +28,7 @@ class WorkoutCompleteScreen extends StatefulWidget {
     this.isChallenge = false,
     required this.userName,
     this.challengeStat,
+    this.challengeName,
   });
 
   @override
@@ -83,7 +85,7 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
 
         final currentWeek = widget.completedDay.weekNumber ?? 1;
         final dayWeek = d.weekNumber ?? 1;
-        return dayWeek <= currentWeek;
+        return dayWeek == currentWeek; // 👇 было dayWeek <= currentWeek
       }).toList();
 
       workouts = relevantDays.isNotEmpty ? relevantDays.length : 1;
@@ -100,22 +102,32 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
 
     if (mounted) {
       setState(() {
-      _streak = streak;
-      _totalWorkoutsInPeriod = workouts;
-      _totalExercisesInPeriod = exercises;
-    });
+        _streak = streak;
+        _totalWorkoutsInPeriod = workouts;
+        _totalExercisesInPeriod = exercises;
+      });
     }
   }
 
-  String get _title {
-    if (_mode == ShareCardMode.cycle) return 'Цикл ${widget.completedDay.cycleNumber ?? 1}';
-    if (_mode == ShareCardMode.week) return 'Неделя ${widget.completedDay.weekNumber ?? 1}';
-    if (_mode == ShareCardMode.challenge) return widget.challengeStat ?? 'Челлендж';
+  /// 👇 Номер дня из названия тренировки («День 3» → 3) для плашки «Неделя N · День M»
+  int? get _dayNumber {
+    final match = RegExp(r'День (\d+)').firstMatch(widget.completedDay.name);
+    if (match == null) return null;
+    return int.tryParse(match.group(1)!);
+  }
 
-    final name = widget.completedDay.name;
-    final match = RegExp(r'День (\d+)').firstMatch(name);
-    if (match != null) return 'Тренировка · День ${match.group(1)}';
-    return 'Тренировка';
+  String get _title {
+    if (_mode == ShareCardMode.challenge) {
+      return widget.challengeName ?? widget.challengeStat ?? 'Челлендж';
+    }
+    if (_mode == ShareCardMode.week) return 'Неделя ${widget.completedDay.weekNumber ?? 1}';
+    if (_mode == ShareCardMode.cycle) return 'Цикл ${widget.completedDay.cycleNumber ?? 1}';
+
+    final dayNum = _dayNumber?.toString() ?? '?'; // 👇 берём из геттера, без дубля регулярки
+    // 👇 Защита от «Неделя 0»: weekNumber меньше 1 не показываем никогда
+    final wn = widget.completedDay.weekNumber ?? 0;
+    final safeWeek = wn < 1 ? 1 : wn;
+    return 'Неделя $safeWeek · День $dayNum';
   }
 
   String get _headline {
@@ -126,8 +138,13 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
   }
 
   String get _subheadline {
+    final isMale = _profile?.gender == 'male';
     if (_mode == ShareCardMode.challenge) return 'Это было мощно. Настоящий вызов!';
-    if (_mode == ShareCardMode.cycle) return 'Ты прошла весь месяц. Это огромный шаг к цели!';
+    if (_mode == ShareCardMode.cycle) {
+      return isMale
+          ? 'Ты прошёл весь месяц. Это огромный шаг к цели!'
+          : 'Ты прошла весь месяц. Это огромный шаг к цели!';
+    }
     if (_mode == ShareCardMode.week) return 'Все тренировки недели выполнены. Ты молодец!';
     return 'Ещё один шаг к цели. Продолжай в том же духе!';
   }
@@ -196,10 +213,6 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
                       final plannedDays = _profile?.daysPerWeek ?? 3;
                       final isWeekInProgress = !widget.isWeekComplete && _mode != ShareCardMode.challenge;
 
-                      final streakValueToPass = widget.isWeekComplete
-                          ? (widget.completedDay.weekNumber ?? 1)
-                          : _totalWorkoutsInPeriod;
-
                       ShareService.shareWorkoutCard(
                         context: context,
                         mode: _mode,
@@ -208,7 +221,15 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
                         minutes: widget.completedDay.durationMinutes ?? 0,
                         exercisesCount: _totalExercisesInPeriod,
                         workoutsCount: _totalWorkoutsInPeriod,
-                        streakWeeks: streakValueToPass,
+                        // 👇 Для прогресса «X из Y» — число выполненных тренировок недели
+                        streakWeeks: _totalWorkoutsInPeriod,
+                        // 👇 Честный стрик «N недель подряд» — из FairyStatsService
+                        realStreak: _streak,
+                        weekNumber: widget.completedDay.weekNumber,
+                        dayNumber: _dayNumber, // 👇 плашка «Неделя 2 · День 2»
+                        perfectMonth: _mode == ShareCardMode.cycle && _streak >= 4,
+                        gender: _profile?.gender,
+                        challengeName: widget.challengeName,
                         isWeekInProgress: isWeekInProgress,
                         plannedDays: plannedDays,
                         challengeStat: widget.challengeStat,
@@ -239,6 +260,7 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
 
                         final day = await DatabaseHelper.instance.getWorkoutDayById(widget.completedDay.id!);
                         if (day == null || !mounted) return;
+                        if (!mounted) return; // 👇 отдельная строка, без «||»
 
                         await Navigator.pushReplacement(
                           context,

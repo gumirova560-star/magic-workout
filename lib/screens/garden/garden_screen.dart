@@ -9,7 +9,9 @@ import 'package:universal_html/html.dart' as html;
 import '../../data/fairy_mood.dart';
 import '../../services/garden_service.dart';
 import '../../services/energy_service.dart';
-
+import '../../services/fairy_reaction_service.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 class GardenScreen extends StatefulWidget {
   final int profileId;
   const GardenScreen({super.key, required this.profileId});
@@ -31,7 +33,7 @@ class _GardenScreenState extends State<GardenScreen> {
   bool _isCapturing = false;
 
 // Размер клетки (логических пикселей)
-  static const double cellSize = 38.0;
+  static const double cellSize = 25.0; // было 20.0
 
 // Размеры сетки (20 на 40)
   static const int totalCols = 20;
@@ -290,9 +292,16 @@ class _GardenScreenState extends State<GardenScreen> {
       }
 
 // Сохранение для мобилок
-      final xFile = XFile.fromData(bytes,
-          name: 'my_garden_story.png', mimeType: 'image/png');
-      await Share.shareXFiles([xFile], text: 'Смотри, какой сад я вырастила! 🌸✨');
+      final directory = await getTemporaryDirectory();
+      final file = File('${directory.path}/my_garden_story.png');
+      await file.writeAsBytes(bytes);
+      final xFile = XFile(file.path);
+
+      final isMale = FairyReactionService().profileGender == 'male';
+      await Share.shareXFiles(
+        [xFile],
+        text: isMale ? 'Смотри, какой сад я вырастил! 🌿✨' : 'Смотри, какой сад я вырастила! 🌸✨',
+      );
     } catch (e) {
       if (mounted) {
         setState(() => _isCapturing = false);
@@ -598,7 +607,7 @@ class _GardenScreenState extends State<GardenScreen> {
     'bench': (image: 'bench.png', overflow: 85, drag: 85),
     'swing': (image: 'swing.png', overflow: 90, drag: 90),
     'fountain': (image: 'fountain.png', overflow: 100, drag: 100),
-    'lamp': (image: 'lamp.png', overflow: null, drag: 100), // 70x100 — особый случай
+    'lamp': (image: 'lamp.png', overflow: 90, drag: 130), // особый случай: рамка 90x130
     'pavilion': (image: 'pavilion.png', overflow: 110, drag: 110),
     'tree': (image: 'tree.png', overflow: 120, drag: 120),
     'pond': (image: 'pond.png', overflow: 120, drag: 120),
@@ -632,9 +641,9 @@ class _GardenScreenState extends State<GardenScreen> {
 
     if (visuals.overflow != null) {
       if (type == 'lamp') {
-// особый случай: 70x100
+// особый случай: 90x130
         return OverflowBox(
-            maxWidth: 70, maxHeight: 100, child: buildImage(visuals.image));
+            maxWidth: 90, maxHeight: 130, child: buildImage(visuals.image));
       }
       return OverflowBox(
           maxWidth: visuals.overflow!,
@@ -794,14 +803,17 @@ class _GardenScreenState extends State<GardenScreen> {
           final isHovering = candidateData.isNotEmpty;
           return GestureDetector(
             onTap: () => _onCellTap(index),
-            child: Stack(children: [
-              Center(child: imageWidget),
-              if (isHovering)
-                Positioned.fill(
-                  child: Container(
-                      color: Colors.white.withValues(alpha: 0.5)),
-                ),
-            ]),
+            child: Stack(
+              clipBehavior: Clip.none, // 👈 разрешаем объектам выступать за клетку
+              children: [
+                Center(child: imageWidget),
+                if (isHovering)
+                  Positioned.fill(
+                    child: Container(
+                        color: Colors.white.withValues(alpha: 0.5)),
+                  ),
+              ],
+            ),
           );
         },
       ),
@@ -896,8 +908,8 @@ class _GardenScreenState extends State<GardenScreen> {
                 maxScale: 4.0,
                 boundaryMargin: const EdgeInsets.all(2000),
                 child: SizedBox(
-                  width: totalCols * cellSize, // 20 * 38 = 760
-                  height: totalRows * cellSize, // 40 * 38 = 1520
+                  width: totalCols * cellSize, // 20 * 25 = 500
+                  height: totalRows * cellSize, // 40 * 25 = 1000
                   // Stack: слои от нижнего к верхнему.
                   // 1) трава  2) тропинки+пустые клетки  3) объекты
                   child: Stack(

@@ -145,8 +145,9 @@ const Map<String, ExerciseMeta> kAbsoluteExerciseDictionary = {
   'Тяга Т-грифа': ExerciseMeta('back', ExerciseType.base),
   'Тяга штанги в наклоне обратным хватом': ExerciseMeta('back', ExerciseType.isolation),
   'Разведения в наклоне на трапеции': ExerciseMeta('back', ExerciseType.isolation),
-  'Тяга гантели одной рукой': ExerciseMeta('back', ExerciseType.isolation),
-  'Тяга гантели к поясу (в наклоне)': ExerciseMeta('back', ExerciseType.isolation),
+  // 👇 ИЗМЕНЕНО: тяга гантели — это compound (спина + бицепс), а не изоляция
+  'Тяга гантели одной рукой': ExerciseMeta('back', ExerciseType.base),
+  'Тяга гантели к поясу (в наклоне)': ExerciseMeta('back', ExerciseType.base),
   'Тяга резинки к поясу': ExerciseMeta('back', ExerciseType.isolation),
   'Пуловер с гантелью': ExerciseMeta('back', ExerciseType.isolation),
   'Пулловер на верхнем блоке': ExerciseMeta('back', ExerciseType.isolation),
@@ -162,11 +163,13 @@ const Map<String, ExerciseMeta> kAbsoluteExerciseDictionary = {
   'Жим штанги лежа в Смите': ExerciseMeta('chest', ExerciseType.base),
   'Разведения гантелей лёжа': ExerciseMeta('chest', ExerciseType.isolation),
   'Сведение рук в тренажёре': ExerciseMeta('chest', ExerciseType.isolation),
-  'Жим гантелей лёжа на наклонной скамье': ExerciseMeta('chest', ExerciseType.isolation),
+  // 👇 ИЗМЕНЕНО: наклонный жим гантелей — это compound (грудь + трицепс + плечи)
+  'Жим гантелей лёжа на наклонной скамье': ExerciseMeta('chest', ExerciseType.base),
   'Отжимания от скамьи (обратные)': ExerciseMeta('chest', ExerciseType.isolation),
   'Сведение рук в кроссовере': ExerciseMeta('chest', ExerciseType.isolation),
   'Разведение гантелей лёжа на наклонной скамье': ExerciseMeta('chest', ExerciseType.isolation),
-  'Отжимания с широкой постановкой': ExerciseMeta('chest', ExerciseType.isolation),
+  // 👇 ИЗМЕНЕНО: отжимания широкой постановкой — это pushup (compound)
+  'Отжимания с широкой постановкой': ExerciseMeta('chest', ExerciseType.base),
   'Жим гантелей сидя (для верха груди)': ExerciseMeta('chest', ExerciseType.isolation),
 };
 
@@ -221,14 +224,8 @@ String getExerciseFamily(String name) {
   // Ягодицы: Мосты
   if (lower.contains('ягодичный мост') || lower.contains('хип-траст') || lower.contains('hip thrust') || lower.contains('фрог-памп')) return 'glute_bridge';
   // Ягодицы: Отведения назад
-  // 👈 ФИКС 12: «отведение ноги в кроссовере» перенесено в боковые отведения —
-  // без «назад» это боковое отведение ноги на блоке, а не разгибание бедра.
-  // Иначе кроссовер и «Отведение ноги в сторону с резинкой» считались
-  // разными семействами и обе изоляции попадали в один день.
   if (lower.contains('отведение ноги назад') || lower.contains('тяга ноги назад') || lower.contains('махи ногой назад')) return 'hip_extension_back';
   // Ягодицы: Отведения в сторону
-  // 👈 ИСПРАВЛЕНО: добавлена Ходьба с резинкой (Monster Walk) — это те же отведения бедра
-  // 👈 ФИКС 12: добавлено «отведение ноги в кроссовере»
   if (lower.contains('отведение ноги в сторону') || lower.contains('отведение ноги в кроссовере') || lower.contains('разведение ног') || lower.contains('разгибание бедра') || lower.contains('махи ногой в сторону') || lower.contains('отведение ноги лежа') || lower.contains('ходьба с резинкой')) return 'hip_abduction_side';
 
   // Новые ягодичные
@@ -240,18 +237,18 @@ String getExerciseFamily(String name) {
   if (lower.contains('разгибание ног') || lower.contains('разгибание одной ноги')) return 'leg_extension';
   // Ноги: Сгибание
   if (lower.contains('сгибание ног') || lower.contains('сгибание одной ноги')) return 'leg_curl';
-  // сведение ног (приводящие) — раньше уходило в «свободное плавание»
+  // сведение ног (приводящие)
   if (lower.contains('сведение ног')) return 'adduction';
   // Голень: Подъёмы на носки
   if (lower.contains('носки') || lower.contains('жим носками')) return 'calf_raise';
-  // Ноги: Приседания и Жим ногами (включая новые)
+  // Ноги: Приседания и Жим ногами
   if (lower.contains('приседания') || lower.contains('жим ногами') || lower.contains('гакк-приседания')) return 'squat';
   // Ноги: Выпады
   if (lower.contains('выпады') || lower.contains('болгарский')) return 'lunge';
   // Ноги: Румынская тяга и наклоны
   if (lower.contains('румынская тяга') || lower.contains('наклоны со штангой')) return 'hinge';
 
-  // Спина: Тяги горизонтальные (включая Т-гриф; исключаем тягу к подбородку — это плечи)
+  // Спина: Тяги горизонтальные
   if ((lower.contains('тяга штанги в наклоне') || lower.contains('тяга гантели') || lower.contains('тяга нижнего блока') || lower.contains('тяга резинки к поясу') || lower.contains('тяга т-грифа')) && !lower.contains('подбородку')) return 'back_row_horizontal';
 
   // Спина: Тяги вертикальные
@@ -263,39 +260,34 @@ String getExerciseFamily(String name) {
   // Спина: Пулловеры
   if (lower.contains('пуловер') || lower.contains('пулловер')) return 'pullover';
 
-  // Грудь: Жимы (включая тренажеры и Смит)
+  // Грудь: Жимы
   if (lower.contains('жим штанги') || lower.contains('жим гантелей') || lower.contains('жим в тренажере') || lower.contains('жим в тренажёре')) return 'bench_press';
   // Грудь: Разведения/Сведения
-
-  // ИСПРАВЛЕНО: раньше правило ловило плечевые «Разведения гантелей в стороны»
-  // и «на заднюю дельту», а также «Обратную бабочку» — теперь исключены
   if (lower.contains('сведение рук') ||
       (lower.contains('бабочка') && !lower.contains('обратная бабочка')) ||
       ((lower.contains('разведения гантелей') || lower.contains('разведение гантелей')) &&
           !lower.contains('в стороны') && !lower.contains('заднюю дельту'))) return 'chest_fly';
-  // Грудь: Отжимания (включая брусья)
+  // Грудь: Отжимания
   if (lower.contains('отжимания')) return 'pushup';
 
-  // Плечи: Жимы (включая тренажеры)
+  // Плечи: Жимы
   if (lower.contains('жим гантелей сидя') || lower.contains('жим штанги стоя') || lower.contains('жим арнольда') || lower.contains('жим гантелей в тренажёре') || lower.contains('жим в тренажере на плечи')) return 'shoulder_press';
-  // Плечи: Средняя дельта (включая блоки)
+  // Плечи: Средняя дельта
   if (lower.contains('разведения гантелей в стороны') || lower.contains('махи гантелями в стороны сидя') || lower.contains('махи в сторону на нижнем блоке')) return 'shoulder_side';
   // Плечи: Передняя дельта
   if (lower.contains('махи гантелями перед собой')) return 'shoulder_front';
-  // Плечи: Задняя дельта (включая обратную бабочку)
+  // Плечи: Задняя дельта
   if (lower.contains('разведения в наклоне') || lower.contains('махи гантелью в наклоне') || lower.contains('обратные разведения') || lower.contains('разведения гантелей на заднюю дельту') || lower.contains('тяга резинки к лицу') || lower.contains('обратная бабочка')) return 'shoulder_rear';
   // Плечи: Тяга к подбородку
   if (lower.contains('тяга штанги к подбородку') || lower.contains('тяга гантелей к подбородку')) return 'upright_row';
 
-  // Руки: Бицепс (включая тренажеры и блоки)
+  // Руки: Бицепс
   if (lower.contains('подъём гантелей на бицепс') || lower.contains('подъём штанги на бицепс') || lower.contains('молотковые сгибания') || lower.contains('концентрированный подъём') || lower.contains('подъем на бицепс') || lower.contains('сгибание рук в тренажере')) return 'bicep_curl';
-  // Руки: Трицепс (включая тренажеры и жим узким хватом)
+  // Руки: Трицепс
   if (lower.contains('французский жим') || lower.contains('разгибание руки') || lower.contains('разгибание рук на блоке') || lower.contains('отжимания от скамьи (трицепс)') || lower.contains('отжимания узким хватом') || lower.contains('жим штанги узким хватом') || lower.contains('разгибание рук в тренажере')) return 'tricep_extension';
 
   // Пресс: Планки
   if (lower.contains('планка')) return 'plank';
-  // подъёмы ног — раньше «Подъём ног лёжа» и «Подъём ног в висе»
-  // имели разные семейства и могли попасть в один день
   if (lower.contains('подъём ног') || lower.contains('подъем ног')) return 'leg_raise';
   // Пресс: Скручивания (стандартные)
   if (lower.contains('скручивания') && !lower.contains('боковые') && !lower.contains('обратные')) return 'crunch_standard';
@@ -326,8 +318,8 @@ const Set<String> _optionalWeightNames = {
   'Махи ногой в сторону (на четвереньках)',
   'Отведение ноги в сторону стоя',
   'Отведение ноги лежа на боку',
-  'Отведение ноги в сторону с резинкой', // 👈 ФИКС 12: резинка — вес опционален
-  'Ходьба с резинкой (Monster Walk)',    // 👈 ФИКС 12: то же самое
+  'Отведение ноги в сторону с резинкой',
+  'Ходьба с резинкой (Monster Walk)',
   'Подъём ног лёжа',
   'Подъём ног в висе',
   'Подъём ног в висе на турнике (согнутые)',
@@ -360,8 +352,6 @@ int weightModeFor(Exercise e) {
 // работают прежние эвристики по названию.
 
 /// Кардио или нет. Эвристика, общая для syncExercises и фолбэка.
-/// Раньше эта логика жила в workout_generator.dart как _isCardio —
-/// теперь здесь одна копия на всё приложение.
 bool isCardioExercise(Exercise e) {
   final lower = e.name.toLowerCase();
   if (lower.contains('бег') ||
@@ -409,11 +399,6 @@ int weightModeOf(Exercise e) => e.weightMode ?? weightModeFor(e);
 // ═══════════════════════════════════════════════════════════
 // Коды — ровно те, что выбирает пользователь в профиле
 // (profile_edit_screen): back, knees, shoulders, neck.
-// Таблица — источник истины для syncExercises() (см. contraindicationsFor),
-// а exerciseBlockedByLimitations сверяется с ней как фолбэком,
-// пока синхронизация не прошла. 👇 v21.2: раньше фолбэк искал ключ
-// по имени упражнения (kContraindications[e.name]) — а ключи здесь
-// коды ограничений, так что фолбэк не срабатывал никогда.
 
 const Map<String, List<String>> kContraindications = {
   // Колени: осевая и ударная нагрузка
@@ -432,7 +417,6 @@ const Map<String, List<String>> kContraindications = {
     'Бег на месте с высоким подниманием колен',
   ],
   // Спина: осевая нагрузка и сгибание с весом.
-  // Статика (планки, лодочка, Bird Dog) не блокируется — она спину укрепляет.
   'back': [
     'Приседания со штангой', 'Приседания в тренажере Смита',
     'Гакк-приседания (Hack Squat)', 'Наклоны со штангой',
@@ -443,7 +427,6 @@ const Map<String, List<String>> kContraindications = {
     'Тяга гантели к поясу (в наклоне)', 'Гиперэкстензия с весом',
   ],
   // Плечи: жимы над головой, тяга к подбородку, брусья.
-  // Махи и разведения не блокируются — дельты там не под нагрузкой сжатия.
   'shoulders': [
     'Жим гантелей сидя', 'Жим гантелей сидя (для верха груди)',
     'Жим штанги стоя', 'Жим Арнольда',
@@ -451,20 +434,14 @@ const Map<String, List<String>> kContraindications = {
     'Тяга штанги к подбородку', 'Тяга гантелей к подбородку',
     'Отжимания на брусьях (акцент на грудь)',
     'Французский жим лёжа', 'Разгибание руки из-за головы',
-    // 👇 правка 7: гребля нагружает передние дельты в каждом гребке,
-    // а в muscleGroups плечей у неё нет — зональный фильтр её не видит.
-    // Имя в базе ровно «Гребной тренажер» (с «е»).
     'Гребной тренажер',
   ],
-
-  // Шея: прямых нагружателей шеи в каталоге нет — оставляем пустым,
-  // ограничение пока ни на что не влияет (честнее фантомного фильтра).
+  // Шея: прямых нагружателей шеи в каталоге нет
   'neck': [],
 };
 
 /// Ограничение → зоны, которые не давать в бонусе «забытой зоны»
-/// и в challenge-экранах. Раньше сюда сравнивались коды напрямую
-/// с зонами — срабатывал только 'back', knees/neck/shoulders молчали.
+/// и в challenge-экранах.
 const Map<String, List<String>> kLimitationZones = {
   'knees': ['legs', 'glutes'],
   'back': ['back', 'lower_back'],
@@ -472,9 +449,7 @@ const Map<String, List<String>> kLimitationZones = {
   'neck': [],
 };
 
-/// 👇 v21.2: коды ограничений, блокирующие данное упражнение
-/// (обратный lookup по таблице). Нужен syncExercises() для заполнения
-/// поля contraindications в базе.
+/// Обратный lookup: коды ограничений, блокирующие упражнение.
 List<String> contraindicationsFor(String exerciseName) {
   final res = <String>[];
   kContraindications.forEach((code, names) {
@@ -484,9 +459,6 @@ List<String> contraindicationsFor(String exerciseName) {
 }
 
 /// Упражнение заблокировано ограничениями профиля?
-/// 👇 v21.2: поле из базы + настоящий фолбэк в таблицу — для каждого
-/// кода ограничения проверяем, есть ли имя упражнения в его списке.
-/// Точное пересечение, без подстрок.
 bool exerciseBlockedByLimitations(Exercise e, List<String> limitations) {
   if (limitations.isEmpty) return false;
   final blocked = limitations.map((l) => l.toLowerCase().trim()).toSet();
@@ -494,7 +466,7 @@ bool exerciseBlockedByLimitations(Exercise e, List<String> limitations) {
   final fieldCodes =
   e.contraindications.map((c) => c.toLowerCase().trim()).toSet();
   if (fieldCodes.any(blocked.contains)) return true;
-  // 2) фолбэк в таблицу: имя упражнения в списке заблокированного кода
+  // 2) фолбэк в таблицу
   for (final lim in blocked) {
     if (kContraindications[lim]?.contains(e.name) ?? false) return true;
   }
@@ -511,8 +483,6 @@ List<String> zonesBlockedByLimitations(List<String> limitations) {
 }
 
 // ═══ ЕДИНАЯ ПРОВЕРКА ДЛЯ ЭКРАНОВ (правка 8) ═══
-// Расширение зоны → подзоны. Дубликат приватной _zoneExpand
-// из workout_generator — позже генератор можно перевести на неё.
 const Map<String, List<String>> kZoneExpand = {
   'legs': ['quads', 'hamstrings', 'legs', 'calves', 'feet'],
   'glutes': ['glutes', 'hamstrings'],
@@ -523,10 +493,7 @@ const Map<String, List<String>> kZoneExpand = {
   'shoulders': ['shoulders', 'traps'],
 };
 
-/// Упражнение нарушает ограничения профиля? Объединяет табличную
-/// проверку (по имени из kContraindications) и зональную (по
-/// muscleGroups). Один источник истины для replace-экрана —
-/// генератор фильтрует ровно так же.
+/// Упражнение нарушает ограничения профиля?
 bool exerciseViolatesLimitations(Exercise e, List<String> limitations) {
   if (limitations.isEmpty) return false;
   if (exerciseBlockedByLimitations(e, limitations)) return true;
@@ -539,3 +506,4 @@ bool exerciseViolatesLimitations(Exercise e, List<String> limitations) {
   }
   return false;
 }
+// ═══ КОНЕЦ ФАЙЛА base_exercises.dart ═══

@@ -28,11 +28,11 @@ class ExerciseCard extends StatelessWidget {
 
   final void Function(int index, SetData data) onSetChanged;
   final Function() onSetComplete;
-  final bool allowComplete; // 👈 правка 9: прокидываем до SetRow
+  final bool allowComplete;
   final Function() onAddSet;
   final Function(int) onDeleteSet;
   final Function() onOpenMenu;
-  final Function()? onQuickReplace; // 👈 НОВОЕ ПОЛЕ
+  final Function()? onQuickReplace;
   final Function(int) onTryAutoCollapse;
 
   final String? Function(Exercise) getBaseZone;
@@ -40,8 +40,12 @@ class ExerciseCard extends StatelessWidget {
   final String Function(String) groupLabel;
   final bool Function(Exercise) isCardio;
   final bool Function(String) isTimed;
-  final int Function(Exercise) weightMode; // 👈 ВЕС: 0 — без веса, 1 — опционально, 2 — обязательно
+  final int Function(Exercise) weightMode;
   final int? Function(String) parseReps;
+
+  // 👇 НОВОЕ: паттерны для дома
+  final bool isHome;
+  final String Function(Exercise)? patternOf;
 
   const ExerciseCard({
     super.key,
@@ -54,30 +58,47 @@ class ExerciseCard extends StatelessWidget {
     required this.sets,
     required this.onSetChanged,
     required this.onSetComplete,
-    this.allowComplete = true, // back-compat: по умолчанию разрешено
+    this.allowComplete = true,
 
     required this.onAddSet,
     required this.onDeleteSet,
     required this.onOpenMenu,
-    this.onQuickReplace, // 👈 ДОБАВЛЕНО В КОНСТРУКТОР
+    this.onQuickReplace,
     required this.onTryAutoCollapse,
     required this.getBaseZone,
     required this.isBase,
     required this.groupLabel,
     required this.isCardio,
     required this.isTimed,
-    required this.weightMode, // 👈 ВЕС
+    required this.weightMode,
     required this.parseReps,
     this.lastWeight,
     this.lastReps,
+    // 👇 НОВОЕ
+    this.isHome = false,
+    this.patternOf,
   });
+
+  // 👇 НОВОЕ: лейблы паттернов для дома
+  String _patternLabel(String pattern) {
+    const map = {
+      'push': 'ЖИМ',
+      'pull': 'ТЯГА',
+      'squat': 'ПРИСЕД',
+      'hinge': 'МОСТИК / ТЯГА',
+      'lunge': 'ВЫПАД',
+      'core': 'КОР',
+      'cardio': 'КАРДИО',
+    };
+    return map[pattern] ?? pattern.toUpperCase();
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isCardio = this.isCardio(ex);
     final isTimedEx = isTimed(ex.name);
-    final wMode = weightMode(ex); // 👈 ВЕС: режим веса этого упражнения
+    final wMode = weightMode(ex);
     final baseZone = getBaseZone(ex);
     final isThisBase = isBase(ex);
     final defaultReps = parseReps(item.reps);
@@ -86,13 +107,16 @@ class ExerciseCard extends StatelessWidget {
     if (sets.isEmpty) {
       setIndexesToShow = [0];
     } else if (circleIndex != null) {
-      setIndexesToShow = (circleIndex! < sets.length) ? [circleIndex!] : [0];
+      setIndexesToShow =
+      (circleIndex! < sets.length) ? [circleIndex!] : [0];
     } else {
       setIndexesToShow = List.generate(sets.length, (i) => i);
     }
 
     final bool hasHistory = lastWeight != null || lastReps != null;
-    final bool showFairyBanner = !isThisBase && !isCardio && (circleIndex == null || circleIndex == 0);
+    final bool showFairyBanner = !isThisBase &&
+        !isCardio &&
+        (circleIndex == null || circleIndex == 0);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -111,8 +135,18 @@ class ExerciseCard extends StatelessWidget {
                       width: 24,
                       height: 24,
                       alignment: Alignment.center,
-                      decoration: BoxDecoration(color: theme.colorScheme.primary.withValues(alpha: 0.1), shape: BoxShape.circle),
-                      child: Text('$index', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        '$index',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 10),
                   ],
@@ -127,7 +161,13 @@ class ExerciseCard extends StatelessWidget {
                       ),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(isCardio ? Icons.directions_run_rounded : Icons.fitness_center, color: Colors.white, size: 22),
+                    child: Icon(
+                      isCardio
+                          ? Icons.directions_run_rounded
+                          : Icons.fitness_center,
+                      color: Colors.white,
+                      size: 22,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -137,30 +177,40 @@ class ExerciseCard extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(ex.name, style: theme.textTheme.headlineMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
-
+                              Text(
+                                ex.name,
+                                style: theme.textTheme.headlineMedium,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                               if (showFairyBanner) ...[
                                 const SizedBox(height: 8),
                                 Container(
                                   width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 10),
                                   decoration: BoxDecoration(
                                     color: hasHistory
                                         ? Colors.amber.withValues(alpha: 0.08)
-                                        : theme.colorScheme.primary.withValues(alpha: 0.08),
+                                        : theme.colorScheme.primary
+                                        .withValues(alpha: 0.08),
                                     borderRadius: BorderRadius.circular(10),
                                     border: Border.all(
                                       color: hasHistory
                                           ? Colors.amber.withValues(alpha: 0.3)
-                                          : theme.colorScheme.primary.withValues(alpha: 0.2),
+                                          : theme.colorScheme.primary
+                                          .withValues(alpha: 0.2),
                                     ),
                                   ),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
-                                          Text(hasHistory ? '🏆' : '✨', style: const TextStyle(fontSize: 14)),
+                                          Text(hasHistory ? '🏆' : '✨',
+                                              style:
+                                              const TextStyle(fontSize: 14)),
                                           const SizedBox(width: 6),
                                           Expanded(
                                             child: Text(
@@ -172,22 +222,27 @@ class ExerciseCard extends StatelessWidget {
                                               style: TextStyle(
                                                 fontSize: 11,
                                                 fontWeight: FontWeight.w800,
-                                                color: hasHistory ? Colors.amber[800] : theme.colorScheme.primary,
+                                                color: hasHistory
+                                                    ? Colors.amber[800]
+                                                    : theme
+                                                    .colorScheme.primary,
                                               ),
                                             ),
                                           ),
                                         ],
                                       ),
-
-                                      // 👇 ФРАЗЫ ФЕИ ПОКАЗЫВАЕМ ТОЛЬКО ДЛЯ СТАРЫХ УПРАЖНЕНИЙ
                                       if (hasHistory) ...[
                                         const SizedBox(height: 6),
                                         Text(
-                                          _isolationPhrases[(ex.name.hashCode.abs() + DateTime.now().day) % _isolationPhrases.length],
+                                          _isolationPhrases[(ex.name.hashCode
+                                              .abs() +
+                                              DateTime.now().day) %
+                                              _isolationPhrases.length],
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w700,
-                                            color: theme.colorScheme.primary,
+                                            color:
+                                            theme.colorScheme.primary,
                                             height: 1.3,
                                           ),
                                         ),
@@ -196,68 +251,150 @@ class ExerciseCard extends StatelessWidget {
                                   ),
                                 ),
                               ],
-
                               if (!isCardio) ...[
                                 const SizedBox(height: 6),
                                 Row(
                                   children: [
-                                    if (isThisBase)
+                                    // 👇 ДОМ: паттерн (ЖИМ/ТЯГА/ПРИСЕД/...)
+                                    if (isHome && patternOf != null) ...[
                                       Flexible(
                                         child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(color: const Color(0xFF6C5CE7).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF6C5CE7)
+                                                .withValues(alpha: 0.1),
+                                            borderRadius:
+                                            BorderRadius.circular(4),
+                                          ),
                                           child: Text(
-                                            'БАЗА - ${groupLabel(baseZone ?? '').toUpperCase()}',
+                                            _patternLabel(patternOf!(ex)),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF6C5CE7)),
+                                            style: const TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w800,
+                                              color: Color(0xFF6C5CE7),
+                                            ),
                                           ),
-                                        ),
-                                      )
-                                    else ...[
-                                      Flexible(
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(color: const Color(0xFF00B894).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
-                                          child: const Text('ИЗОЛЯЦИЯ', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF00B894))),
                                         ),
                                       ),
                                       const SizedBox(width: 4),
                                       Expanded(
                                         child: Text(
-                                          ex.muscleGroups.map((g) => groupLabel(g)).join(' + ').toUpperCase(),
+                                          ex.muscleGroups
+                                              .map((g) => groupLabel(g))
+                                              .join(' + ')
+                                              .toUpperCase(),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w700,
+                                            color: theme.colorScheme.onSurface
+                                                .withValues(alpha: 0.5),
+                                          ),
                                         ),
                                       ),
-                                    ],
+                                    ]
+                                    // ЗАЛ: старая логика (БАЗА / ИЗОЛЯЦИЯ)
+                                    else if (isThisBase)
+                                      Flexible(
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF6C5CE7)
+                                                .withValues(alpha: 0.1),
+                                            borderRadius:
+                                            BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            'БАЗА - ${groupLabel(baseZone ?? '').toUpperCase()}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w800,
+                                              color: Color(0xFF6C5CE7),
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                    else ...[
+                                        Flexible(
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF00B894)
+                                                  .withValues(alpha: 0.1),
+                                              borderRadius:
+                                              BorderRadius.circular(4),
+                                            ),
+                                            child: const Text(
+                                              'ИЗОЛЯЦИЯ',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.w800,
+                                                color: Color(0xFF00B894),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            ex.muscleGroups
+                                                .map((g) => groupLabel(g))
+                                                .join(' + ')
+                                                .toUpperCase(),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w700,
+                                              color: theme.colorScheme.onSurface
+                                                  .withValues(alpha: 0.5),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                   ],
                                 ),
                               ],
                             ],
                           ),
                         ),
-
-                        // 👇 БЫСТРАЯ ЗАМЕНА (КНОПКА СО СТРЕЛОЧКАМИ)
                         if (!isViewMode && onQuickReplace != null)
                           IconButton(
-                            icon: Icon(Icons.swap_horiz_rounded, color: theme.colorScheme.primary, size: 22),
+                            icon: Icon(Icons.swap_horiz_rounded,
+                                color: theme.colorScheme.primary, size: 22),
                             onPressed: onQuickReplace,
                             tooltip: 'Быстрая замена',
                           ),
-
                         IconButton(
-                          icon: Icon(Icons.info_outline_rounded, color: theme.colorScheme.primary, size: 22),
+                          icon: Icon(Icons.info_outline_rounded,
+                              color: theme.colorScheme.primary, size: 22),
                           onPressed: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => ExerciseDetailScreen(exercise: ex)));
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) =>
+                                      ExerciseDetailScreen(exercise: ex)),
+                            );
                           },
                           tooltip: 'Детали упражнения',
                         ),
                       ],
                     ),
                   ),
-                  if (!isViewMode) Icon(Icons.more_vert_rounded, color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
+                  if (!isViewMode)
+                    Icon(Icons.more_vert_rounded,
+                        color: theme.colorScheme.onSurface
+                            .withValues(alpha: 0.4)),
                 ],
               ),
             ),
@@ -265,7 +402,8 @@ class ExerciseCard extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 ex.description,
-                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -274,7 +412,8 @@ class ExerciseCard extends StatelessWidget {
             if (setIndexesToShow.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 8),
-                child: Text('Нет подходов для отображения', style: TextStyle(color: Colors.grey)),
+                child: Text('Нет подходов для отображения',
+                    style: TextStyle(color: Colors.grey)),
               )
             else
               for (final i in setIndexesToShow)
@@ -282,30 +421,44 @@ class ExerciseCard extends StatelessWidget {
                   key: ValueKey('${item.id}_$i'),
                   setNumber: i + 1,
                   setIndex: i,
-                  completed: sets.isNotEmpty && i < sets.length ? sets[i].completed : false,
-                  initialWeight: sets.isNotEmpty && i < sets.length ? sets[i].weight : null,
-                  initialReps: sets.isNotEmpty && i < sets.length ? sets[i].reps ?? defaultReps : defaultReps,
+                  completed: sets.isNotEmpty && i < sets.length
+                      ? sets[i].completed
+                      : false,
+                  initialWeight: sets.isNotEmpty && i < sets.length
+                      ? sets[i].weight
+                      : null,
+                  initialReps: sets.isNotEmpty && i < sets.length
+                      ? sets[i].reps ?? defaultReps
+                      : defaultReps,
                   readOnly: isViewMode,
-                  allowComplete: allowComplete, // 👈 правка 9: прокидываем флаг в галочку
+                  allowComplete: allowComplete,
                   isCardio: isCardio,
                   isTimed: isTimedEx,
-                  // 👈 ВЕС: безвесовые (режим 0) не получают поле веса,
-                  // опциональные (режим 1) получают поле с пометкой «кг опц.»
                   hasWeight: wMode > 0,
                   optionalWeight: wMode == 1,
                   targetReps: item.reps,
                   onChanged: (index, data) {
                     if (item.id == null || isViewMode) return;
                     var updatedData = data;
-                    if (data.completed && data.reps == null && defaultReps != null) {
-                      updatedData = SetData(weight: data.weight, reps: defaultReps, completed: data.completed);
+                    if (data.completed &&
+                        data.reps == null &&
+                        defaultReps != null) {
+                      updatedData = SetData(
+                        weight: data.weight,
+                        reps: defaultReps,
+                        completed: data.completed,
+                      );
                     }
                     onSetChanged(index, updatedData);
-                    if (circleIndex != null && item.id != null) onTryAutoCollapse(circleIndex!);
+                    if (circleIndex != null && item.id != null) {
+                      onTryAutoCollapse(circleIndex!);
+                    }
                   },
                   onComplete: () {
                     onSetComplete();
-                    if (circleIndex != null && item.id != null) onTryAutoCollapse(circleIndex!);
+                    if (circleIndex != null && item.id != null) {
+                      onTryAutoCollapse(circleIndex!);
+                    }
                   },
                   onDelete: circleIndex == null ? () => onDeleteSet(i) : null,
                 ),
@@ -320,7 +473,8 @@ class ExerciseCard extends StatelessWidget {
                     label: const Text('Добавить подход'),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
                 ),
@@ -331,3 +485,4 @@ class ExerciseCard extends StatelessWidget {
     );
   }
 }
+// ═══ КОНЕЦ ФАЙЛА exercise_card.dart ═══

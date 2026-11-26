@@ -20,6 +20,7 @@ import '../exercise/stretch_detail_screen.dart';
 import '../../services/energy_service.dart';
 import '../../services/garden_service.dart';
 import '../../services/notification_service.dart'; // 👈 ДОБАВИТЬ ЭТО
+import '../../services/workout_generator.dart';
 class WorkoutDetailScreen extends StatefulWidget {
   final WorkoutDay? workoutDay;
   final int profileId;
@@ -710,6 +711,21 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen>
       _stretchMap = stMap;
       _setsData.addAll(setsData);
       _setIds.addAll(setIds);
+      // 👇 ДОМ: автоматически формируем 1 блок, чтобы был круговой вид
+      if (_profile?.equipment == 'home' && !_completed && !_hasBlocks) {
+        final dist = _computeBlockDistribution();
+        if (dist.isNotEmpty) {
+          for (final entry in dist.entries) {
+            final item = _items[entry.key];
+            if (item.id != null) {
+              await DatabaseHelper.instance.updateWorkoutExerciseBlock(
+                  id: item.id!, blockNumber: entry.value);
+            }
+          }
+          _pendingBlocks.addAll(dist);
+          _hasBlocks = true;
+        }
+      }
     } finally {
       _dayLoadBusy = false; // 🛡 правка 2: guard снимается в любом исходе
     }
@@ -998,6 +1014,20 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen>
     final Map<int, int> distribution = {};
     if (_day?.type == 'challenge') return distribution;
 
+    // 👇 ДОМ: всё силовое в ОДИН блок → 3 круга по 5–7 упражнений.
+    // Кардио-финишер и разминка/заминка — вне блока.
+    if (_profile?.equipment == 'home') {
+      for (int i = 0; i < _items.length; i++) {
+        final item = _items[i];
+        if (item.isWarmup || item.isCoolDown || item.order == 150) continue;
+        final ex = _exerciseMap[item.replacedByItemId ?? item.itemId];
+        if (ex != null && _isCardio(ex)) continue; // кардио-финишер — вне
+        distribution[i] = 1;
+      }
+      return distribution;
+    }
+
+    // ═══ ЗАЛ: старая логика без изменений ═══
     bool hasStored = false;
     for (int i = 0; i < _items.length; i++) {
       final item = _items[i];
@@ -2187,6 +2217,9 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen>
       isTimed: _isTimed,
       weightMode: weightModeFor, // 👈 ВЕС: режим веса из base_exercises.dart
       parseReps: _parseReps,
+      // 👇 ДОБАВИТЬ ВОТ ЭТИ ДВЕ СТРОКИ:
+      isHome: _profile?.equipment == 'home',
+      patternOf: (e) => WorkoutGenerator.patternOf(e),
     );
   }
 

@@ -10,13 +10,16 @@ class UserProfile {
   List<String> focusAreas;
   List<String> limitations;
   String equipment;
+  // 👇 НОВОЕ: инвентарь для домашних тренировок.
+  // Заполняется только если equipment == 'home'.
+  // Пустой список = тренировки только с собственным весом.
+  List<String> homeEquipment;
   int daysPerWeek;
-  // 👇 НОВОЕ ПОЛЕ: выбранные дни недели тренировок (1=Пн … 7=Вс).
-  // Пустой список = пользователь не выбрал, генератор откатится
-  // на равномерную раскладку от сегодня.
+  // 👇 выбранные дни недели тренировок (1=Пн … 7=Вс).
+  // Пустой список = генератор откатится на равномерную раскладку от сегодня.
   List<int> trainingWeekdays;
   int sessionMinutes;
-  String? timeRangeLabel; // 👈 НОВОЕ ПОЛЕ: Красивый текст (например, "60-75 мин")
+  String? timeRangeLabel;
   DateTime createdAt;
   String? avatarPath;
   String? beforePhotoPath;
@@ -35,11 +38,12 @@ class UserProfile {
     this.goal = 'tone',
     List<String>? focusAreas,
     List<String>? limitations,
-    this.equipment = 'bodyweight',
+    this.equipment = 'gym', // 👈 дефолт «зал» — безопасный для новых профилей
+    List<String>? homeEquipment, // 👈 НОВОЕ
     this.daysPerWeek = 3,
-    List<int>? trainingWeekdays, // 👈 НОВОЕ
+    List<int>? trainingWeekdays,
     this.sessionMinutes = 45,
-    this.timeRangeLabel, // 👈
+    this.timeRangeLabel,
     DateTime? createdAt,
     this.avatarPath,
     this.beforePhotoPath,
@@ -48,7 +52,8 @@ class UserProfile {
     this.bodyType,
   })  : focusAreas = focusAreas ?? [],
         limitations = limitations ?? [],
-        trainingWeekdays = trainingWeekdays ?? [], // 👈 НОВОЕ
+        homeEquipment = homeEquipment ?? [], // 👈 НОВОЕ
+        trainingWeekdays = trainingWeekdays ?? [],
         createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toMap() {
@@ -64,13 +69,16 @@ class UserProfile {
       'focusAreas': focusAreas.join(','),
       'limitations': limitations.join(','),
       'equipment': equipment,
+      // 👈 НОВОЕ: пустой список → NULL, чтобы не писать пустую строку
+      'homeEquipment': homeEquipment.isNotEmpty
+          ? homeEquipment.join(',')
+          : null,
       'daysPerWeek': daysPerWeek,
-      // 👈 НОВОЕ: сохраняем как строку "2,5", пустой список → NULL
       'trainingWeekdays': trainingWeekdays.isNotEmpty
           ? trainingWeekdays.join(',')
           : null,
       'sessionMinutes': sessionMinutes,
-      'timeRangeLabel': timeRangeLabel, // 👈
+      'timeRangeLabel': timeRangeLabel,
       'createdAt': createdAt.toIso8601String(),
       'avatarPath': avatarPath,
       'beforePhotoPath': beforePhotoPath,
@@ -81,8 +89,6 @@ class UserProfile {
   }
 
   factory UserProfile.fromMap(Map<String, dynamic> map) {
-    // 👈 НОВОЕ: парсим строку "2,5" обратно в список чисел.
-    // toSet() вычищает дубли ("2,2,5" → "2,5"), после чего сортируем.
     final weekdaysStr = map['trainingWeekdays'] as String?;
     final trainingWeekdays = (weekdaysStr == null || weekdaysStr.isEmpty)
         ? <int>[]
@@ -94,6 +100,17 @@ class UserProfile {
         .toList()
       ..sort();
 
+    // 👈 НОВОЕ: парсим инвентарь домашних тренировок
+    final homeEqStr = map['homeEquipment'] as String?;
+    final homeEquipment = (homeEqStr == null || homeEqStr.isEmpty)
+        ? <String>[]
+        : homeEqStr
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toSet()
+        .toList();
+
     return UserProfile(
       id: map['id'],
       name: map['name'] ?? '',
@@ -103,14 +120,25 @@ class UserProfile {
       weight: (map['weight'] as num?)?.toDouble() ?? 60.0,
       level: map['level'] ?? 'beginner',
       goal: map['goal'] ?? 'tone',
-      focusAreas: (map['focusAreas'] as String?)?.split(',').where((s) => s.isNotEmpty).toList() ?? [],
-      limitations: (map['limitations'] as String?)?.split(',').where((s) => s.isNotEmpty).toList() ?? [],
-      equipment: map['equipment'] ?? 'bodyweight',
+      focusAreas: (map['focusAreas'] as String?)
+          ?.split(',')
+          .where((s) => s.isNotEmpty)
+          .toList() ??
+          [],
+      limitations: (map['limitations'] as String?)
+          ?.split(',')
+          .where((s) => s.isNotEmpty)
+          .toList() ??
+          [],
+      equipment: map['equipment'] ?? 'gym',
+      homeEquipment: homeEquipment, // 👈 НОВОЕ
       daysPerWeek: map['daysPerWeek'] ?? 3,
-      trainingWeekdays: trainingWeekdays, // 👈 НОВОЕ
+      trainingWeekdays: trainingWeekdays,
       sessionMinutes: map['sessionMinutes'] ?? 45,
-      timeRangeLabel: map['timeRangeLabel'], // 👈
-      createdAt: map['createdAt'] != null ? DateTime.parse(map['createdAt']) : DateTime.now(),
+      timeRangeLabel: map['timeRangeLabel'],
+      createdAt: map['createdAt'] != null
+          ? DateTime.parse(map['createdAt'])
+          : DateTime.now(),
       avatarPath: map['avatarPath'],
       beforePhotoPath: map['beforePhotoPath'],
       beforeSidePath: map['beforeSidePath'],
@@ -131,10 +159,11 @@ class UserProfile {
     List<String>? focusAreas,
     List<String>? limitations,
     String? equipment,
+    List<String>? homeEquipment, // 👈 НОВОЕ
     int? daysPerWeek,
-    List<int>? trainingWeekdays, // 👈 НОВОЕ
+    List<int>? trainingWeekdays,
     int? sessionMinutes,
-    String? timeRangeLabel, // 👈
+    String? timeRangeLabel,
     String? avatarPath,
     String? beforePhotoPath,
     String? beforeSidePath,
@@ -153,10 +182,11 @@ class UserProfile {
       focusAreas: focusAreas ?? this.focusAreas,
       limitations: limitations ?? this.limitations,
       equipment: equipment ?? this.equipment,
+      homeEquipment: homeEquipment ?? this.homeEquipment, // 👈 НОВОЕ
       daysPerWeek: daysPerWeek ?? this.daysPerWeek,
-      trainingWeekdays: trainingWeekdays ?? this.trainingWeekdays, // 👈 НОВОЕ
+      trainingWeekdays: trainingWeekdays ?? this.trainingWeekdays,
       sessionMinutes: sessionMinutes ?? this.sessionMinutes,
-      timeRangeLabel: timeRangeLabel ?? this.timeRangeLabel, // 👈
+      timeRangeLabel: timeRangeLabel ?? this.timeRangeLabel,
       createdAt: createdAt,
       avatarPath: avatarPath ?? this.avatarPath,
       beforePhotoPath: beforePhotoPath ?? this.beforePhotoPath,
@@ -170,8 +200,6 @@ class UserProfile {
 
   String get genderLabel => gender == 'male' ? 'Мужской' : 'Женский';
 
-  // 👈 НОВОЕ: человекочитаемое расписание для карточки профиля,
-  // например "Вт, Пт". Пустой список → "Не выбрано".
   String get trainingWeekdaysLabel {
     if (trainingWeekdays.isEmpty) return 'Не выбрано';
     const names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -180,38 +208,82 @@ class UserProfile {
 
   String get goalLabel {
     switch (goal) {
-      case 'lose_weight': return 'Похудеть';
-      case 'gain_mass': return 'Набрать массу';
-      case 'tone': return 'Тонус';
-      case 'strength': return 'Сила';
-      default: return 'Тонус';
+      case 'lose_weight':
+        return 'Похудеть';
+      case 'gain_mass':
+        return 'Набрать массу';
+      case 'tone':
+        return 'Тонус';
+      case 'strength':
+        return 'Сила';
+      default:
+        return 'Тонус';
     }
   }
+
   String get levelLabel {
     switch (level) {
-      case 'beginner': return 'Новичок';
-      case 'intermediate': return 'Средний';
-      case 'advanced': return 'Опытный';
-      default: return 'Новичок';
+      case 'beginner':
+        return 'Новичок';
+      case 'intermediate':
+        return 'Средний';
+      case 'advanced':
+        return 'Опытный';
+      default:
+        return 'Новичок';
     }
   }
+
+  // 👈 ОБНОВЛЕНО: добавлен 'home' + поддержка старых значений.
+  // Старые профили до миграции ещё могут приходить с bodyweight /
+  // dumbbells / mixed — им показываем адекватные подписи.
   String get equipmentLabel {
     switch (equipment) {
-      case 'gym': return 'Зал';
-      case 'dumbbells': return 'Гантели';
-      case 'bodyweight': return 'Своё тело';
-      case 'mixed': return 'Смешанно';
-      default: return 'Своё тело';
+      case 'gym':
+        return 'Тренажёрный зал';
+      case 'home':
+        if (homeEquipment.isEmpty) return 'Дом (своё тело)';
+        const names = {
+          'dumbbells': 'гантели',
+          'barbell': 'штанга',
+          'resistance_band': 'резинка',
+          'ball': 'мяч',
+          'jump_rope': 'скакалка',
+          'pull_up_bar': 'турник',
+          'bench': 'скамья',
+          'treadmill': 'дорожка',          // 👈 НОВОЕ
+          'elliptical': 'эллипс',          // 👈 НОВОЕ
+          'bike': 'велотренажёр',          // 👈 НОВОЕ
+          'rower': 'гребной тренажёр',     // 👈 НОВОЕ
+        };
+        final list = homeEquipment.map((e) => names[e] ?? e).join(', ');
+        return 'Дом ($list)';
+    // legacy
+      case 'dumbbells':
+        return 'Гантели';
+      case 'bodyweight':
+        return 'Своё тело';
+      case 'mixed':
+        return 'Смешанно';
+      default:
+        return 'Своё тело';
     }
   }
+
   String get bodyTypeLabel {
     switch (bodyType) {
-      case 'pear': return 'Груша';
-      case 'apple': return 'Яблоко';
-      case 'hourglass': return 'Песочные часы';
-      case 'rectangle': return 'Прямоугольник';
-      case 'inverted_triangle': return 'Перевернутый треугольник';
-      default: return 'Не выбран';
+      case 'pear':
+        return 'Груша';
+      case 'apple':
+        return 'Яблоко';
+      case 'hourglass':
+        return 'Песочные часы';
+      case 'rectangle':
+        return 'Прямоугольник';
+      case 'inverted_triangle':
+        return 'Перевернутый треугольник';
+      default:
+        return 'Не выбран';
     }
   }
 }

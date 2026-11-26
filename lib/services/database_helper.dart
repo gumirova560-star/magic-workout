@@ -7,7 +7,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
 import '../data/exercises_data.dart';
-import '../data/base_exercises.dart'; // 👈 классификация: isCardioExercise / isBaseExercise / getExerciseFamily / weightModeFor
+import '../data/base_exercises.dart';
 import '../models/user_profile.dart';
 import '../models/exercise.dart';
 import '../models/stretch.dart';
@@ -17,67 +17,67 @@ import '../models/workout_day.dart';
 import '../models/transformation_photo.dart';
 
 class DatabaseHelper {
-  static final DatabaseHelper instance = DatabaseHelper._init();
-  static Database? _database;
+static final DatabaseHelper instance = DatabaseHelper._init();
+static Database? _database;
 
-  DatabaseHelper._init();
+DatabaseHelper._init();
 
-// 👇 ВЕРСИЯ 20 (классификация каталога: exType / family / weightMode)
-  static const int _dbVersion = 20;
-  static const String _dbName = 'workout_tracker.db';
+// 👇 ВЕРСИЯ 21 (Добавлен инвентарь для дома: homeEquipment)
+static const int _dbVersion = 21;
+static const String _dbName = 'workout_tracker.db';
 
-  Future<Database> get database async {
-    if (_database != null) return _database!;
-    _database = await _initDB(_dbName);
-    return _database!;
-  }
+Future<Database> get database async {
+if (_database != null) return _database!;
+_database = await _initDB(_dbName);
+return _database!;
+}
 
-  Future<Database> _initDB(String filePath) async {
-    if (kIsWeb) {
-      databaseFactory = databaseFactoryFfiWeb;
-      return await databaseFactory.openDatabase(
-        filePath,
-        options: OpenDatabaseOptions(
-          version: _dbVersion,
-          onConfigure: (db) async => await db.execute('PRAGMA foreign_keys = ON'),
-          onCreate: _createDB,
-          onUpgrade: _upgradeDB,
-        ),
-      );
-    }
+Future<Database> _initDB(String filePath) async {
+if (kIsWeb) {
+databaseFactory = databaseFactoryFfiWeb;
+return await databaseFactory.openDatabase(
+filePath,
+options: OpenDatabaseOptions(
+version: _dbVersion,
+onConfigure: (db) async => await db.execute('PRAGMA foreign_keys = ON'),
+onCreate: _createDB,
+onUpgrade: _upgradeDB,
+),
+);
+}
 
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      sqfliteFfiInit();
-      final dir = await getApplicationDocumentsDirectory();
-      final path = join(dir.path, filePath);
-      return await databaseFactoryFfi.openDatabase(
-        path,
-        options: OpenDatabaseOptions(
-          version: _dbVersion,
-          onConfigure: (db) async => await db.execute('PRAGMA foreign_keys = ON'),
-          onCreate: _createDB,
-          onUpgrade: _upgradeDB,
-        ),
-      );
-    }
+if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+sqfliteFfiInit();
+final dir = await getApplicationDocumentsDirectory();
+final path = join(dir.path, filePath);
+return await databaseFactoryFfi.openDatabase(
+path,
+options: OpenDatabaseOptions(
+version: _dbVersion,
+onConfigure: (db) async => await db.execute('PRAGMA foreign_keys = ON'),
+onCreate: _createDB,
+onUpgrade: _upgradeDB,
+),
+);
+}
 
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, filePath);
-    return await openDatabase(
-      path,
-      version: _dbVersion,
-      onConfigure: (db) async => await db.execute('PRAGMA foreign_keys = ON'),
-      onCreate: _createDB,
-      onUpgrade: _upgradeDB,
-    );
-  }
+final dbPath = await getDatabasesPath();
+final path = join(dbPath, filePath);
+return await openDatabase(
+path,
+version: _dbVersion,
+onConfigure: (db) async => await db.execute('PRAGMA foreign_keys = ON'),
+onCreate: _createDB,
+onUpgrade: _upgradeDB,
+);
+}
 
-  Future<void> _createDB(Database db, int version) async {
-    await db.execute('''
+Future<void> _createDB(Database db, int version) async {
+await db.execute('''
       CREATE TABLE user_profiles (
         id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, gender TEXT NOT NULL, age INTEGER NOT NULL,
         height REAL NOT NULL, weight REAL NOT NULL, level TEXT NOT NULL, goal TEXT NOT NULL, focusAreas TEXT,
-        limitations TEXT, equipment TEXT NOT NULL, daysPerWeek INTEGER NOT NULL, sessionMinutes INTEGER NOT NULL,
+        limitations TEXT, equipment TEXT NOT NULL, homeEquipment TEXT, daysPerWeek INTEGER NOT NULL, sessionMinutes INTEGER NOT NULL,
         life_energy INTEGER DEFAULT 0,
         timeRangeLabel TEXT,
         trainingWeekdays TEXT,
@@ -85,7 +85,7 @@ class DatabaseHelper {
         bodyType TEXT
       )
     ''');
-    await db.execute('''
+await db.execute('''
       CREATE TABLE exercises (
         id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, muscleGroups TEXT, equipment TEXT,
         difficulty TEXT NOT NULL, contraindications TEXT, description TEXT, technique TEXT, mistakes TEXT,
@@ -93,33 +93,33 @@ class DatabaseHelper {
         exType TEXT, family TEXT, weightMode INTEGER
       )
     ''');
-    await db.execute('''
+await db.execute('''
       CREATE TABLE stretches (
         id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT NOT NULL, muscleGroup TEXT NOT NULL,
         durationSeconds INTEGER NOT NULL, bothSides INTEGER DEFAULT 1, description TEXT, technique TEXT,
         benefits TEXT, imagePath TEXT, videoUrl TEXT, isCustom INTEGER DEFAULT 0
       )
     ''');
-    await db.execute('''
+await db.execute('''
       CREATE TABLE yoga_sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, focus TEXT NOT NULL,
         durationMinutes INTEGER NOT NULL, description TEXT, isCustom INTEGER DEFAULT 0
       )
     ''');
-    await db.execute('''
+await db.execute('''
       CREATE TABLE yoga_steps (
         id INTEGER PRIMARY KEY AUTOINCREMENT, sessionId INTEGER NOT NULL, stretchId INTEGER NOT NULL,
         "order" INTEGER NOT NULL, durationSeconds INTEGER NOT NULL, bothSides INTEGER DEFAULT 1, notes TEXT,
         FOREIGN KEY (sessionId) REFERENCES yoga_sessions (id) ON DELETE CASCADE
       )
     ''');
-    await db.execute('''
+await db.execute('''
       CREATE TABLE workout_templates (
         id INTEGER PRIMARY KEY AUTOINCREMENT, profileId INTEGER NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL,
         estimatedMinutes INTEGER NOT NULL, notes TEXT, createdAt TEXT NOT NULL, isCustom INTEGER DEFAULT 0
       )
     ''');
-    await db.execute('''
+await db.execute('''
       CREATE TABLE template_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT, templateId INTEGER NOT NULL, itemType TEXT NOT NULL, itemId INTEGER NOT NULL,
         "order" INTEGER NOT NULL, sets INTEGER DEFAULT 3, reps TEXT, restSeconds INTEGER DEFAULT 60, durationSeconds INTEGER DEFAULT 30,
@@ -127,14 +127,14 @@ class DatabaseHelper {
         FOREIGN KEY (templateId) REFERENCES workout_templates (id) ON DELETE CASCADE
       )
     ''');
-    await db.execute('''
+await db.execute('''
       CREATE TABLE workout_days (
         id INTEGER PRIMARY KEY AUTOINCREMENT, profileId INTEGER NOT NULL, templateId INTEGER, name TEXT NOT NULL,
         type TEXT NOT NULL, date TEXT NOT NULL, status TEXT NOT NULL, durationMinutes INTEGER, notes TEXT,
         startedAt TEXT, completedAt TEXT, weekNumber INTEGER, cycleNumber INTEGER
       )
     ''');
-    await db.execute('''
+await db.execute('''
       CREATE TABLE workout_exercises (
         id INTEGER PRIMARY KEY AUTOINCREMENT, workoutDayId INTEGER NOT NULL, itemType TEXT NOT NULL, itemId INTEGER NOT NULL,
         "order" INTEGER NOT NULL, replacedByItemId INTEGER, replacementReason TEXT, replacementPermanent INTEGER DEFAULT 0,
@@ -144,28 +144,28 @@ class DatabaseHelper {
         FOREIGN KEY (workoutDayId) REFERENCES workout_days (id) ON DELETE CASCADE
       )
     ''');
-    await db.execute('''
+await db.execute('''
       CREATE TABLE workout_sets (
         id INTEGER PRIMARY KEY AUTOINCREMENT, workoutExerciseId INTEGER NOT NULL, "order" INTEGER NOT NULL,
         weight REAL, reps INTEGER, completed INTEGER DEFAULT 0, notes TEXT,
         FOREIGN KEY (workoutExerciseId) REFERENCES workout_exercises (id) ON DELETE CASCADE
       )
     ''');
-    await db.execute('''
+await db.execute('''
       CREATE TABLE replacement_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT, profileId INTEGER NOT NULL, workoutDayId INTEGER NOT NULL,
         itemType TEXT NOT NULL, originalItemId INTEGER NOT NULL, newItemId INTEGER NOT NULL, reason TEXT NOT NULL,
         notes TEXT, permanent INTEGER DEFAULT 0, createdAt TEXT NOT NULL
       )
     ''');
-    await db.execute('''
+await db.execute('''
       CREATE TABLE transformations (
         id INTEGER PRIMARY KEY AUTOINCREMENT, profileId INTEGER NOT NULL, imagePath TEXT NOT NULL,
         monthNumber INTEGER NOT NULL, angle TEXT DEFAULT 'front', createdAt TEXT NOT NULL,
         FOREIGN KEY (profileId) REFERENCES user_profiles (id) ON DELETE CASCADE
       )
     ''');
-    await db.execute('''
+await db.execute('''
       CREATE TABLE daily_challenges (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         profileId INTEGER NOT NULL,
@@ -181,7 +181,7 @@ class DatabaseHelper {
         UNIQUE(profileId, date)
       )
     ''');
-    await db.execute('''
+await db.execute('''
       CREATE TABLE energy_transactions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         profileId INTEGER NOT NULL,
@@ -193,8 +193,8 @@ class DatabaseHelper {
       )
     ''');
 
-// 👇 ТАБЛИЦА САДА (Версия 17, добавлен rotation)
-    await db.execute('''
+// 👇 ТАБЛИЦА САДА (Версия 21, добавлен rotation)
+await db.execute('''
       CREATE TABLE garden_flowers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         profileId INTEGER NOT NULL,
@@ -206,49 +206,48 @@ class DatabaseHelper {
       )
     ''');
 
-    await db.execute('CREATE INDEX idx_workout_days_profile ON workout_days (profileId, date)');
-    await db.execute('CREATE INDEX idx_workout_exercises_day ON workout_exercises (workoutDayId)');
-    await db.execute('CREATE INDEX idx_workout_sets_exercise ON workout_sets (workoutExerciseId)');
-    await db.execute('CREATE INDEX idx_replacement_profile ON replacement_logs (profileId)');
-    await db.execute('CREATE INDEX idx_energy_profile ON energy_transactions (profileId)');
-    await db.execute('CREATE INDEX idx_garden_slot ON garden_flowers (profileId, slotIndex)');
-  }
+await db.execute('CREATE INDEX idx_workout_days_profile ON workout_days (profileId, date)');
+await db.execute('CREATE INDEX idx_workout_exercises_day ON workout_exercises (workoutDayId)');
+await db.execute('CREATE INDEX idx_workout_sets_exercise ON workout_sets (workoutExerciseId)');
+await db.execute('CREATE INDEX idx_replacement_profile ON replacement_logs (profileId)');
+await db.execute('CREATE INDEX idx_energy_profile ON energy_transactions (profileId)');
+await db.execute('CREATE INDEX idx_garden_slot ON garden_flowers (profileId, slotIndex)');
+}
 // ═══ КОНЕЦ ЧАСТИ 1 ═══
-
-  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
-      await db.execute('ALTER TABLE template_items ADD COLUMN replacedByItemId INTEGER');
-      await db.execute('ALTER TABLE template_items ADD COLUMN replacementReason TEXT');
-      await db.execute('ALTER TABLE template_items ADD COLUMN replacementPermanent INTEGER DEFAULT 0');
-    }
-    if (oldVersion < 3) { try { await db.execute('ALTER TABLE workout_templates ADD COLUMN isCustom INTEGER DEFAULT 0'); } catch (_) {} }
-    if (oldVersion < 4) { try { await db.execute('ALTER TABLE workout_exercises ADD COLUMN blockNumber INTEGER'); } catch (_) {} }
-    if (oldVersion < 5) {
-      try {
-        await db.execute('ALTER TABLE user_profiles ADD COLUMN avatarPath TEXT');
-        await db.execute('ALTER TABLE user_profiles ADD COLUMN beforePhotoPath TEXT');
-        await db.execute('''
+Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+if (oldVersion < 2) {
+await db.execute('ALTER TABLE template_items ADD COLUMN replacedByItemId INTEGER');
+await db.execute('ALTER TABLE template_items ADD COLUMN replacementReason TEXT');
+await db.execute('ALTER TABLE template_items ADD COLUMN replacementPermanent INTEGER DEFAULT 0');
+}
+if (oldVersion < 3) { try { await db.execute('ALTER TABLE workout_templates ADD COLUMN isCustom INTEGER DEFAULT 0'); } catch (_) {} }
+if (oldVersion < 4) { try { await db.execute('ALTER TABLE workout_exercises ADD COLUMN blockNumber INTEGER'); } catch (_) {} }
+if (oldVersion < 5) {
+try {
+await db.execute('ALTER TABLE user_profiles ADD COLUMN avatarPath TEXT');
+await db.execute('ALTER TABLE user_profiles ADD COLUMN beforePhotoPath TEXT');
+await db.execute('''
           CREATE TABLE transformations (
             id INTEGER PRIMARY KEY AUTOINCREMENT, profileId INTEGER NOT NULL, imagePath TEXT NOT NULL,
             monthNumber INTEGER NOT NULL, angle TEXT DEFAULT 'front', createdAt TEXT NOT NULL,
             FOREIGN KEY (profileId) REFERENCES user_profiles (id) ON DELETE CASCADE
           )
         ''');
-      } catch (_) {}
-    }
-    if (oldVersion < 6) {
-      try {
-        await db.execute('ALTER TABLE user_profiles ADD COLUMN beforeSidePath TEXT');
-        await db.execute('ALTER TABLE user_profiles ADD COLUMN beforeBackPath TEXT');
-      } catch (_) {}
-    }
-    if (oldVersion < 7) { try { await db.execute('ALTER TABLE workout_days ADD COLUMN weekNumber INTEGER'); } catch (_) {} }
-    if (oldVersion < 8) { try { await db.execute('ALTER TABLE workout_days ADD COLUMN cycleNumber INTEGER'); } catch (_) {} }
-    if (oldVersion < 10) { try { await db.execute('ALTER TABLE user_profiles ADD COLUMN bodyType TEXT'); } catch (_) {} }
-    if (oldVersion < 11) { try { await db.execute('ALTER TABLE workout_exercises ADD COLUMN isWarmup INTEGER DEFAULT 0'); } catch (_) {} }
-    if (oldVersion < 12) {
-      try {
-        await db.execute('''
+} catch (_) {}
+}
+if (oldVersion < 6) {
+try {
+await db.execute('ALTER TABLE user_profiles ADD COLUMN beforeSidePath TEXT');
+await db.execute('ALTER TABLE user_profiles ADD COLUMN beforeBackPath TEXT');
+} catch (_) {}
+}
+if (oldVersion < 7) { try { await db.execute('ALTER TABLE workout_days ADD COLUMN weekNumber INTEGER'); } catch (_) {} }
+if (oldVersion < 8) { try { await db.execute('ALTER TABLE workout_days ADD COLUMN cycleNumber INTEGER'); } catch (_) {} }
+if (oldVersion < 10) { try { await db.execute('ALTER TABLE user_profiles ADD COLUMN bodyType TEXT'); } catch (_) {} }
+if (oldVersion < 11) { try { await db.execute('ALTER TABLE workout_exercises ADD COLUMN isWarmup INTEGER DEFAULT 0'); } catch (_) {} }
+if (oldVersion < 12) {
+try {
+await db.execute('''
           CREATE TABLE daily_challenges (
             id INTEGER PRIMARY KEY AUTOINCREMENT, profileId INTEGER NOT NULL, date TEXT NOT NULL,
             challengeType TEXT NOT NULL, taskId TEXT NOT NULL, currentProgress INTEGER DEFAULT 0,
@@ -256,33 +255,33 @@ class DatabaseHelper {
             UNIQUE(profileId, date)
           )
         ''');
-      } catch (_) {}
-    }
-    if (oldVersion < 13) {
-      try { await db.execute('ALTER TABLE user_profiles ADD COLUMN timeRangeLabel TEXT'); } catch (_) {}
-    }
-    if (oldVersion < 14) {
-      try {
-        await db.execute('ALTER TABLE user_profiles ADD COLUMN life_energy INTEGER DEFAULT 0');
-        await db.execute('ALTER TABLE daily_challenges ADD COLUMN rewardGranted INTEGER DEFAULT 0');
-        await db.execute('''
+} catch (_) {}
+}
+if (oldVersion < 13) {
+try { await db.execute('ALTER TABLE user_profiles ADD COLUMN timeRangeLabel TEXT'); } catch (_) {}
+}
+if (oldVersion < 14) {
+try {
+await db.execute('ALTER TABLE user_profiles ADD COLUMN life_energy INTEGER DEFAULT 0');
+await db.execute('ALTER TABLE daily_challenges ADD COLUMN rewardGranted INTEGER DEFAULT 0');
+await db.execute('''
           CREATE TABLE energy_transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT, profileId INTEGER NOT NULL, delta INTEGER NOT NULL,
             reason TEXT NOT NULL, refId INTEGER, createdAt TEXT NOT NULL, UNIQUE(profileId, reason, refId)
           )
         ''');
-        await db.execute('CREATE INDEX idx_energy_profile ON energy_transactions (profileId)');
-      } catch (_) {}
-    }
-    if (oldVersion < 15) {
-      try {
-        await db.execute('ALTER TABLE daily_challenges ADD COLUMN attemptsCount INTEGER DEFAULT 0');
-      } catch (_) {}
-    }
+await db.execute('CREATE INDEX idx_energy_profile ON energy_transactions (profileId)');
+} catch (_) {}
+}
+if (oldVersion < 15) {
+try {
+await db.execute('ALTER TABLE daily_challenges ADD COLUMN attemptsCount INTEGER DEFAULT 0');
+} catch (_) {}
+}
 // МИГРАЦИЯ ДЛЯ 16-й ВЕРСИИ (САД)
-    if (oldVersion < 16) {
-      try {
-        await db.execute('''
+if (oldVersion < 16) {
+try {
+await db.execute('''
           CREATE TABLE garden_flowers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             profileId INTEGER NOT NULL,
@@ -293,265 +292,249 @@ class DatabaseHelper {
             UNIQUE(profileId, slotIndex)
           )
         ''');
-      } catch (_) {}
-    }
+} catch (_) {}
+}
 // МИГРАЦИЯ ДЛЯ 17-й ВЕРСИИ (ПОВОРОТ ДЕКОРА)
-    if (oldVersion < 17) {
-      try {
-        await db.execute('ALTER TABLE garden_flowers ADD COLUMN rotation INTEGER DEFAULT 0');
-      } catch (_) {}
-    }
-// 👇 МИГРАЦИЯ ДЛЯ 18-й ВЕРСИИ (ВЫБОР ДНЕЙ НЕДЕЛИ ТРЕНИРОВОК)
-// Хранится как строка "2,5" (weekday-числа: 1=Пн…7=Вс).
-// NULL или пусто = пользователь не выбрал дни (fallback на равномерную раскладку).
-    if (oldVersion < 18) {
-      try {
-        await db.execute('ALTER TABLE user_profiles ADD COLUMN trainingWeekdays TEXT');
-      } catch (_) {}
-    }
-// 👇 МИГРАЦИЯ ДЛЯ 19-й ВЕРСИИ (СЛОИ САДА)
-// UNIQUE(profileId, slotIndex) разрешал только одну запись на клетку,
-// а двухслойный сад требует двух (пол + объект). Пересоздаём таблицу
-// без ограничения, данные переносим как есть.
-    if (oldVersion < 19) {
-      await db.execute('ALTER TABLE garden_flowers RENAME TO garden_flowers_old');
-      await db.execute('''
-    CREATE TABLE garden_flowers (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      profileId INTEGER NOT NULL,
-      slotIndex INTEGER NOT NULL,
-      state TEXT DEFAULT 'bloomed',
-      flowerType TEXT DEFAULT 'normal',
-      rotation INTEGER DEFAULT 0,
-      createdAt TEXT NOT NULL
-    )
-  ''');
-      await db.execute('''
-    INSERT INTO garden_flowers (id, profileId, slotIndex, state, flowerType, rotation, createdAt)
-    SELECT id, profileId, slotIndex, state, flowerType, rotation, createdAt FROM garden_flowers_old
-  ''');
-      await db.execute('DROP TABLE garden_flowers_old');
-      await db.execute('CREATE INDEX idx_garden_slot ON garden_flowers (profileId, slotIndex)');
-    }
+if (oldVersion < 17) {
+try {
+await db.execute('ALTER TABLE garden_flowers ADD COLUMN rotation INTEGER DEFAULT 0');
+} catch (_) {}
+}
+// МИГРАЦИЯ ДЛЯ 18-й ВЕРСИИ (ВЫБОР ДНЕЙ НЕДЕЛИ ТРЕНИРОВОК)
+if (oldVersion < 18) {
+try {
+await db.execute('ALTER TABLE user_profiles ADD COLUMN trainingWeekdays TEXT');
+} catch (_) {}
+}
+// МИГРАЦИЯ ДЛЯ 19-й ВЕРСИИ (СЛОИ САДА)
+if (oldVersion < 19) {
+await db.execute('ALTER TABLE garden_flowers RENAME TO garden_flowers_old');
+await db.execute('''
+        CREATE TABLE garden_flowers (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          profileId INTEGER NOT NULL,
+          slotIndex INTEGER NOT NULL,
+          state TEXT DEFAULT 'bloomed',
+          flowerType TEXT DEFAULT 'normal',
+          rotation INTEGER DEFAULT 0,
+          createdAt TEXT NOT NULL
+        )
+      ''');
+await db.execute('''
+        INSERT INTO garden_flowers (id, profileId, slotIndex, state, flowerType, rotation, createdAt)
+        SELECT id, profileId, slotIndex, state, flowerType, rotation, createdAt FROM garden_flowers_old
+      ''');
+await db.execute('DROP TABLE garden_flowers_old');
+await db.execute('CREATE INDEX idx_garden_slot ON garden_flowers (profileId, slotIndex)');
+}
 
-// 👇 МИГРАЦИЯ ДЛЯ 20-й ВЕРСИИ (КЛАССИФИКАЦИЯ КАТАЛОГА)
-// Кардио/база/изоляция, семейства и режим веса переезжают из
-// подстрок-эвристик в данные. Сами значения заполняет syncExercises()
-// при первом открытии базы после миграции.
-    if (oldVersion < 20) {
-      try { await db.execute('ALTER TABLE exercises ADD COLUMN exType TEXT'); } catch (_) {}
-      try { await db.execute('ALTER TABLE exercises ADD COLUMN family TEXT'); } catch (_) {}
-      try { await db.execute('ALTER TABLE exercises ADD COLUMN weightMode INTEGER'); } catch (_) {}
-    }
+// МИГРАЦИЯ ДЛЯ 20-й ВЕРСИИ (КЛАССИФИКАЦИЯ КАТАЛОГА)
+if (oldVersion < 20) {
+try { await db.execute('ALTER TABLE exercises ADD COLUMN exType TEXT'); } catch (_) {}
+try { await db.execute('ALTER TABLE exercises ADD COLUMN family TEXT'); } catch (_) {}
+try { await db.execute('ALTER TABLE exercises ADD COLUMN weightMode INTEGER'); } catch (_) {}
+}
 
-  }
+// 👇 МИГРАЦИЯ ДЛЯ 21-й ВЕРСИИ (ДОМ: ИНВЕНТАРЬ)
+if (oldVersion < 21) {
+try {
+await db.execute('ALTER TABLE user_profiles ADD COLUMN homeEquipment TEXT');
+
+// Мигрируем старые значения equipment:
+// bodyweight → home (своё тело)
+await db.execute(
+"UPDATE user_profiles SET equipment = 'home', homeEquipment = '' WHERE equipment = 'bodyweight'");
+// dumbbells → home + [гантели, резинка]
+await db.execute(
+"UPDATE user_profiles SET equipment = 'home', homeEquipment = 'dumbbells,resistance_band' WHERE equipment = 'dumbbells'");
+// mixed → gym (смешанно = доступно всё)
+await db.execute(
+"UPDATE user_profiles SET equipment = 'gym' WHERE equipment = 'mixed'");
+} catch (_) {}
+}
+}
 
 // ═══════════════════════════════════════════════════════════
 //  ПРОФИЛИ
 // ═══════════════════════════════════════════════════════════
 
-  Future<int> addProfile(UserProfile profile) async {
-    final db = await database;
-    return await db.insert('user_profiles', profile.toMap());
-  }
+Future<int> addProfile(UserProfile profile) async {
+final db = await database;
+return await db.insert('user_profiles', profile.toMap());
+}
 
-  Future<List<UserProfile>> getProfiles() async {
-    final db = await database;
-    final maps = await db.query('user_profiles', orderBy: 'createdAt ASC');
-    return maps.map((m) => UserProfile.fromMap(m)).toList();
-  }
+Future<List<UserProfile>> getProfiles() async {
+final db = await database;
+final maps = await db.query('user_profiles', orderBy: 'createdAt ASC');
+return maps.map((m) => UserProfile.fromMap(m)).toList();
+}
 
-  Future<UserProfile?> getProfileById(int id) async {
-    final db = await database;
-    final maps = await db.query('user_profiles', where: 'id = ?', whereArgs: [id], limit: 1);
-    if (maps.isEmpty) return null;
-    return UserProfile.fromMap(maps.first);
-  }
+Future<UserProfile?> getProfileById(int id) async {
+final db = await database;
+final maps = await db.query('user_profiles', where: 'id = ?', whereArgs: [id], limit: 1);
+if (maps.isEmpty) return null;
+return UserProfile.fromMap(maps.first);
+}
 
-  Future<int> updateProfile(UserProfile profile) async {
-    final db = await database;
-    return await db.update('user_profiles', profile.toMap(), where: 'id = ?', whereArgs: [profile.id]);
-  }
+Future<int> updateProfile(UserProfile profile) async {
+final db = await database;
+return await db.update('user_profiles', profile.toMap(), where: 'id = ?', whereArgs: [profile.id]);
+}
 
-  Future<int> deleteProfile(int id) async {
-    final db = await database;
-    return await db.delete('user_profiles', where: 'id = ?', whereArgs: [id]);
-  }
+Future<int> deleteProfile(int id) async {
+final db = await database;
+return await db.delete('user_profiles', where: 'id = ?', whereArgs: [id]);
+}
 
 // ═══════════════════════════════════════════════════════════
 //  УПРАЖНЕНИЯ
 // ═══════════════════════════════════════════════════════════
 
-  Future<int> addExercise(Exercise exercise) async {
-    final db = await database;
-    return await db.insert('exercises', exercise.toMap());
-  }
+Future<int> addExercise(Exercise exercise) async {
+final db = await database;
+return await db.insert('exercises', exercise.toMap());
+}
 
-  Future<List<Exercise>> getExercises() async {
-    final db = await database;
-    final maps = await db.query('exercises', orderBy: 'name ASC');
-    return maps.map((m) => Exercise.fromMap(m)).toList();
-  }
+Future<List<Exercise>> getExercises() async {
+final db = await database;
+final maps = await db.query('exercises', orderBy: 'name ASC');
+return maps.map((m) => Exercise.fromMap(m)).toList();
+}
 
-  Future<Exercise?> getExerciseById(int id) async {
-    final db = await database;
-    final maps = await db.query('exercises', where: 'id = ?', whereArgs: [id], limit: 1);
-    if (maps.isEmpty) return null;
-    return Exercise.fromMap(maps.first);
-  }
+Future<Exercise?> getExerciseById(int id) async {
+final db = await database;
+final maps = await db.query('exercises', where: 'id = ?', whereArgs: [id], limit: 1);
+if (maps.isEmpty) return null;
+return Exercise.fromMap(maps.first);
+}
 
-  Future<int> countExercises() async {
-    final db = await database;
-    final result = await db.rawQuery('SELECT COUNT(*) as count FROM exercises');
-    return Sqflite.firstIntValue(result) ?? 0;
-  }
+Future<int> countExercises() async {
+final db = await database;
+final result = await db.rawQuery('SELECT COUNT(*) as count FROM exercises');
+return Sqflite.firstIntValue(result) ?? 0;
+}
 
 // ═══════════════════════════════════════════════════════════
 //  СИНХРОНИЗАЦИЯ КАТАЛОГА УПРАЖНЕНИЙ
 // ═══════════════════════════════════════════════════════════
 
-  /// Синхронизация каталога упражнений с кодом приложения:
-  /// добавляет недостающие (новые кардио и прочие), обновляет поля существующих,
-  /// НИКОГДА не удаляет — чтобы не сломать ссылки истории
-  /// (workout_exercises.itemId / replacedByItemId и prefs-рекорды).
-  ///
-  /// Вызывать после открытия базы (при старте приложения и в сетапе тестов).
-  Future<void> syncExercises() async {
-    final db = await database;
-    // 👇 v21.2: чистим дубликаты встроенного каталога ДО синка,
-    // иначе синк обновит обе копии и ничего не изменится.
-    await _dedupeBuiltinExercises(db);
-    final existing = await db.query('exercises', columns: ['id', 'name']);
-    final byName = <String, int>{};
-    for (final row in existing) {
-      final key = (row['name'] as String)
-          .toLowerCase()
-          .replaceAll('ё', 'е')
-          .replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
-      byName.putIfAbsent(key, () => row['id'] as int);
-    }
+Future<void> syncExercises() async {
+final db = await database;
+await _dedupeBuiltinExercises(db);
+final existing = await db.query('exercises', columns: ['id', 'name']);
+final byName = <String, int>{};
+for (final row in existing) {
+final key = (row['name'] as String)
+.toLowerCase()
+.replaceAll('ё', 'е')
+.replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
+byName.putIfAbsent(key, () => row['id'] as int);
+}
 
-    for (final ex in getExercisesData()) {
-      final key = ex.name
-          .toLowerCase()
-          .replaceAll('ё', 'е')
-          .replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
-      final id = byName[key];
-      final data = ex.toMap()..remove('id');
-      // 👇 Классификация: тип, семейство и режим веса вычисляются один раз
-      // здесь, а не при каждом обращении генератора к эвристикам
-      data['exType'] = isCardioExercise(ex)
-          ? 'cardio'
-          : (isBaseExercise(ex) ? 'base' : 'isolation');
-      data['family'] = getExerciseFamily(ex.name);
-      data['weightMode'] = weightModeFor(ex);
-      // 👇 v21.2: противопоказания — обратный lookup по таблице кодов.
-      // Раньше kContraindications[ex.name] искал ключ по ИМЕНИ упражнения,
-      // а таблица ключуется кодами ограничений (knees, back...) —
-      // lookup всегда возвращал null, и поле оставалось пустым
-      // (аудит: 107 записей с пустым полем). Записываем всегда,
-      // включая пустой список: встроенные данные всегда приводятся
-      // к источнику истины.
-      data['contraindications'] = contraindicationsFor(ex.name).join(',');
+for (final ex in getExercisesData()) {
+final key = ex.name
+.toLowerCase()
+.replaceAll('ё', 'е')
+.replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
+final id = byName[key];
+final data = ex.toMap()..remove('id');
 
-      if (id == null) {
-        await db.insert('exercises', data);
-      } else {
-        // Обновляем только встроенные (isCustom = 0), пользовательские не трогаем
-        await db.update(
-          'exercises',
-          data,
-          where: 'id = ? AND isCustom = 0',
-          whereArgs: [id],
-        );
-      }
-    }
-  }
+data['exType'] = isCardioExercise(ex)
+? 'cardio'
+: (isBaseExercise(ex) ? 'base' : 'isolation');
+data['family'] = getExerciseFamily(ex.name);
+data['weightMode'] = weightModeFor(ex);
+data['contraindications'] = contraindicationsFor(ex.name).join(',');
 
-  /// 👇 v21.2: чистка дубликатов встроенного каталога. Дубликаты
-  /// (Bird Dog, Dead Bug, Вакуум живота) прилетели из ранних версий,
-  /// когда каталог вставлялся без проверки повторов. Синк по имени
-  /// только обновляет обе копии, поэтому удалять нужно явно.
-  /// Оставляем запись с меньшим id — на неё вероятнее всего ссылается
-  /// история, — переносим ссылки с дубликатов на неё и удаляем их.
-  Future<void> _dedupeBuiltinExercises(Database db) async {
-    final rows = await db.query('exercises',
-        where: 'isCustom = 0', columns: ['id', 'name']);
-    String norm(String name) => name
-        .toLowerCase()
-        .replaceAll('ё', 'е')
-        .replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
+if (id == null) {
+await db.insert('exercises', data);
+} else {
+await db.update(
+'exercises',
+data,
+where: 'id = ? AND isCustom = 0',
+whereArgs: [id],
+);
+}
+}
+}
 
-    final byKey = <String, int>{};
-    final dups = <int, int>{}; // dupId -> keptId
-    for (final row in rows) {
-      final key = norm(row['name'] as String);
-      final id = row['id'] as int;
-      final kept = byKey[key];
-      if (kept == null) {
-        byKey[key] = id;
-      } else if (id < kept) {
-        byKey[key] = id;
-        dups[kept] = id;
-      } else {
-        dups[id] = kept;
-      }
-    }
-    if (dups.isEmpty) return;
+Future<void> _dedupeBuiltinExercises(Database db) async {
+final rows = await db.query('exercises',
+where: 'isCustom = 0', columns: ['id', 'name']);
+String norm(String name) => name
+.toLowerCase()
+.replaceAll('ё', 'е')
+.replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
 
-    for (final entry in dups.entries) {
-      final dup = entry.key;
-      final kept = entry.value;
-      // workout_exercises: и «какое упражнение», и «чем заменили»
-      await db.update('workout_exercises', {'itemId': kept},
-          where: 'itemId = ?', whereArgs: [dup]);
-      await db.update('workout_exercises', {'replacedByItemId': kept},
-          where: 'replacedByItemId = ?', whereArgs: [dup]);
-      // template_items: то же самое
-      await db.update('template_items', {'itemId': kept},
-          where: 'itemId = ?', whereArgs: [dup]);
-      await db.update('template_items', {'replacedByItemId': kept},
-          where: 'replacedByItemId = ?', whereArgs: [dup]);
-      // replacement_logs: оригинал и замена
-      await db.update('replacement_logs', {'originalItemId': kept},
-          where: 'originalItemId = ?', whereArgs: [dup]);
-      await db.update('replacement_logs', {'newItemId': kept},
-          where: 'newItemId = ?', whereArgs: [dup]);
-    }
-    await db.delete('exercises',
-        where: 'id IN (${List.filled(dups.length, '?').join(',')})',
-        whereArgs: dups.keys.toList());
-  }
+final byKey = <String, int>{};
+final dups = <int, int>{};
+for (final row in rows) {
+final key = norm(row['name'] as String);
+final id = row['id'] as int;
+final kept = byKey[key];
+if (kept == null) {
+byKey[key] = id;
+} else if (id < kept) {
+byKey[key] = id;
+dups[kept] = id;
+} else {
+dups[id] = kept;
+}
+}
+if (dups.isEmpty) return;
+
+for (final entry in dups.entries) {
+final dup = entry.key;
+final kept = entry.value;
+await db.update('workout_exercises', {'itemId': kept},
+where: 'itemId = ?', whereArgs: [dup]);
+await db.update('workout_exercises', {'replacedByItemId': kept},
+where: 'replacedByItemId = ?', whereArgs: [dup]);
+await db.update('template_items', {'itemId': kept},
+where: 'itemId = ?', whereArgs: [dup]);
+await db.update('template_items', {'replacedByItemId': kept},
+where: 'replacedByItemId = ?', whereArgs: [dup]);
+await db.update('replacement_logs', {'originalItemId': kept},
+where: 'originalItemId = ?', whereArgs: [dup]);
+await db.update('replacement_logs', {'newItemId': kept},
+where: 'newItemId = ?', whereArgs: [dup]);
+}
+await db.delete('exercises',
+where: 'id IN (${List.filled(dups.length, '?').join(',')})',
+whereArgs: dups.keys.toList());
+}
 
 // ═══════════════════════════════════════════════════════════
 //  РАСТЯЖКИ
 // ═══════════════════════════════════════════════════════════
 
-  Future<int> addStretch(Stretch stretch) async {
-    final db = await database;
-    return await db.insert('stretches', stretch.toMap());
-  }
+Future<int> addStretch(Stretch stretch) async {
+final db = await database;
+return await db.insert('stretches', stretch.toMap());
+}
 
-  Future<List<Stretch>> getStretches() async {
-    final db = await database;
-    final maps = await db.query('stretches', orderBy: 'name ASC');
-    return maps.map((m) => Stretch.fromMap(m)).toList();
-  }
+Future<List<Stretch>> getStretches() async {
+final db = await database;
+final maps = await db.query('stretches', orderBy: 'name ASC');
+return maps.map((m) => Stretch.fromMap(m)).toList();
+}
 
-  Future<Stretch?> getStretchById(int id) async {
-    final db = await database;
-    final maps = await db.query('stretches', where: 'id = ?', whereArgs: [id], limit: 1);
-    if (maps.isEmpty) return null;
-    return Stretch.fromMap(maps.first);
-  }
+Future<Stretch?> getStretchById(int id) async {
+final db = await database;
+final maps = await db.query('stretches', where: 'id = ?', whereArgs: [id], limit: 1);
+if (maps.isEmpty) return null;
+return Stretch.fromMap(maps.first);
+}
 
-  Future<Stretch?> getStretchByName(String name) async {
-    final db = await database;
-    final maps = await db.query('stretches', where: 'name = ?', whereArgs: [name], limit: 1);
-    if (maps.isEmpty) return null;
-    return Stretch.fromMap(maps.first);
-  }
+Future<Stretch?> getStretchByName(String name) async {
+final db = await database;
+final maps = await db.query('stretches', where: 'name = ?', whereArgs: [name], limit: 1);
+if (maps.isEmpty) return null;
+return Stretch.fromMap(maps.first);
+}
 
+// ═══ КОНЕЦ ЧАСТИ 2 ═══
   // ═══════════════════════════════════════════════════════════
   //  ЙОГА
   // ═══════════════════════════════════════════════════════════
@@ -631,10 +614,6 @@ class DatabaseHelper {
   }
 
   /// 👇 N+1 FIX 2: вставка дня одним коммитом.
-  /// content — пары (упражнение дня, его сеты). Возвращает id дня.
-  /// Три вставки в одной транзакции: либо день целиком, либо ничего.
-  /// Вместо сотен await на генерацию — три оборота: день, батч упражнений,
-  /// батч сетов.
   Future<int> createWorkoutDayWithContent(
       WorkoutDay day,
       List<(WorkoutExercise, List<WorkoutSet>)> content,
@@ -645,7 +624,6 @@ class DatabaseHelper {
       final dayId = await txn.insert('workout_days', day.toMap());
 
       // 2. Все упражнения дня одним батчем — commit вернёт id
-      // в порядке добавления, сеты по ним раскладываем без запросов
       final exBatch = txn.batch();
       for (final (we, _) in content) {
         exBatch.insert('workout_exercises', we.toMap()..['workoutDayId'] = dayId);
@@ -760,7 +738,6 @@ class DatabaseHelper {
 
     // Плановые даты уже корректны (уникальны и не в прошлом) — сетка
     // генератора (в том числе ручные переносы), не трогаем.
-    // Ломаем только схлопнутые/просроченные.
     final plannedDates = planned.map((d) => parseDate(d['date'])).toList();
     final uniqueOk = plannedDates.toSet().length == plannedDates.length;
     final futureOk = plannedDates.every((d) => !d.isBefore(today));
@@ -784,9 +761,7 @@ class DatabaseHelper {
     }
   }
 
-  /// 👇 ФИКС 8: удаляет только НЕзавершённые дни (planned / in_progress).
-  /// Завершённые дни — это достижения, они не трогаются никогда.
-  /// Связанные упражнения и сеты чистит каскад (foreign_keys = ON).
+  /// Удаляет только НЕзавершённые дни (planned / in_progress).
   Future<int> deleteUnfinishedWorkoutDays(int profileId) async {
     final db = await database;
     return await db.delete(
@@ -796,7 +771,7 @@ class DatabaseHelper {
     );
   }
 
-  /// 👇 ФИКС 9: «Очистить историю» удаляет только завершённые тренировки
+  /// «Очистить историю» удаляет только завершённые тренировки
   /// и брошенные «в процессе». Плановые дни текущего плана не трогаются.
   Future<int> deleteHistoryWorkoutDays(int profileId) async {
     final db = await database;
@@ -806,8 +781,6 @@ class DatabaseHelper {
       whereArgs: [profileId, 'completed', 'in_progress'],
     );
   }
-
-  // ═══ КОНЕЦ ЧАСТИ 2 ═══
 
   // ═══════════════════════════════════════════════════════════
   //  УПРАЖНЕНИЯ В ТРЕНИРОВКЕ
@@ -1291,10 +1264,6 @@ class DatabaseHelper {
   //  УТИЛИТЫ
   // ═══════════════════════════════════════════════════════════
 
-  /// 👇 v21.2: раньше эта функция удаляла дубликаты БЕЗ переноса ссылок
-  /// (itemId / replacedByItemId / replacement_logs оставались битыми).
-  /// Теперь вся логика живёт в _dedupeBuiltinExercises с переносом
-  /// ссылок по всем трём таблицам, здесь — только вызов.
   Future<void> removeExerciseDuplicates() async {
     final db = await database;
     await _dedupeBuiltinExercises(db);
@@ -1306,8 +1275,6 @@ class DatabaseHelper {
   }
 
   /// Сброс соединения — для изоляции тестов.
-  /// Тесты вызывают его перед каждым тестом, чтобы каждый начинался
-  /// с чистой базы, а не с той, что осталась от предыдущего.
   Future<void> resetForTest() async {
     final db = _database;
     if (db != null) {
@@ -1316,4 +1283,5 @@ class DatabaseHelper {
     }
   }
 }
+// ═══ КОНЕЦ ЧАСТИ 3 ═══
 // ═══ КОНЕЦ ФАЙЛА database_helper.dart ═══

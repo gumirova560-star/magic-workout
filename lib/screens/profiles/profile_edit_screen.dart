@@ -30,9 +30,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   double _weight = 65;
   String _level = 'beginner';
   String _goal = 'tone';
-  String _equipment = 'dumbbells';
+  String _equipment = 'gym'; // gym | home
+  final Set<String> _homeEquipment = {};
   int _daysPerWeek = 3;
-  // 👇 выбранные дни недели (1=Пн … 7=Вс)
   List<int> _selectedWeekdays = [];
   int _sessionMinutes = 45;
   String? _timeRangeLabel = '45-60 мин';
@@ -43,11 +43,27 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   final Set<String> _focusAreas = {};
   final Set<String> _limitations = {};
 
-  // 👇 ДИНАМИЧЕСКОЕ ОГРАНИЧЕНИЕ ФОКУСНЫХ ЗОН
-  int get _maxFocusAreas => _level == 'beginner' ? 2 : 3;
+  // 👇 Дом — всегда 2 зоны (как у новичка). Зал — 2/3 по уровню.
+  int get _maxFocusAreas {
+    if (_equipment == 'home') return 2;
+    return _level == 'beginner' ? 2 : 3;
+  }
 
-  // 👇 ДНИ: выбрали ли ровно столько, сколько нужно
   bool get _weekdaysComplete => _selectedWeekdays.length == _daysPerWeek;
+
+  static const _homeEquipmentOptions = <(String, String, IconData)>[
+    ('dumbbells', 'Гантели', Icons.sports_gymnastics_rounded),
+    ('barbell', 'Штанга', Icons.fitness_center_rounded),
+    ('resistance_band', 'Резинка', Icons.cable_rounded),
+    ('ball', 'Мяч / фитбол', Icons.sports_soccer_rounded),
+    ('jump_rope', 'Скакалка', Icons.timeline_rounded),
+    ('pull_up_bar', 'Турник / брусья', Icons.horizontal_rule_rounded),
+    ('bench', 'Скамья', Icons.chair_rounded),
+    ('treadmill', 'Дорожка', Icons.directions_run_rounded),
+    ('elliptical', 'Эллипс', Icons.air_rounded),
+    ('bike', 'Велотренажёр', Icons.pedal_bike_rounded),
+    ('rower', 'Гребной тренажёр', Icons.rowing_rounded),
+  ];
 
   @override
   void initState() {
@@ -61,12 +77,28 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       _weight = p.weight;
       _level = p.level;
       _goal = p.goal;
-      _equipment = p.equipment;
+      switch (p.equipment) {
+        case 'gym':
+        case 'mixed':
+          _equipment = 'gym';
+          break;
+        case 'home':
+          _equipment = 'home';
+          _homeEquipment.addAll(p.homeEquipment);
+          break;
+        case 'dumbbells':
+          _equipment = 'home';
+          _homeEquipment.addAll(['dumbbells', 'resistance_band']);
+          break;
+        case 'bodyweight':
+        default:
+          _equipment = 'home';
+          break;
+      }
       _daysPerWeek = p.daysPerWeek;
-      // 👇 подтягиваем сохранённое расписание, лишнее обрезаем
       _selectedWeekdays = List<int>.from(p.trainingWeekdays.take(_daysPerWeek));
       _sessionMinutes = p.sessionMinutes;
-      _timeRangeLabel = p.timeRangeLabel ?? '45-60 мин'; // Фолбэк для старых профилей
+      _timeRangeLabel = p.timeRangeLabel ?? '45-60 мин';
       _focusAreas.addAll(p.focusAreas.take(_maxFocusAreas));
       _limitations.addAll(p.limitations);
       _bodyType = p.bodyType;
@@ -74,7 +106,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
     _ageController = TextEditingController(text: _age.toString());
     _heightController = TextEditingController(text: _height.toInt().toString());
-    _weightController = TextEditingController(text: _weight.toStringAsFixed(_weight % 1 == 0 ? 0 : 1));
+    _weightController = TextEditingController(
+        text: _weight.toStringAsFixed(_weight % 1 == 0 ? 0 : 1));
   }
 
   @override
@@ -89,7 +122,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // 👇 Нельзя сохранить, пока не выбрано ровно _daysPerWeek дней
     if (!_weekdaysComplete) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(
@@ -103,7 +135,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     }
 
     if (_focusAreas.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Выберите хотя бы одну фокусную зону')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Выберите хотя бы одну фокусную зону')));
       return;
     }
 
@@ -121,14 +154,15 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       focusAreas: finalFocusAreas,
       limitations: _limitations.toList(),
       equipment: _equipment,
+      homeEquipment: _equipment == 'home'
+          ? _homeEquipment.toList()
+          : <String>[],
       daysPerWeek: _daysPerWeek,
       trainingWeekdays: _selectedWeekdays,
       sessionMinutes: _sessionMinutes,
       timeRangeLabel: _timeRangeLabel,
       createdAt: widget.profile?.createdAt,
       bodyType: _bodyType,
-
-      // ФИКС: Передаем старые картинки, чтобы они не затирались при сохранении
       avatarPath: widget.profile?.avatarPath,
       beforePhotoPath: widget.profile?.beforePhotoPath,
       beforeSidePath: widget.profile?.beforeSidePath,
@@ -138,14 +172,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     try {
       if (widget.profile == null) {
         final newId = await DatabaseHelper.instance.addProfile(profile);
-        // 👇 Приветственные 30⚡ на сад. refId = id профиля: UNIQUE-констрейнт
-        // в energy_transactions гарантирует, что повторный вызов ничего
-        // не начислит — даже если сюда попасть дважды.
         await EnergyService.grantWelcomeBonus(newId);
 
-        // 👇 Сообщение покажет фея на MainScreen: сейчас слушателей нет
-        // (pushAndRemoveUntil снесёт этот экран), поэтому откладываем его
-        // до первого FairyBubble, который заберёт через takePending.
         FairyReactionService().sayOnNext(
           'Профиль создан! Тебе начислено 30 единиц жизненной энергии. '
               'Загляни в Сад Феи и посади свой первый цветок 🌱',
@@ -167,7 +195,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
       }
     }
   }
@@ -177,7 +206,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     final isEdit = widget.profile != null;
 
     return Scaffold(
-      appBar: AppBar(title: Text(isEdit ? 'Редактировать' : 'Создать профиль')),
+      appBar: AppBar(
+          title: Text(isEdit ? 'Редактировать' : 'Создать профиль')),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -185,7 +215,10 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           children: [
             TextFormField(
               controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Имя профиля', hintText: 'Я, Жена, Муж...', prefixIcon: Icon(Icons.person_rounded)),
+              decoration: const InputDecoration(
+                  labelText: 'Имя профиля',
+                  hintText: 'Я, Жена, Муж...',
+                  prefixIcon: Icon(Icons.person_rounded)),
               validator: (v) => v?.isEmpty ?? true ? 'Введите имя' : null,
             ),
             const SizedBox(height: 24),
@@ -193,9 +226,19 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             _sectionTitle('Пол'),
             Row(
               children: [
-                Expanded(child: _choiceButton(label: 'Женский', icon: Icons.female_rounded, isSelected: _gender == 'female', onTap: () => setState(() => _gender = 'female'))),
+                Expanded(
+                    child: _choiceButton(
+                        label: 'Женский',
+                        icon: Icons.female_rounded,
+                        isSelected: _gender == 'female',
+                        onTap: () => setState(() => _gender = 'female'))),
                 const SizedBox(width: 12),
-                Expanded(child: _choiceButton(label: 'Мужской', icon: Icons.male_rounded, isSelected: _gender == 'male', onTap: () => setState(() => _gender = 'male'))),
+                Expanded(
+                    child: _choiceButton(
+                        label: 'Мужской',
+                        icon: Icons.male_rounded,
+                        isSelected: _gender == 'male',
+                        onTap: () => setState(() => _gender = 'male'))),
               ],
             ),
             const SizedBox(height: 24),
@@ -206,24 +249,49 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
               controller: _ageController,
               value: _age.toDouble(),
               min: 14, max: 90, divisions: 76, unit: 'лет',
-              onChanged: (v) { setState(() => _age = v.toInt()); _ageController.text = _age.toString(); },
-              onTextChanged: (text) { final parsed = int.tryParse(text); if (parsed != null && parsed >= 14 && parsed <= 90) setState(() => _age = parsed); },
+              onChanged: (v) {
+                setState(() => _age = v.toInt());
+                _ageController.text = _age.toString();
+              },
+              onTextChanged: (text) {
+                final parsed = int.tryParse(text);
+                if (parsed != null && parsed >= 14 && parsed <= 90) {
+                  setState(() => _age = parsed);
+                }
+              },
             ),
             _buildHybridSlider(
               label: 'Рост',
               controller: _heightController,
               value: _height,
               min: 130, max: 220, divisions: 90, unit: 'см',
-              onChanged: (v) { setState(() => _height = v); _heightController.text = _height.toInt().toString(); },
-              onTextChanged: (text) { final parsed = double.tryParse(text); if (parsed != null && parsed >= 130 && parsed <= 220) setState(() => _height = parsed); },
+              onChanged: (v) {
+                setState(() => _height = v);
+                _heightController.text = _height.toInt().toString();
+              },
+              onTextChanged: (text) {
+                final parsed = double.tryParse(text);
+                if (parsed != null && parsed >= 130 && parsed <= 220) {
+                  setState(() => _height = parsed);
+                }
+              },
             ),
             _buildHybridSlider(
               label: 'Вес',
               controller: _weightController,
               value: _weight,
               min: 35, max: 200, divisions: 165, unit: 'кг',
-              onChanged: (v) { setState(() => _weight = v); _weightController.text = _weight.toStringAsFixed(_weight % 1 == 0 ? 0 : 1); },
-              onTextChanged: (text) { final parsed = double.tryParse(text); if (parsed != null && parsed >= 35 && parsed <= 200) setState(() => _weight = parsed); },
+              onChanged: (v) {
+                setState(() => _weight = v);
+                _weightController.text =
+                    _weight.toStringAsFixed(_weight % 1 == 0 ? 0 : 1);
+              },
+              onTextChanged: (text) {
+                final parsed = double.tryParse(text);
+                if (parsed != null && parsed >= 35 && parsed <= 200) {
+                  setState(() => _weight = parsed);
+                }
+              },
             ),
             const SizedBox(height: 24),
 
@@ -241,7 +309,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                   final list = _focusAreas.toList();
                   _focusAreas.clear();
                   _focusAreas.addAll(list.take(_maxFocusAreas));
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Для этого уровня доступно не более $_maxFocusAreas фокусных зон')));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(
+                          'Для этого уровня доступно не более $_maxFocusAreas фокусных зон')));
                 }
                 if (_focusAutoFilled && _bodyType != null) {
                   final Map<String, List<String>> bodyTypeZones = {
@@ -253,23 +323,175 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                   };
                   if (bodyTypeZones.containsKey(_bodyType)) {
                     _focusAreas.clear();
-                    _focusAreas.addAll(bodyTypeZones[_bodyType]!.take(_maxFocusAreas));
+                    _focusAreas.addAll(
+                        bodyTypeZones[_bodyType]!.take(_maxFocusAreas));
                   }
                 }
               }),
             ),
             const SizedBox(height: 24),
 
+            // ═══ ГДЕ ТРЕНИРУЕШЬСЯ (перенесено выше — до типов фигуры и зон) ═══
+            _sectionTitle('Где тренируешься?'),
+            Row(
+              children: [
+                Expanded(
+                  child: _choiceButton(
+                    label: 'Тренажёрный зал',
+                    icon: Icons.fitness_center_rounded,
+                    isSelected: _equipment == 'gym',
+                    onTap: () => setState(() {
+                      _equipment = 'gym';
+                      _homeEquipment.clear();
+                    }),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _choiceButton(
+                    label: 'Дом',
+                    icon: Icons.home_rounded,
+                    isSelected: _equipment == 'home',
+                    // 👇 При переключении на дом: обрезаем зоны до 2 + SnackBar
+                    onTap: () {
+                      final hadTooMany = _focusAreas.length > 2;
+                      setState(() {
+                        _equipment = 'home';
+                        if (hadTooMany) {
+                          final list = _focusAreas.toList();
+                          _focusAreas.clear();
+                          _focusAreas.addAll(list.take(2));
+                        }
+                      });
+                      if (hadTooMany) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text(
+                                  'Для дома доступно не более 2 фокусных зон')),
+                        );
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+
+            // 👇 Если выбран «Дом» — показываем чекбоксы инвентаря
+            if (_equipment == 'home') ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withValues(alpha: 0.2)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline_rounded,
+                            size: 18,
+                            color: Theme.of(context).colorScheme.primary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _homeEquipment.isEmpty
+                                ? 'Ничего не отмечено — план будет только на своём теле'
+                                : 'Отмечено: ${_homeEquipment.length} шт.',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).colorScheme.primary),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8, runSpacing: 8,
+                      children: _homeEquipmentOptions.map((opt) {
+                        final (code, label, icon) = opt;
+                        final isSelected = _homeEquipment.contains(code);
+                        return FilterChip(
+                          avatar: Icon(
+                            icon,
+                            size: 16,
+                            color: isSelected
+                                ? Colors.white
+                                : Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.6),
+                          ),
+                          label: Text(
+                            label,
+                            style: TextStyle(
+                              color: isSelected
+                                  ? Colors.white
+                                  : Theme.of(context).colorScheme.onSurface,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                          selected: isSelected,
+                          onSelected: (v) => setState(() {
+                            if (v) {
+                              _homeEquipment.add(code);
+                            } else {
+                              _homeEquipment.remove(code);
+                            }
+                          }),
+                          backgroundColor:
+                          Theme.of(context).colorScheme.surface,
+                          selectedColor:
+                          Theme.of(context).colorScheme.primary,
+                          checkmarkColor: Colors.white,
+                          side: BorderSide(
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.3),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 24),
+
+            // ═══ ТИП ФИГУРЫ ═══
             _sectionTitle('Тип фигуры'),
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber.shade200)),
+              decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade200)),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.info_outline_rounded, size: 20, color: Colors.amber.shade800),
+                  Icon(Icons.info_outline_rounded,
+                      size: 20, color: Colors.amber.shade800),
                   const SizedBox(width: 8),
-                  Expanded(child: Text('Тип фигуры — это генетика. Тренировки не изменят её на 100%, но помогут подчеркнуть достоинства и создать гармоничные пропорции.', style: TextStyle(fontSize: 12, color: Colors.amber.shade900))),
+                  Expanded(
+                      child: Text(
+                          'Тип фигуры — это генетика. Тренировки не изменят её на 100%, но помогут подчеркнуть достоинства и создать гармоничные пропорции.',
+                          style: TextStyle(
+                              fontSize: 12, color: Colors.amber.shade900))),
                 ],
               ),
             ),
@@ -277,6 +499,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             ..._buildBodyTypeOptions(),
             const SizedBox(height: 24),
 
+            // ═══ ФОКУСНЫЕ ЗОНЫ ═══
             _sectionTitle('Фокусные зоны (макс. $_maxFocusAreas)'),
             Wrap(
               spacing: 8, runSpacing: 8,
@@ -288,41 +511,77 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                 _focusChip('back', 'Спина'),
                 _focusChip('arms', 'Руки'),
                 _focusChip('shoulders', 'Плечи'),
-                _focusChip('cardio', 'Кардио-день', isDisabled: _daysPerWeek < 3),
+                _focusChip('cardio', 'Кардио-день',
+                    isDisabled: _daysPerWeek < 3),
               ],
             ),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                color: Theme.of(context)
+                    .colorScheme
+                    .primary
+                    .withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
+                border: Border.all(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.3)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      Icon(_focusAreas.isEmpty ? Icons.info_outline_rounded : Icons.check_circle_outline_rounded, size: 18, color: Theme.of(context).colorScheme.primary),
+                      Icon(
+                          _focusAreas.isEmpty
+                              ? Icons.info_outline_rounded
+                              : Icons.check_circle_outline_rounded,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.primary),
                       const SizedBox(width: 8),
-                      Expanded(child: Text(
-                        _focusAreas.isEmpty
-                            ? 'Для уровня «${_getLevelLabel(_level)}» доступно до $_maxFocusAreas зон.'
-                            : 'Для уровня «${_getLevelLabel(_level)}» выбрано ${_focusAreas.length} из $_maxFocusAreas: ${_focusAreas.map(_getZoneLabel).join(', ')}',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary),
-                      )),
+                      Expanded(
+                          child: Text(
+                            _focusAreas.isEmpty
+                                ? 'Для уровня «${_getLevelLabel(_level)}» доступно до $_maxFocusAreas зон.'
+                                : 'Для уровня «${_getLevelLabel(_level)}» выбрано ${_focusAreas.length} из $_maxFocusAreas: ${_focusAreas.map(_getZoneLabel).join(', ')}',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).colorScheme.primary),
+                          )),
                     ],
                   ),
                   if (_focusAutoFilled) ...[
                     const SizedBox(height: 6),
-                    Text('Зоны подобраны по типу фигуры «${_getBodyTypeLabel(_bodyType)}». Ты можешь их подтвердить или выбрать вручную.', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8))),
+                    Text(
+                        'Зоны подобраны по типу фигуры «${_getBodyTypeLabel(_bodyType)}». Ты можешь их подтвердить или выбрать вручную.',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withValues(alpha: 0.8))),
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Expanded(child: OutlinedButton(onPressed: () => setState(() => _focusAutoFilled = false), child: const Text('Подтвердить', style: TextStyle(fontSize: 13)))),
+                        Expanded(
+                            child: OutlinedButton(
+                                onPressed: () =>
+                                    setState(() => _focusAutoFilled = false),
+                                child: const Text('Подтвердить',
+                                    style: TextStyle(fontSize: 13)))),
                         const SizedBox(width: 8),
-                        Expanded(child: TextButton(onPressed: () => setState(() { _focusAreas.clear(); _focusAutoFilled = false; }), child: const Text('Выбрать вручную', style: TextStyle(fontSize: 13)))),
+                        Expanded(
+                            child: TextButton(
+                                onPressed: () => setState(() {
+                                  _focusAreas.clear();
+                                  _focusAutoFilled = false;
+                                }),
+                                child: const Text('Выбрать вручную',
+                                    style: TextStyle(fontSize: 13)))),
                       ],
                     ),
                   ],
@@ -356,19 +615,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             ),
             const SizedBox(height: 24),
 
-            _sectionTitle('Инвентарь'),
-            ..._buildOptions(
-              options: const [
-                ('gym', 'Зал', Icons.fitness_center_rounded),
-                ('dumbbells', 'Гантели', Icons.sports_gymnastics_rounded),
-                ('bodyweight', 'Своё тело', Icons.accessibility_new_rounded),
-                ('mixed', 'Смешанно', Icons.shuffle_rounded),
-              ],
-              selected: _equipment,
-              onSelected: (v) => setState(() => _equipment = v),
-            ),
-            const SizedBox(height: 24),
-
             _sectionTitle('Дней в неделю'),
             _buildSlider(
               label: 'Тренировок',
@@ -377,25 +623,33 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
               onChanged: (v) => setState(() {
                 _daysPerWeek = v.toInt();
                 if (_daysPerWeek < 3) _focusAreas.remove('cardio');
-                // 👇 если дней стало меньше, обрезаем лишние выбранные
                 if (_selectedWeekdays.length > _daysPerWeek) {
-                  _selectedWeekdays = _selectedWeekdays.take(_daysPerWeek).toList();
+                  _selectedWeekdays =
+                      _selectedWeekdays.take(_daysPerWeek).toList();
                 }
               }),
             ),
             const SizedBox(height: 24),
 
-            // ═══ БЛОК: выбор дней недели ═══
             _sectionTitle('Дни тренировок'),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                color: Theme.of(context)
+                    .colorScheme
+                    .primary
+                    .withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: _weekdaysComplete
-                      ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
-                      : Theme.of(context).colorScheme.error.withValues(alpha: 0.5),
+                      ? Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: 0.3)
+                      : Theme.of(context)
+                      .colorScheme
+                      .error
+                      .withValues(alpha: 0.5),
                 ),
               ),
               child: Column(
@@ -404,7 +658,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                   Row(
                     children: [
                       Icon(
-                        _weekdaysComplete ? Icons.check_circle_outline_rounded : Icons.info_outline_rounded,
+                        _weekdaysComplete
+                            ? Icons.check_circle_outline_rounded
+                            : Icons.info_outline_rounded,
                         size: 18,
                         color: _weekdaysComplete
                             ? Theme.of(context).colorScheme.primary
@@ -452,11 +708,14 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             const SizedBox(height: 32),
 
             ElevatedButton.icon(
-              // 👇 Кнопка активна всегда, чтобы по тапу показать сообщение,
-              // но приглушена, пока дней не хватает
               onPressed: _save,
               style: ElevatedButton.styleFrom(
-                backgroundColor: _weekdaysComplete ? null : Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
+                backgroundColor: _weekdaysComplete
+                    ? null
+                    : Theme.of(context)
+                    .colorScheme
+                    .primary
+                    .withValues(alpha: 0.4),
               ),
               icon: const Icon(Icons.check_rounded),
               label: Text(isEdit ? 'Сохранить' : 'Создать профиль'),
@@ -468,7 +727,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     );
   }
 
-  // ═══ ЧИП ДНЯ НЕДЕЛИ ═══
   Widget _weekdayChip(int weekday) {
     final theme = Theme.of(context);
     const names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -491,9 +749,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       onSelected: (v) => setState(() {
         if (v) {
           if (isMax) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Вы тренируетесь $_daysPerWeek дней в неделю — выберите столько же дней')),
-            );
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(
+                    'Вы тренируетесь $_daysPerWeek дней в неделю — выберите столько же дней')));
             return;
           }
           _selectedWeekdays.add(weekday);
@@ -513,7 +771,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     );
   }
 
-  // 👇 ВИДЖЕТ КНОПКИ ВРЕМЕНИ
   Widget _timeChip(String label, int minutes) {
     final theme = Theme.of(context);
     final isSelected = _timeRangeLabel == label;
@@ -530,7 +787,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         if (v) {
           setState(() {
             _timeRangeLabel = label;
-            _sessionMinutes = minutes; // В базу пишем нижнюю границу
+            _sessionMinutes = minutes;
           });
         }
       },
@@ -561,11 +818,17 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         ),
       ),
       selected: isSelected,
-      onSelected: isDisabled ? null : (v) {
+      onSelected: isDisabled
+          ? null
+          : (v) {
         setState(() {
           if (v) {
             if (_focusAreas.length >= _maxFocusAreas) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Для этого уровня можно выбрать не больше $_maxFocusAreas зон')));
+              final msg = _equipment == 'home'
+                  ? 'Для дома доступно не более 2 фокусных зон'
+                  : 'Для этого уровня можно выбрать не больше $_maxFocusAreas зон';
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text(msg)));
               return;
             }
             _focusAreas.add(code);
@@ -588,11 +851,16 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
   List<Widget> _buildBodyTypeOptions() {
     final types = [
-      ('pear', 'Груша', 'Узкие плечи, широкие бедра. Акцент: плечи (для баланса) и ягодицы.'),
-      ('apple', 'Яблоко', 'Широкие плечи и бедра, акцент в животе. Акцент: пресс, ноги, спина.'),
-      ('hourglass', 'Песочные часы', 'Сбалансированные плечи и бедра, талия. Акцент: ягодицы, пресс.'),
-      ('rectangle', 'Прямоугольник', 'Плечи = бедра, талия слабо выражена. Акцент: ягодицы, плечи.'),
-      ('inverted_triangle', 'Перевернутый треугольник', 'Широкие плечи, узкие бедра. Акцент: ягодицы, ноги.'),
+      ('pear', 'Груша',
+      'Узкие плечи, широкие бедра. Акцент: плечи (для баланса) и ягодицы.'),
+      ('apple', 'Яблоко',
+      'Широкие плечи и бедра, акцент в животе. Акцент: пресс, ноги, спина.'),
+      ('hourglass', 'Песочные часы',
+      'Сбалансированные плечи и бедра, талия. Акцент: ягодицы, пресс.'),
+      ('rectangle', 'Прямоугольник',
+      'Плечи = бедра, талия слабо выражена. Акцент: ягодицы, плечи.'),
+      ('inverted_triangle', 'Перевернутый треугольник',
+      'Широкие плечи, узкие бедра. Акцент: ягодицы, ноги.'),
     ];
 
     return types.map((t) {
@@ -614,28 +882,50 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             };
             if (bodyTypeZones.containsKey(code)) {
               _focusAreas.clear();
-              _focusAreas.addAll(bodyTypeZones[code]!.take(_maxFocusAreas));
+              _focusAreas.addAll(
+                  bodyTypeZones[code]!.take(_maxFocusAreas));
               _focusAutoFilled = true;
             }
           }),
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isSelected ? theme.colorScheme.primary.withValues(alpha: 0.12) : theme.colorScheme.surface,
-              border: Border.all(color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.1), width: isSelected ? 2 : 1),
+              color: isSelected
+                  ? theme.colorScheme.primary.withValues(alpha: 0.12)
+                  : theme.colorScheme.surface,
+              border: Border.all(
+                  color: isSelected
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurface.withValues(alpha: 0.1),
+                  width: isSelected ? 2 : 1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
               children: [
-                Icon(isSelected ? Icons.check_circle : Icons.circle_outlined, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.4)),
+                Icon(
+                    isSelected
+                        ? Icons.check_circle
+                        : Icons.circle_outlined,
+                    color: isSelected
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.4)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface)),
+                      Text(label,
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: isSelected
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.onSurface)),
                       const SizedBox(height: 2),
-                      Text(desc, style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
+                      Text(desc,
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.6))),
                     ],
                   ),
                 ),
@@ -650,26 +940,48 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   Widget _sectionTitle(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Text(text, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+      child: Text(text,
+          style:
+          const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
     );
   }
 
-  Widget _choiceButton({required String label, required IconData icon, required bool isSelected, required VoidCallback onTap}) {
+  Widget _choiceButton({
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
     final theme = Theme.of(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: isSelected ? theme.colorScheme.primary.withValues(alpha: 0.15) : theme.colorScheme.surface,
-          border: Border.all(color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.15), width: isSelected ? 2 : 1),
+          color: isSelected
+              ? theme.colorScheme.primary.withValues(alpha: 0.15)
+              : theme.colorScheme.surface,
+          border: Border.all(
+              color: isSelected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurface.withValues(alpha: 0.15),
+              width: isSelected ? 2 : 1),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
           children: [
-            Icon(icon, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+            Icon(icon,
+                color: isSelected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurface.withValues(alpha: 0.6)),
             const SizedBox(height: 4),
-            Text(label, style: TextStyle(fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface)),
+            Text(label,
+                style: TextStyle(
+                    fontWeight:
+                    isSelected ? FontWeight.w600 : FontWeight.w500,
+                    color: isSelected
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurface)),
           ],
         ),
       ),
@@ -677,9 +989,15 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   }
 
   Widget _buildHybridSlider({
-    required String label, required TextEditingController controller, required double value,
-    required double min, required double max, required int divisions, required String unit,
-    required ValueChanged<double> onChanged, required ValueChanged<String> onTextChanged,
+    required String label,
+    required TextEditingController controller,
+    required double value,
+    required double min,
+    required double max,
+    required int divisions,
+    required String unit,
+    required ValueChanged<double> onChanged,
+    required ValueChanged<String> onTextChanged,
   }) {
     final theme = Theme.of(context);
     return Padding(
@@ -694,23 +1012,51 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
               SizedBox(
                 width: 80, height: 36,
                 child: TextField(
-                  controller: controller, keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))], textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700, color: theme.colorScheme.primary),
-                  decoration: InputDecoration(isDense: true, contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+                  controller: controller,
+                  keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
+                  ],
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.primary),
+                  decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                          vertical: 8, horizontal: 4),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8))),
                   onChanged: onTextChanged,
                 ),
               ),
-              Text(unit, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
+              Text(unit,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurface
+                          .withValues(alpha: 0.6))),
             ],
           ),
-          Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged),
+          Slider(
+              value: value,
+              min: min,
+              max: max,
+              divisions: divisions,
+              onChanged: onChanged),
         ],
       ),
     );
   }
 
-  Widget _buildSlider({required String label, required double value, required double min, required double max, required int divisions, required String unit, required ValueChanged<double> onChanged}) {
+  Widget _buildSlider({
+    required String label,
+    required double value,
+    required double min,
+    required double max,
+    required int divisions,
+    required String unit,
+    required ValueChanged<double> onChanged,
+  }) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -719,15 +1065,27 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         children: [
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Text(label, style: theme.textTheme.bodyLarge),
-            Text('${value.toInt()} $unit', style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700, color: theme.colorScheme.primary)),
+            Text('${value.toInt()} $unit',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.primary)),
           ]),
-          Slider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged),
+          Slider(
+              value: value,
+              min: min,
+              max: max,
+              divisions: divisions,
+              onChanged: onChanged),
         ],
       ),
     );
   }
 
-  List<Widget> _buildOptions({required List<(String, String, IconData)> options, required String selected, required ValueChanged<String> onSelected}) {
+  List<Widget> _buildOptions({
+    required List<(String, String, IconData)> options,
+    required String selected,
+    required ValueChanged<String> onSelected,
+  }) {
     return options.map((opt) {
       final (value, label, icon) = opt;
       final isSelected = selected == value;
@@ -740,17 +1098,35 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: isSelected ? theme.colorScheme.primary.withValues(alpha: 0.12) : theme.colorScheme.surface,
-              border: Border.all(color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.1), width: isSelected ? 2 : 1),
+              color: isSelected
+                  ? theme.colorScheme.primary.withValues(alpha: 0.12)
+                  : theme.colorScheme.surface,
+              border: Border.all(
+                  color: isSelected
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurface.withValues(alpha: 0.1),
+                  width: isSelected ? 2 : 1),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Row(
               children: [
-                Icon(icon, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+                Icon(icon,
+                    color: isSelected
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.6)),
                 const SizedBox(width: 12),
-                Text(label, style: TextStyle(fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface)),
+                Text(label,
+                    style: TextStyle(
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                        color: isSelected
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurface)),
                 const Spacer(),
-                if (isSelected) Icon(Icons.check_circle_rounded, color: theme.colorScheme.primary),
+                if (isSelected)
+                  Icon(Icons.check_circle_rounded,
+                      color: theme.colorScheme.primary),
               ],
             ),
           ),
@@ -771,7 +1147,13 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         ),
       ),
       selected: isSelected,
-      onSelected: (v) => setState(() { if (v) { collection.add(value); } else { collection.remove(value); } }),
+      onSelected: (v) => setState(() {
+        if (v) {
+          collection.add(value);
+        } else {
+          collection.remove(value);
+        }
+      }),
       backgroundColor: theme.colorScheme.surface,
       selectedColor: theme.colorScheme.primary,
       checkmarkColor: Colors.white,
@@ -793,7 +1175,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
   String _getLevelLabel(String level) {
     const labels = {
-      'beginner': 'Новичок', 'intermediate': 'Средний', 'advanced': 'Продвинутый',
+      'beginner': 'Новичок',
+      'intermediate': 'Средний',
+      'advanced': 'Продвинутый',
     };
     return labels[level] ?? level;
   }
@@ -801,8 +1185,11 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   String _getBodyTypeLabel(String? type) {
     if (type == null) return 'не выбран';
     const labels = {
-      'pear': 'Груша', 'apple': 'Яблоко', 'hourglass': 'Песочные часы',
-      'rectangle': 'Прямоугольник', 'inverted_triangle': 'Перевернутый треугольник',
+      'pear': 'Груша',
+      'apple': 'Яблоко',
+      'hourglass': 'Песочные часы',
+      'rectangle': 'Прямоугольник',
+      'inverted_triangle': 'Перевернутый треугольник',
     };
     return labels[type] ?? type;
   }

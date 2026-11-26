@@ -6,6 +6,7 @@ import '../../models/yoga_session.dart';
 import '../../models/workout_day.dart';
 import '../../services/database_helper.dart';
 import '../../services/fairy_reaction_service.dart';
+import '../../services/energy_service.dart'; // 👈 ЭНЕРГИЯ ЗА ЙОГУ
 
 class YogaPlayerScreen extends StatefulWidget {
   final YogaSession session;
@@ -52,7 +53,7 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
   Future<void> _loadSteps() async {
     setState(() => _loading = true);
     final steps =
-        await DatabaseHelper.instance.getYogaSteps(widget.session.id!);
+    await DatabaseHelper.instance.getYogaSteps(widget.session.id!);
 
     final map = <int, Stretch>{};
     for (final step in steps) {
@@ -105,6 +106,11 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
       );
 
       _workoutDayId = await DatabaseHelper.instance.createWorkoutDay(day);
+
+      // ═══ ЭНЕРГИЯ ЗА ЙОГУ: +15⚡ один раз в календарный день ═══
+      // Вызов безопасен: при повторной сессии в тот же день
+      // UNIQUE-констрейнт не даст начислить второй раз.
+      await EnergyService.grantYogaBonus(profileId);
 
       // ═══ Реакция феи + уведомляем слушателей ═══
       await FairyReactionService().setActiveProfile(
@@ -203,10 +209,10 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _steps.isEmpty
-              ? _buildEmpty(context)
-              : _finished
-                  ? _buildFinished(context)
-                  : _buildPlayer(context, theme),
+          ? _buildEmpty(context)
+          : _finished
+          ? _buildFinished(context)
+          : _buildPlayer(context, theme),
     );
   }
 
@@ -234,7 +240,7 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
                 child: LinearProgressIndicator(
                   value: (_currentIndex + 1) / _steps.length,
                   backgroundColor:
-                      theme.colorScheme.primary.withValues(alpha: 0.15),
+                  theme.colorScheme.primary.withValues(alpha: 0.15),
                   color: theme.colorScheme.primary,
                   minHeight: 6,
                   borderRadius: BorderRadius.circular(4),
@@ -258,7 +264,7 @@ class _YogaPlayerScreenState extends State<YogaPlayerScreen> {
                     value: progress,
                     strokeWidth: 10,
                     backgroundColor:
-                        theme.colorScheme.primary.withValues(alpha: 0.15),
+                    theme.colorScheme.primary.withValues(alpha: 0.15),
                     color: theme.colorScheme.primary,
                     strokeCap: StrokeCap.round,
                   ),

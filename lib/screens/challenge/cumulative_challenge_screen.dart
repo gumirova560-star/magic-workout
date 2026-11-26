@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/daily_challenge.dart';
 import '../../data/challenge_data.dart';
 import '../../services/challenge_service.dart';
+import '../../services/energy_service.dart'; // 👈 ДОБАВЛЕНО ДЛЯ БОНУСА
 
 class CumulativeChallengeScreen extends StatefulWidget {
   final int profileId;
@@ -94,6 +95,45 @@ class _CumulativeChallengeScreenState extends State<CumulativeChallengeScreen> {
     }
   }
 
+  // 👇 НОВЫЙ МЕТОД: Диалоговое окно ручного ввода
+  Future<void> _showManualInputDialog() async {
+    final controller = TextEditingController();
+    final result = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Сколько добавить?', style: TextStyle(fontSize: 18)),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Например: 12',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final val = int.tryParse(controller.text);
+              Navigator.pop(ctx, val);
+            },
+            child: const Text('Добавить'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result > 0) {
+      await _addProgress(result);
+    }
+  }
+
   Future<void> _startPause() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_pauseKey, DateTime.now().millisecondsSinceEpoch);
@@ -103,7 +143,25 @@ class _CumulativeChallengeScreenState extends State<CumulativeChallengeScreen> {
     _startPauseTicker();
   }
 
+  // 👇 ИЗМЕНЕНО: Теперь считает перевыполнение и дает бонус
   Future<void> _awardFlower() async {
+    final int overshoot = _currentProgress - _targetValue;
+    int bonusEnergy = 0;
+
+    if (overshoot > 0) {
+      // Даем +1⚡ за каждые 10 повторений сверху, но максимум +10⚡
+      bonusEnergy = (overshoot / 10).floor().clamp(0, 10);
+
+      if (bonusEnergy > 0) {
+        await EnergyService.addEnergy(
+          profileId: widget.profileId,
+          delta: bonusEnergy,
+          reason: 'challenge_overshoot_bonus', // Уникальная причина
+          refId: widget.challenge.id,
+        );
+      }
+    }
+
     final granted = await ChallengeService.tryAwardReward(
       profileId: widget.profileId,
       challengeId: widget.challenge.id!,
@@ -111,22 +169,34 @@ class _CumulativeChallengeScreenState extends State<CumulativeChallengeScreen> {
     );
 
     if (!mounted) return;
-    _showCompletionDialog(granted);
+    _showCompletionDialog(granted, bonusEnergy: bonusEnergy, overshoot: overshoot);
   }
 
-  void _showCompletionDialog(bool granted) {
+  // 👇 ИЗМЕНЕНО: Показывает бонус в диалоговом окне
+  void _showCompletionDialog(bool granted, {int bonusEnergy = 0, int overshoot = 0}) {
+    String message = 'Ты отлично справился!\n\n🌸 В твоем Саду Феи расцвел новый цветок!\n⚡️ Начислено +15 энергии!';
+
+    if (!granted) {
+      message = 'Ты уже получал награду за этот челлендж. Но всё равно молодец!';
+    }
+
+    if (overshoot > 0) {
+      message += '\n\n🔥 Ого! Ты перевыполнил план на $overshoot повторений!';
+      if (bonusEnergy > 0) {
+        message += '\n🎁 Бонус за упорство: +$bonusEnergy ⚡!';
+      }
+    }
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('🎉 Челлендж выполнен!', textAlign: TextAlign.center),
-        content: Text(
-          granted
-              ? 'Ты отлично справился!\n\n🌸 В твоем Саду Феи расцвел новый цветок!\n⚡️ Начислено +15 энергии!'
-              : 'Ты уже получал награду за этот челлендж. Но всё равно молодец!',
-          textAlign: TextAlign.center,
+        title: Text(
+            overshoot > 0 ? '🏆 РЕКОРД ПОБИТ!' : '🎉 Челлендж выполнен!',
+            textAlign: TextAlign.center
         ),
+        content: Text(message, textAlign: TextAlign.center),
         actions: [
           ElevatedButton(
             onPressed: () {
@@ -152,8 +222,6 @@ class _CumulativeChallengeScreenState extends State<CumulativeChallengeScreen> {
         padding: const EdgeInsets.all(24.0),
         child: Column(
           children: [
-            Text(config.emoji, style: const TextStyle(fontSize: 80)),
-            const SizedBox(height: 24),
             Text('$_currentProgress / $_targetValue ${config.unit}',
                 style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
@@ -197,6 +265,26 @@ class _CumulativeChallengeScreenState extends State<CumulativeChallengeScreen> {
                   _buildAddButton(20, enabled: !isPaused),
                 ],
               ),
+              const SizedBox(height: 12),
+              // 👇 НОВАЯ КНОПКА РУЧНОГО ВВОДА
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: isPaused ? null : _showManualInputDialog,
+                  icon: const Icon(Icons.edit_rounded, size: 18),
+                  label: const Text('Ввести вручную', style: TextStyle(fontWeight: FontWeight.w600)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    foregroundColor: Colors.deepPurple,
+                    side: BorderSide(
+                      color: Colors.deepPurple.withOpacity(0.3),
+                    ),
+                  ),
+                ),
+              ),
             ] else
               const Text('Отдыхай, ты молодец! 🏆',
                   style: TextStyle(
@@ -229,3 +317,4 @@ class _CumulativeChallengeScreenState extends State<CumulativeChallengeScreen> {
     );
   }
 }
+// ═══ КОНЕЦ ФАЙЛА CumulativeChallengeScreen ═══

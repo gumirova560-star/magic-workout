@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 import '../../models/user_profile.dart';
 import '../../services/database_helper.dart';
 import '../../services/energy_service.dart';
-import '../../services/fairy_reaction_service.dart'; // 👇 ДОБАВЛЕНО
-import '../../data/fairy_mood.dart';                 // 👇 ДОБАВЛЕНО
+import '../../services/fairy_reaction_service.dart';
+import '../../data/fairy_mood.dart';
 import '../main_screen.dart';
 
 class ProfileEditScreen extends StatefulWidget {
@@ -46,6 +46,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   // 👇 ДИНАМИЧЕСКОЕ ОГРАНИЧЕНИЕ ФОКУСНЫХ ЗОН
   int get _maxFocusAreas => _level == 'beginner' ? 2 : 3;
 
+  // 👇 ДНИ: выбрали ли ровно столько, сколько нужно
+  bool get _weekdaysComplete => _selectedWeekdays.length == _daysPerWeek;
+
   @override
   void initState() {
     super.initState();
@@ -85,6 +88,19 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // 👇 Нельзя сохранить, пока не выбрано ровно _daysPerWeek дней
+    if (!_weekdaysComplete) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          _selectedWeekdays.length < _daysPerWeek
+              ? 'Добавь ещё ${_daysPerWeek - _selectedWeekdays.length} ${_daysPerWeek - _selectedWeekdays.length == 1 ? 'день' : 'дня'} — выбрано ${_selectedWeekdays.length} из $_daysPerWeek'
+              : 'Выбрано больше дней ($_selectedWeekdays.length), чем тренировок ($_daysPerWeek). Убери лишние',
+        ),
+        backgroundColor: Colors.deepPurple,
+      ));
+      return;
+    }
 
     if (_focusAreas.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Выберите хотя бы одну фокусную зону')));
@@ -376,7 +392,11 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: _weekdaysComplete
+                      ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
+                      : Theme.of(context).colorScheme.error.withValues(alpha: 0.5),
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -384,17 +404,27 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                   Row(
                     children: [
                       Icon(
-                        _selectedWeekdays.length == _daysPerWeek ? Icons.check_circle_outline_rounded : Icons.info_outline_rounded,
+                        _weekdaysComplete ? Icons.check_circle_outline_rounded : Icons.info_outline_rounded,
                         size: 18,
-                        color: Theme.of(context).colorScheme.primary,
+                        color: _weekdaysComplete
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.error,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          _selectedWeekdays.isEmpty
+                          _weekdaysComplete
+                              ? 'Выбрано ${_selectedWeekdays.length} из $_daysPerWeek. Не сможете в день — перенесёте тренировку прямо из плана'
+                              : _selectedWeekdays.isEmpty
                               ? 'Выберите $_daysPerWeek день(ей) — план ляжет именно на них'
-                              : 'Выбрано ${_selectedWeekdays.length} из $_daysPerWeek. Не сможете в день — перенесёте тренировку прямо из плана',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary),
+                              : 'Добавь ещё ${_daysPerWeek - _selectedWeekdays.length} ${_daysPerWeek - _selectedWeekdays.length == 1 ? 'день' : 'дня'} — выбрано ${_selectedWeekdays.length} из $_daysPerWeek',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: _weekdaysComplete
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context).colorScheme.error,
+                          ),
                         ),
                       ),
                     ],
@@ -422,7 +452,12 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             const SizedBox(height: 32),
 
             ElevatedButton.icon(
+              // 👇 Кнопка активна всегда, чтобы по тапу показать сообщение,
+              // но приглушена, пока дней не хватает
               onPressed: _save,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _weekdaysComplete ? null : Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
+              ),
               icon: const Icon(Icons.check_rounded),
               label: Text(isEdit ? 'Сохранить' : 'Создать профиль'),
             ),

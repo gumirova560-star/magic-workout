@@ -17,6 +17,7 @@ import 'challenge_dice_screen.dart';
 import '../../widgets/daily_challenge_card.dart';
 import '../../widgets/energy_badge.dart';
 import '../garden/garden_screen.dart'; // 👈 Импорт Сада
+import '../../services/energy_service.dart';
 
 class WorkoutScreen extends StatefulWidget {
   const WorkoutScreen({super.key});
@@ -119,6 +120,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     if (profiles.isNotEmpty) {
       final active = profiles.first;
+      // 👇 ЕЖЕДНЕВНЫЙ ВХОД: +5⚡ один раз в календарный день.
+      // Вызов безопасен: сам сервис защищён UNIQUE-констрейнтом и кэшем,
+      // поэтому можно звать при каждом обновлении экрана.
+      if (active.id != null) {
+        await EnergyService.grantDailyLogin(active.id!);
+      }
+
       final allHistory = await DatabaseHelper.instance.getWorkoutDays(profileId: active.id!, limit: 100);
 
       final activeMonthPlan = allHistory.where((d) => d.status != 'completed').toList();

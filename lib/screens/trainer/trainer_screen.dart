@@ -11,20 +11,15 @@ class TrainerScreen extends StatefulWidget {
 }
 
 class _TrainerScreenState extends State<TrainerScreen> {
-  // 👇 ФИКС БАГА 9: ключ строки вместо числового индекса — иначе при
-  // фильтрации indexOf(group) возвращал -1 и группы делили индексы,
-  // из-за чего ответы открывались парами
   String? _expandedIndex;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
-  // 👇 Два поля обратной связи
   final TextEditingController _questionController = TextEditingController();
   final TextEditingController _ideaController = TextEditingController();
   bool _isSendingQuestion = false;
   bool _isSendingIdea = false;
 
-  // 👇 Персонализация
   String get _name => widget.profile?.name ?? 'друг';
   bool get _isMale => widget.profile?.gender == 'male';
   String get _coped => _isMale ? 'справился' : 'справилась';
@@ -75,7 +70,7 @@ class _TrainerScreenState extends State<TrainerScreen> {
         'name': _name,
         'profileId': widget.profile?.id,
         'message': trimmed,
-        'type': type, // 'question' | 'idea'
+        'type': type,
         'timestamp': FieldValue.serverTimestamp(),
       });
 
@@ -114,7 +109,7 @@ class _TrainerScreenState extends State<TrainerScreen> {
             const SizedBox(width: 8),
             const Expanded(child: Text('Спасибо!')),
           ]),
-          content: Text(msg, style: const TextStyle(fontSize: 14, height: 1.4)),
+          content: Text(msg, style: const TextStyle(fontSize: 13, height: 1.4)),
           actions: [
             ElevatedButton(
               onPressed: () => Navigator.pop(ctx),
@@ -178,7 +173,30 @@ class _TrainerScreenState extends State<TrainerScreen> {
         },
         {
           'q': 'Могу ли я менять упражнения в плане?',
-          'a': 'Конечно! Если упражнение не подходит (нет оборудования, тяжело или не нравится), нажми на три точки рядом и выбери «Заменить упражнение». Я подберу альтернативу с учётом причины. Изменения можно применить на один день или на весь месяц.',
+          'a': 'Конечно! Нажми на упражнение — в меню есть «Заменить упражнение» с выбором причины (нет оборудования, тяжело, легко, не нравится) и быстрый значок замены прямо на карточке — тот же экран замены, но без вопросов о причине.\n\nВ обоих случаях покажу аналоги, фильтр по инвентарю и поиск. Для базовых спрошу в конце: «Только сегодня» или «Навсегда» — замена закрепится во всём месяце. Для изоляции замена ставится на один день: на следующей тренировке вернётся запланированное. И я никогда не предложу упражнение, запрещённое твоими ограничениями.',
+        },
+      ],
+    },
+    {
+      'title': '📅 План тренировок',
+      'icon': Icons.calendar_month_rounded,
+      'color': const Color(0xFF0984E3),
+      'items': [
+        {
+          'q': 'Как устроен план тренировок?',
+          'a': '$_name, план создаётся сразу на месяц — это один цикл из 4 недель. Первые три недели нагрузка растёт: добавляются подходы, а на 3-й неделе, если ты выполняла норму, — рабочий вес. Четвёртая неделя — разгрузочная: вес откатывается назад, чтобы организм восстановился. Базовые упражнения внутри цикла чередуются — каждое возвращается раз в два цикла, а изоляции не повторяются около двух недель. Чтобы перейти к следующей неделе, нужно закрыть все дни предыдущей.',
+        },
+        {
+          'q': 'От чего зависит мой план?',
+          'a': 'Видишь ли, $_name, план собирается лично под тебя. Тип фигуры подсказывает акцентные зоны (например, «Груша» — плечи и ягодицы, «Яблоко» — пресс и ноги). Уровень задаёт сложность и количество фокусных зон. Цель меняет структуру: при похудении больше кардио и короче отдых. Инвентарь определяет пул упражнений, а ограничения по здоровью исключают опасные движения. И, конечно, план ляжет именно на выбранные тобой дни недели.',
+        },
+        {
+          'q': 'Можно ли выбрать «Кардио-день»?',
+          'a': 'Если ты тренируешься от трёх дней в неделю — да. При двух днях в неделю каждой тренировке нужнее силовая часть.',
+        },
+        {
+          'q': 'Не смогу тренироваться в выбранный день — что делать?',
+          'a': 'Ничего страшного, $_name: тренировку можно перенести прямо из плана на другой день. План живой, подстроится.',
         },
       ],
     },
@@ -187,10 +205,6 @@ class _TrainerScreenState extends State<TrainerScreen> {
       'icon': Icons.trending_up_rounded,
       'color': const Color(0xFF00B894),
       'items': [
-        {
-          'q': 'Почему план строится на месяц?',
-          'a': 'Месяц (4 недели) — это классический цикл периодизации. Я постепенно повышаю нагрузку, а на 4-й неделе делаю разгрузку, чтобы тело восстановилось. Такой цикл даёт стабильный прогресс без выгорания.',
-        },
         {
           'q': 'Как растёт вес и меняются повторы?',
           'a': '$_name, это зависит от цели:\n\n• Тонус и похудение — вес повышаю на 3-й неделе, повторы сохраняю с 2-й (если ты $_coped).\n• Сила и масса — вес повышаю на 2-й и 3-й неделе, повторы остаются базовыми для адаптации.\n\nЕсли ты $_didNot норму — вес не вырастет, пока техника не закрепится.',
@@ -220,7 +234,7 @@ class _TrainerScreenState extends State<TrainerScreen> {
         },
         {
           'q': 'Что такое фокусные зоны и тип фигуры?',
-          'a': 'У тебя в профиле выбран тип фигуры «$_bodyTypeLabel». Это значит, что я автоматически подбираю упражнения так, чтобы подчеркнуть достоинства именно этого типа (например, сделать акцент на ягодицы, плечи или талию). Фокусные зоны — это те мышцы, которые мы прорабатываем в первую очередь.',
+          'a': 'У тебя в профиле выбран тип фигуры «$_bodyTypeLabel». Это значит, что я автоматически подбираю упражнения так, чтобы подчеркнуть достоинства именно этого типа (например, сделать акцент на ягодицы, плечи или талию). Фокусные зоны — это те мышцы, которые мы прорабатываем в первую очередь. Новичкам доступно 2 зоны, остальным — 3.',
         },
         {
           'q': 'Как уровень (Новичок/Средний/Продвинутый) влияет на план?',
@@ -229,6 +243,75 @@ class _TrainerScreenState extends State<TrainerScreen> {
         {
           'q': 'Почему кардио стоит в конце тренировки?',
           'a': 'Чтобы не тратить силы на бег до силовой работы. Сначала мы выкладываемся на базе и изоляции, а кардио в конце помогает «дожечь» калории и разогнать пульс.',
+        },
+      ],
+    },
+    {
+      'title': '⚡ Энергия и усталость',
+      'icon': Icons.bolt_rounded,
+      'color': const Color(0xFFFDCB6E),
+      'items': [
+        {
+          'q': 'Как получить энергию?',
+          'a': 'Сразу после создания профиля я дарю 30 ⚡ приветственных. Дальше источники:За вход в приложение каждый день ты получаешь 5⚡,  завершённая тренировка (+20 ⚡), день челленджа в 3-й неделе (+60 ⚡ и Золотой Лотос в сад!), ежедневный мини-челлендж (+15 ⚡ и цветок 🌸), сессия йоги (+15 ⚡), $_name. Всю историю начислений видно на экране «Жизненная энергия».',
+        },
+        {
+          'q': 'На что тратить энергию?',
+          'a': 'В Саду Феи: лотосы, тропинки, скамейки, фонтаны и другие украшения — от 10 до 100 ⚡. Завядший цветок оживляет за 30 ⚡. Убранный предмет возвращает свою цену полностью.',
+        },
+        {
+          'q': 'Почему цветок завял?',
+          'a': '$_name, это честная часть игры: если вчерашний мини-челлендж остался незавершённым, один цветок в саду засыпает. Нажми на него — и он расцветёт снова за 30 ⚡ Жизненной Энергии. Даже если ты пропустила несколько дней, завянет только один цветок, а не весь сад. Завядший цветок нельзя убрать или переставить — только оживить.',
+        },
+        {
+          'q': 'Куда делись мои элементы? Как посмотреть историю?',
+          'a': 'На экране «Жизненная энергия» видно все начисления и траты с причинами: покупки в саду, оживление цветка, награды за тренировки и челленджи. Если кажется, что что-то списалось зря — сверь с историей, там каждая транзакция.',
+        },
+      ],
+    },
+    {
+      'title': '🌻 Сад Феи',
+      'icon': Icons.local_florist_rounded,
+      'color': const Color(0xFF00B894),
+      'items': [
+        {
+          'q': 'Как работает Сад Феи?',
+          'a': 'Сад — это твой прогресс, ставший наглядным, $_name. Цветы растут за выполненные челленджи и тренировки, а за энергию можно покупать декор: скамейки, кусты, качели, фонтаны, фонари, арки. Нажми на свободную клетку — откроется магазин. Зажми предмет и перетащи — переместишь его на другое место. Тропинку можно положить даже под готовый объект.',
+        },
+        {
+          'q': 'Что за Золотой Лотос?',
+          'a': 'Самый ценный цветок в саду 🌟 — он вырастает за пройденный день челленджа в 3-й неделе месяца. Обычные цветы растут за ежедневные мини-челленджи.',
+        },
+        {
+          'q': 'Можно ли поделиться садом?',
+          'a': 'Конечно, $_name! Иконка «Поделиться» вверху — я соберу красивую картинку-историю с твоим садом, и её можно отправить друзьям или выложить в соцсети. Сад — это тоже твой прогресс, им можно гордиться!',
+        },
+        {
+          'q': 'Можно ли начать сад заново?',
+          'a': 'Да, $_name — иконка корзины вверху экрана сада. Но учти: при полной очистке энергия за предметы не возвращается, а вот если убирать предметы по одному — цена возвращается целиком.',
+        },
+      ],
+    },
+    {
+      'title': '📊 Прогресс и фото',
+      'icon': Icons.analytics_rounded,
+      'color': const Color(0xFF6C5CE7),
+      'items': [
+        {
+          'q': 'Где посмотреть мой прогресс?',
+          'a': 'Во вкладке «Прогресс», $_name. Сверху — три цифры: сколько тренировок завершено, суммарное время и общий объём (тоннаж). Ниже — график по дням недели: он считает факт, поэтому если тренировка сдвинулась, она попадёт в свой реальный день. Дальше календарь месяца со статусами, и в конце — выпадающий список упражнений с графиком веса по каждому.',
+        },
+        {
+          'q': 'Что такое анализ упражнений?',
+          'a': 'Это раздел в «Прогрессе». Он делится на «Силовой прогресс» (веса) и «Функциональный» (время, повторения, кардио). По каждому упражнению видно, сколько раз оно встречалось, средний результат прошлой и текущей недели и рекомендацию: расти, держать темп или притормозить. Анализ появляется, когда закрыта 3-я неделя цикла — до этого сравнивать просто не с чем.',
+        },
+        {
+          'q': 'Как работают фото трансформации?',
+          'a': 'Раз в месяц делай фото с трёх ракурсов: спереди, сбоку и сзади. И понимаешь, $_name, главное — снимать в одинаковых условиях: тот же свет, та же поза, то же время суток. Тогда разница между «до» и «после» будет честной. Фото можно перезагрузить, открыть на весь экран и приблизить пальцами. Они хранятся прямо в приложении и никуда не отправляются.',
+        },
+        {
+          'q': 'Что такое достижения?',
+          'a': 'Маленькие награды за серии, подходы и объём. Они помогают не бросать и замечать прогресс. Смотри их в разделе достижений — там видно, что уже открыто, а к чему ты идёшь.',
         },
       ],
     },
@@ -247,29 +330,6 @@ class _TrainerScreenState extends State<TrainerScreen> {
         },
       ],
     },
-    {
-      'title': '🧚 О приложении',
-      'icon': Icons.auto_awesome_rounded,
-      'color': const Color(0xFFA29BFE),
-      'items': [
-        {
-          'q': 'Что такое анализ упражнений?',
-          'a': 'Я сравниваю неделю 1 и неделю 3 текущего цикла и показываю, где ты растёшь, где стагнация, а где результат падает. Плюс даю рекомендацию по каждому упражнению. Открывается из экрана «Прогресс».',
-        },
-        {
-          'q': 'Что такое фото трансформации?',
-          'a': 'Делай фото до/после по месяцам с трёх ракурсов — я храню их и показываю прогресс. Это отличный способ увидеть изменения, когда весы стоят на месте. Открывается из экрана «Прогресс».',
-        },
-        {
-          'q': 'Что такое достижения?',
-          'a': 'Маленькие награды за серии, подходы и объём. Они помогают не бросать и замечать прогресс. Смотри их в разделе достижений — там видно, что уже открыто, а к чему ты идёшь.',
-        },
-        {
-          'q': 'Что такое шаблоны?',
-          'a': 'Можешь сохранить тренировку как шаблон и использовать позже — например, свою любимую силовую. Открывается из экрана «Тренировки» → меню «Из шаблона».',
-        },
-      ],
-    },
   ];
 
   // ═══════════════════════════════════════════════════════════
@@ -280,7 +340,6 @@ class _TrainerScreenState extends State<TrainerScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // 👇 Фильтрация по поиску
     final query = _searchQuery.trim().toLowerCase();
     final filteredGroups = _faqGroups.map((group) {
       final items = (group['items'] as List).where((item) {
@@ -294,7 +353,7 @@ class _TrainerScreenState extends State<TrainerScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Шпаргалка от Феи'),
+        title: const Text('Шпаргалка от Феи', style: TextStyle(fontSize: 18)),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -335,17 +394,17 @@ class _TrainerScreenState extends State<TrainerScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Image.asset('assets/fairy/fairy_wink.png', width: 72, height: 72, fit: BoxFit.contain),
+          Image.asset('assets/fairy/fairy_wink.png', width: 90, height: 90, fit: BoxFit.contain),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Привет, $_name!', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                Text('Привет, $_name!', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
                 const Text(
                   'Я собрала для тебя популярные вопросы по группам. Нажми на любой, чтобы узнать ответ.',
-                  style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.3),
+                  style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.3),
                 ),
               ],
             ),
@@ -361,11 +420,11 @@ class _TrainerScreenState extends State<TrainerScreen> {
       onChanged: (v) => setState(() => _searchQuery = v),
       decoration: InputDecoration(
         hintText: 'Найти ответ...',
-        hintStyle: TextStyle(fontSize: 14, color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
-        prefixIcon: Icon(Icons.search_rounded, color: theme.colorScheme.primary),
+        hintStyle: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
+        prefixIcon: Icon(Icons.search_rounded, color: theme.colorScheme.primary, size: 20),
         suffixIcon: _searchQuery.isNotEmpty
             ? IconButton(
-          icon: const Icon(Icons.close_rounded, size: 20),
+          icon: const Icon(Icons.close_rounded, size: 18),
           onPressed: () {
             _searchController.clear();
             setState(() => _searchQuery = '');
@@ -374,12 +433,13 @@ class _TrainerScreenState extends State<TrainerScreen> {
             : null,
         filled: true,
         fillColor: theme.colorScheme.primary.withValues(alpha: 0.05),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
         ),
       ),
+      style: const TextStyle(fontSize: 13),
     );
   }
 
@@ -388,17 +448,17 @@ class _TrainerScreenState extends State<TrainerScreen> {
       padding: const EdgeInsets.symmetric(vertical: 40),
       child: Column(
         children: [
-          Icon(Icons.search_off_rounded, size: 48, color: theme.colorScheme.primary.withValues(alpha: 0.4)),
+          Icon(Icons.search_off_rounded, size: 40, color: theme.colorScheme.primary.withValues(alpha: 0.4)),
           const SizedBox(height: 12),
           Text(
             'Ничего не нашлось',
-            style: theme.textTheme.headlineMedium?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
           ),
           const SizedBox(height: 6),
           Text(
             'Попробуй другой запрос или напиши мне вопрос внизу',
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+            style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
           ),
         ],
       ),
@@ -419,18 +479,19 @@ class _TrainerScreenState extends State<TrainerScreen> {
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(group['icon'] as IconData, color: color, size: 20),
+                  child: Icon(group['icon'] as IconData, color: color, size: 18),
                 ),
                 const SizedBox(width: 10),
                 Text(
                   group['title'] as String,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
                     color: theme.colorScheme.onSurface,
                   ),
                 ),
@@ -439,8 +500,6 @@ class _TrainerScreenState extends State<TrainerScreen> {
           ),
           ...List.generate(items.length, (i) {
             final item = items[i];
-            // 👇 ФИКС БАГА 9: ключ строим из названия группы и номера карточки —
-            // он уникален и стабилен при поиске, в отличие от сломанного indexOf
             final itemKey = '${group['title']}#$i';
             final isExpanded = _expandedIndex == itemKey;
             return Padding(
@@ -492,7 +551,7 @@ class _TrainerScreenState extends State<TrainerScreen> {
           onTap: onTap,
           borderRadius: BorderRadius.circular(16),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -502,7 +561,7 @@ class _TrainerScreenState extends State<TrainerScreen> {
                       child: Text(
                         question,
                         style: TextStyle(
-                          fontSize: 15,
+                          fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: isExpanded ? theme.colorScheme.primary : theme.colorScheme.onSurface,
                         ),
@@ -511,17 +570,18 @@ class _TrainerScreenState extends State<TrainerScreen> {
                     Icon(
                       isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
                       color: isExpanded ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                      size: 20,
                     ),
                   ],
                 ),
                 if (isExpanded) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   Text(
                     answer,
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 13,
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
-                      height: 1.5,
+                      height: 1.4,
                     ),
                   ),
                 ],
@@ -533,56 +593,50 @@ class _TrainerScreenState extends State<TrainerScreen> {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════
-  //  ПОДВАЛ: ПОДПИСЬ ФЕИ + ДВА ПОЛЯ ОБРАТНОЙ СВЯЗИ
-  // ═══════════════════════════════════════════════════════════
-
   Widget _buildFooter(BuildContext context, ThemeData theme) {
     return Center(
       child: Column(
         children: [
           Image.asset(
             'assets/fairy/fairy_happy.png',
-            width: 80,
-            height: 80,
+            width: 110,
+            height: 110,
             fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_rounded, size: 64, color: theme.colorScheme.primary),
+            errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_rounded, size: 48, color: theme.colorScheme.primary),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Text(
             'С заботой о тебе,\nтвоя Фея',
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 14,
               fontWeight: FontWeight.w700,
               fontStyle: FontStyle.italic,
               color: theme.colorScheme.primary,
-              height: 1.4,
+              height: 1.3,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.1)),
             ),
             child: Text(
-              // 👇 род по профилю: нашла/нашёл
               'P.S. Если не $_found ответа — задай вопрос или оставь пожелание ниже. Я обязательно прочитаю! 🧚‍♀️',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 11,
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                 fontStyle: FontStyle.italic,
-                height: 1.4,
+                height: 1.3,
               ),
             ),
           ),
           const SizedBox(height: 20),
 
-          // ═══ ПОЛЕ 1: ВОПРОС ═══
           _buildFeedbackField(
             theme: theme,
             title: 'Есть вопрос?',
@@ -594,7 +648,6 @@ class _TrainerScreenState extends State<TrainerScreen> {
           ),
           const SizedBox(height: 12),
 
-          // ═══ ПОЛЕ 2: ПОЖЕЛАНИЕ ПО УЛУЧШЕНИЮ ═══
           _buildFeedbackField(
             theme: theme,
             title: 'Пожелание по улучшению',
@@ -634,7 +687,7 @@ class _TrainerScreenState extends State<TrainerScreen> {
           Text(
             title,
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
               color: accent,
             ),
@@ -649,28 +702,28 @@ class _TrainerScreenState extends State<TrainerScreen> {
                   minLines: 1,
                   decoration: InputDecoration(
                     hintText: hint,
-                    hintStyle: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
+                    hintStyle: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
                     ),
                     filled: true,
                     fillColor: accent.withValues(alpha: 0.05),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   ),
-                  style: const TextStyle(fontSize: 14),
+                  style: const TextStyle(fontSize: 13),
                 ),
               ),
               const SizedBox(width: 8),
               IconButton(
                 onPressed: isSending ? null : () => _sendFeedback(text: controller.text, type: type),
                 icon: isSending
-                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.send_rounded),
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.send_rounded, size: 20),
                 style: IconButton.styleFrom(
                   backgroundColor: accent,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(10),
                 ),
               ),
             ],

@@ -59,16 +59,24 @@ class FairyStatsService {
       return partsA[1].compareTo(partsB[1]);
     });
 
-    // 👇 ГЛАВНОЕ ИСПРАВЛЕНИЕ: в базе лежат и БУДУЩИЕ недели плана (статус planned).
     // Серия считается только до последней «активной» недели — той, где уже есть
-    // хотя бы один выполненный или пропущенный день. Всё, что дальше, —
-    // будущее, о него серия ломаться не должна.
+    // хотя бы один выполненный или пропущенный день. Будущие недели плана
+    // (со статусом planned) в подсчёт не попадают и серию не ломают.
     int lastActiveIndex = -1;
     for (int i = 0; i < sortedWeekKeys.length; i++) {
       final weekDays = weeks[sortedWeekKeys[i]]!;
       if (weekDays.any((d) => d.status == 'completed' || d.status == 'skipped')) {
         lastActiveIndex = i;
       }
+    }
+
+    // 👇 ДИАГНОСТИКА: печатаем состояние каждой недели
+    print('FairyStreak: daysPerWeek=$daysPerWeek, недель всего=${sortedWeekKeys.length}, последняя активная=$lastActiveIndex');
+    for (int i = 0; i <= lastActiveIndex; i++) {
+      final weekDays = weeks[sortedWeekKeys[i]]!;
+      final completedCount = weekDays.where((d) => d.status == 'completed').length;
+      final skippedCount = weekDays.where((d) => d.status == 'skipped').length;
+      print('FairyStreak: неделя ${sortedWeekKeys[i]} — completed=$completedCount, skipped=$skippedCount, всего дней=${weekDays.length}');
     }
 
     int streak = 0;
@@ -85,7 +93,7 @@ class FairyStatsService {
       if (isWeekComplete) {
         streak++;
       } else if (i == lastActiveIndex) {
-        // 👇 Текущая неделя ещё в процессе — серию не ломаем и не наращиваем
+        // Текущая неделя ещё в процессе — серию не ломаем и не наращиваем
         break;
       } else {
         // Прошлая неделя не закрыта или в ней был пропуск — серия прервана
@@ -93,6 +101,8 @@ class FairyStatsService {
         break;
       }
     }
+
+    print('FairyStreak: итог series=$streak');
 
     await prefs.setInt(_keyStreakWeeks, streak);
     return streak;

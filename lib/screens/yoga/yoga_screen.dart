@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/yoga_session.dart';
 import '../../services/database_helper.dart';
-import '../../widgets/fairy_bubble.dart'; // ⚠️ ИМПОРТ ФЕИ
+import '../../widgets/fairy_bubble.dart';
 import 'session_detail_screen.dart';
 import 'stretch_list_screen.dart';
 
@@ -15,6 +15,7 @@ class YogaScreen extends StatefulWidget {
 class _YogaScreenState extends State<YogaScreen> {
   List<YogaSession> _sessions = [];
   bool _loading = true;
+  int? _profileId; // 👈 НОВОЕ: id активного профиля для наград
 
   @override
   void initState() {
@@ -25,8 +26,12 @@ class _YogaScreenState extends State<YogaScreen> {
   Future<void> _loadSessions() async {
     setState(() => _loading = true);
     final sessions = await DatabaseHelper.instance.getYogaSessions();
+    // 👇 активный профиль — как на главном экране: первый в списке
+    final profiles = await DatabaseHelper.instance.getProfiles();
+    if (!mounted) return;
     setState(() {
       _sessions = sessions;
+      _profileId = profiles.isNotEmpty ? profiles.first.id : null;
       _loading = false;
     });
   }
@@ -34,7 +39,12 @@ class _YogaScreenState extends State<YogaScreen> {
   Future<void> _openSession(YogaSession session) async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => SessionDetailScreen(session: session)),
+      MaterialPageRoute(
+        builder: (_) => SessionDetailScreen(
+          session: session,
+          profileId: _profileId, // 👈 ПРОФИЛЬ ЕДЕТ ДАЛЬШЕ
+        ),
+      ),
     );
   }
 
@@ -75,37 +85,31 @@ class _YogaScreenState extends State<YogaScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Йога и растяжка')),
-      // ⚠️ ОБОРАЧИВАЕМ В STACK, ЧТОБЫ ВСТАВИТЬ ФЕЮ
       body: Stack(
         children: [
           _loading
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(
-                  onRefresh: _loadSessions,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      _buildFreePracticeCard(context),
-                      const SizedBox(height: 20),
-                      Text(
-                        'Готовые сессии',
-                        style: theme.textTheme.headlineMedium,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${_sessions.length} практик для разных целей',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      ..._sessions.map((s) => _buildSessionCard(context, s)),
-                      const SizedBox(height: 120),
-                    ],
+            onRefresh: _loadSessions,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _buildFreePracticeCard(context),
+                const SizedBox(height: 20),
+                Text('Готовые сессии', style: theme.textTheme.headlineMedium),
+                const SizedBox(height: 4),
+                Text(
+                  '${_sessions.length} практик для разных целей',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
-
-          // ⚠️ ФЕЯ ТЕПЕРЬ ЗДЕСЬ (ПОВЕРХ ЭКРАНА ЙОГИ)
+                const SizedBox(height: 12),
+                ..._sessions.map((s) => _buildSessionCard(context, s)),
+                const SizedBox(height: 120),
+              ],
+            ),
+          ),
           const FairyBubble(screenKey: 'yoga'),
         ],
       ),
@@ -197,11 +201,7 @@ class _YogaScreenState extends State<YogaScreen> {
                   ),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Icon(
-                  _getFocusIcon(session.focus),
-                  color: Colors.white,
-                  size: 26,
-                ),
+                child: Icon(_getFocusIcon(session.focus), color: Colors.white, size: 26),
               ),
               const SizedBox(width: 14),
               Expanded(

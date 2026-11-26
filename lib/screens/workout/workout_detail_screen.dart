@@ -19,7 +19,7 @@ import 'widgets/circle_header.dart';
 import '../exercise/stretch_detail_screen.dart';
 import '../../services/energy_service.dart';
 import '../../services/garden_service.dart';
-
+import '../../services/notification_service.dart'; // 👈 ДОБАВИТЬ ЭТО
 class WorkoutDetailScreen extends StatefulWidget {
   final WorkoutDay? workoutDay;
   final int profileId;
@@ -1323,8 +1323,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen>
     Color snackColor;
 
     if (isChallengeDay) {
-      // UNIQUE(profileId, reason, refId) в energy_transactions —
-      // гарантия, что 60⚡ и лотос выдаются только ОДИН раз за этот день
       final awarded = await EnergyService.addEnergy(
         profileId: widget.profileId,
         delta: 60,
@@ -1334,9 +1332,17 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen>
       if (awarded) {
         await GardenService.plantNextFlower(
           profileId: widget.profileId,
-          flowerType: 'legendary', // flower_gold.png в саду
+          flowerType: 'legendary',
         );
         snackMessage = '🏆 ЧЕЛЛЕНДЖ ПРОЙДЕН!\n+60 ⚡️ и Золотой Лотос выросли в Саду Феи 🌸✨';
+
+        // 👇 ОТПРАВЛЯЕМ ПУШ
+        await NotificationService.showInstantNotification(
+          id: _workoutDayId ?? 0,
+          title: '🏆 Челлендж пройден!',
+          body: 'Ты получил 60⚡ и Золотой Лотос. Загляни в Сад Феи!',
+        );
+
       } else {
         snackMessage = 'Челлендж уже засчитан ранее. Отличная работа! 💪';
       }

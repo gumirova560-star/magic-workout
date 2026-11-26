@@ -12,6 +12,7 @@ import 'services/data_initializer.dart';
 import 'services/theme_service.dart';
 import 'services/database_helper.dart';
 import 'services/fairy_reaction_service.dart';
+import 'services/notification_service.dart'; // 👈 ДОБАВИЛИ ИМПОРТ
 import 'theme/app_theme.dart';
 import 'screens/main_screen.dart';
 import 'screens/onboarding_screen.dart';
@@ -34,6 +35,9 @@ Future<void> main() async {
       debugPrint('Firebase не инициализирован: $e');
     }
   }
+
+  // 👇 ИНИЦИАЛИЗАЦИЯ УВЕДОМЛЕНИЙ
+  await NotificationService.init();
 
   // Инициализируем БД до запуска приложения
   await DataInitializer.initialize();
@@ -77,6 +81,15 @@ class _MyAppState extends State<MyApp> {
 
     final profiles = await DatabaseHelper.instance.getProfiles();
     final hasProfile = profiles.isNotEmpty;
+
+    // 👇 СТАВИМ ЕЖЕДНЕВНОЕ НАПОМИНАНИЕ НА 18:00
+    await NotificationService.scheduleDailyReminder(
+      id: 100,
+      title: 'Твоя Фея скучает! 🌸',
+      body: 'Пора на тренировку или забери награду за сегодняшний челлендж.',
+      hour: 18,
+      minute: 0,
+    );
 
     if (!mounted) return;
     setState(() {

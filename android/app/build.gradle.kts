@@ -13,6 +13,7 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true // 👈 ДОБАВЛЕНО
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -49,4 +50,9 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+// 👇 ДОБАВЛЕНО: зависимость для coreLibraryDesugaring
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

@@ -57,11 +57,12 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       MaterialPageRoute(
         builder: (_) => YogaPlayerScreen(
           session: widget.session,
-          profileId: widget.profileId,
+          profileId: widget.profileId, // 👈 БЫЛО: widget.profileId уже был, но проверьте
         ),
       ),
     );
   }
+
 
   @override
   Widget build(BuildContext context) {

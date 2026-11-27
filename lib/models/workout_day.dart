@@ -12,6 +12,7 @@ class WorkoutDay {
   DateTime? completedAt;
   int? weekNumber;
   int? cycleNumber;
+  String? userMood; // 👈 НОВОЕ: 'ready' / 'tired' — самочувствие перед стартом
 
   WorkoutDay({
     this.id,
@@ -27,6 +28,7 @@ class WorkoutDay {
     this.completedAt,
     this.weekNumber,
     this.cycleNumber,
+    this.userMood,
   }) : date = date ?? DateTime.now();
 
   Map<String, dynamic> toMap() {
@@ -44,6 +46,7 @@ class WorkoutDay {
       'completedAt': completedAt?.toIso8601String(),
       'weekNumber': weekNumber,
       'cycleNumber': cycleNumber,
+      'userMood': userMood, // 👈 НОВОЕ
     };
   }
 
@@ -62,6 +65,7 @@ class WorkoutDay {
       completedAt: DateTime.tryParse(map['completedAt']?.toString() ?? ''),
       weekNumber: map['weekNumber'],
       cycleNumber: map['cycleNumber'],
+      userMood: map['userMood'], // 👈 НОВОЕ
     );
   }
 
@@ -79,6 +83,7 @@ class WorkoutDay {
     DateTime? completedAt,
     int? weekNumber,
     int? cycleNumber,
+    String? userMood, // 👈 НОВОЕ
   }) {
     return WorkoutDay(
       id: id ?? this.id,
@@ -94,6 +99,7 @@ class WorkoutDay {
       completedAt: completedAt ?? this.completedAt,
       weekNumber: weekNumber ?? this.weekNumber,
       cycleNumber: cycleNumber ?? this.cycleNumber,
+      userMood: userMood ?? this.userMood,
     );
   }
 

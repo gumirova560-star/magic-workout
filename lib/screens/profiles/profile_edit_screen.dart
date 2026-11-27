@@ -5,6 +5,7 @@ import '../../services/database_helper.dart';
 import '../../services/energy_service.dart';
 import '../../services/fairy_reaction_service.dart';
 import '../../data/fairy_mood.dart';
+import '../../services/workout_generator.dart'; // 👇 НОВОЕ: генератор для перегенерации плана
 import '../main_screen.dart';
 
 class ProfileEditScreen extends StatefulWidget {
@@ -51,6 +52,23 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
   bool get _weekdaysComplete => _selectedWeekdays.length == _daysPerWeek;
 
+  // 👇 НОВОЕ: «эффективное» место тренировок из сохранённого профиля.
+  // Legacy-значения (mixed, dumbbells, bodyweight) сворачиваются в
+  // gym/home, чтобы случайное сохранение не вызывало ложную
+  // перегенерацию плана.
+  String _effectiveEquipment(UserProfile p) {
+    switch (p.equipment) {
+      case 'gym':
+      case 'mixed':
+        return 'gym';
+      case 'home':
+      case 'dumbbells':
+      case 'bodyweight':
+      default:
+        return 'home';
+    }
+  }
+
   static const _homeEquipmentOptions = <(String, String, IconData)>[
     ('dumbbells', 'Гантели', Icons.sports_gymnastics_rounded),
     ('barbell', 'Штанга', Icons.fitness_center_rounded),
@@ -59,6 +77,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     ('jump_rope', 'Скакалка', Icons.timeline_rounded),
     ('pull_up_bar', 'Турник / брусья', Icons.horizontal_rule_rounded),
     ('bench', 'Скамья', Icons.chair_rounded),
+    ('ankle_weights', 'Утяжелители', Icons.monitor_weight_rounded), // 👈 НОВОЕ
     ('treadmill', 'Дорожка', Icons.directions_run_rounded),
     ('elliptical', 'Эллипс', Icons.air_rounded),
     ('bike', 'Велотренажёр', Icons.pedal_bike_rounded),
@@ -142,6 +161,17 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
     final finalFocusAreas = _focusAreas.take(_maxFocusAreas).toList();
 
+    // 👇 НОВОЕ: страховка для legacy-профилей — дому не даём цели «сила/масса»
+    var finalGoal = _goal;
+    if (_equipment == 'home' &&
+        (finalGoal == 'strength' || finalGoal == 'gain_mass')) {
+      finalGoal = 'tone';
+    }
+
+    // 👇 НОВОЕ: зафиксировали смену места тренировок ДО сохранения
+    final equipmentChanged = widget.profile != null &&
+        _effectiveEquipment(widget.profile!) != _equipment;
+
     final profile = UserProfile(
       id: widget.profile?.id,
       name: _nameController.text.trim(),
@@ -150,7 +180,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       height: _height,
       weight: _weight,
       level: _level,
-      goal: _goal,
+      goal: finalGoal, // 👇 ИЗМЕНЕНО: используем finalGoal вместо _goal
       focusAreas: finalFocusAreas,
       limitations: _limitations.toList(),
       equipment: _equipment,
@@ -181,6 +211,23 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         );
       } else {
         await DatabaseHelper.instance.updateProfile(profile);
+
+        // 👇 НОВОЕ: смена места тренировок (в обе стороны) — план
+        // пересоздаётся целиком. deleteUnfinishedWorkoutDays чистит
+        // незавершённые дни старого цикла, generateMonthPlan создаёт
+        // новый цикл уже под новое оборудование. Завершённые дни —
+        // остаются в истории.
+        if (equipmentChanged) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Место тренировок изменилось — обновляем план...'),
+              duration: Duration(seconds: 2),
+            ));
+          }
+          await DatabaseHelper.instance
+              .deleteUnfinishedWorkoutDays(profile.id!);
+          await WorkoutGenerator.generateMonthPlan(profile);
+        }
       }
 
       if (!mounted) return;
@@ -352,9 +399,12 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                     label: 'Дом',
                     icon: Icons.home_rounded,
                     isSelected: _equipment == 'home',
-                    // 👇 При переключении на дом: обрезаем зоны до 2 + SnackBar
+                    // 👇 ИЗМЕНЕНО: при переключении на дом обрезаем зоны до 2
+                    // и сбрасываем несовместимую цель (сила/масса → тонус)
                     onTap: () {
                       final hadTooMany = _focusAreas.length > 2;
+                      final hadHeavyGoal =
+                          _goal == 'strength' || _goal == 'gain_mass';
                       setState(() {
                         _equipment = 'home';
                         if (hadTooMany) {
@@ -362,6 +412,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                           _focusAreas.clear();
                           _focusAreas.addAll(list.take(2));
                         }
+                        if (hadHeavyGoal) _goal = 'tone';
                       });
                       if (hadTooMany) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -369,6 +420,11 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                               content: Text(
                                   'Для дома доступно не более 2 фокусных зон')),
                         );
+                      }
+                      if (hadHeavyGoal) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text(
+                                'Сила и масса недоступны для домашних тренировок — цель изменена на «Тонус»')));
                       }
                     },
                   ),
@@ -590,9 +646,15 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             ),
             const SizedBox(height: 24),
 
+            // 👇 НОВОЕ: для дома доступны только «Похудеть» и «Тонус»
             _sectionTitle('Цель'),
             ..._buildOptions(
-              options: const [
+              options: _equipment == 'home'
+                  ? const [
+                ('lose_weight', 'Похудеть', Icons.trending_down_rounded),
+                ('tone', 'Тонус', Icons.favorite_rounded),
+              ]
+                  : const [
                 ('lose_weight', 'Похудеть', Icons.trending_down_rounded),
                 ('gain_mass', 'Набрать массу', Icons.trending_up_rounded),
                 ('tone', 'Тонус', Icons.favorite_rounded),

@@ -47,6 +47,10 @@ class ExerciseCard extends StatelessWidget {
   final bool isHome;
   final String Function(Exercise)? patternOf;
 
+  // 👇 НОВОЕ: плашка «новое/старое» показывается раз на круг —
+  // на первом упражнении круга. Приходит от родителя.
+  final bool isFirstInCircle;
+
   const ExerciseCard({
     super.key,
     required this.item,
@@ -59,7 +63,6 @@ class ExerciseCard extends StatelessWidget {
     required this.onSetChanged,
     required this.onSetComplete,
     this.allowComplete = true,
-
     required this.onAddSet,
     required this.onDeleteSet,
     required this.onOpenMenu,
@@ -77,6 +80,7 @@ class ExerciseCard extends StatelessWidget {
     // 👇 НОВОЕ
     this.isHome = false,
     this.patternOf,
+    this.isFirstInCircle = false, // 👈 НОВОЕ
   });
 
   // 👇 НОВОЕ: лейблы паттернов для дома
@@ -91,6 +95,16 @@ class ExerciseCard extends StatelessWidget {
       'cardio': 'КАРДИО',
     };
     return map[pattern] ?? pattern.toUpperCase();
+  }
+
+  // 👇 НОВОЕ: для безвесовых (wMode == 0) убираем фразы про вес —
+  // «не гонись за весом» и «техника, а не вес» им не подходят:
+  // прогрессия идёт по повторам, поля веса нет вовсе.
+  List<String> _phrasesFor(int wMode) {
+    if (wMode == 0) {
+      return _isolationPhrases.where((p) => !p.contains('вес')).toList();
+    }
+    return _isolationPhrases;
   }
 
   @override
@@ -114,9 +128,22 @@ class ExerciseCard extends StatelessWidget {
     }
 
     final bool hasHistory = lastWeight != null || lastReps != null;
-    final bool showFairyBanner = !isThisBase &&
-        !isCardio &&
-        (circleIndex == null || circleIndex == 0);
+
+    // 👇 НОВОЕ: плашки (баннер феи) — атрибут ТОЛЬКО первого круга.
+    // circleIndex == 0 → круг 1, circleIndex 1/2 → круги 2–3 (чисто),
+    // null → некруговой режим (тоже считаем одним кругом — показываем).
+    final bool isFirstCircle = circleIndex == null || circleIndex == 0;
+
+    // 👇 ИЗМЕНЕНО: плашка «Новое упражнение / Прошлый раз».
+    // ДОМ — на КАЖДОМ силовом упражнении круга 1 (не только на первом):
+    // пользователь видит статус по каждому упражнению. Круги 2–3 — чисто.
+    // ЗАЛ — как раньше: только изоляция круга 1.
+    final bool showFairyBanner = isHome
+        ? (!isCardio && isFirstCircle)
+        : (!isThisBase && !isCardio && (circleIndex == null || circleIndex == 0));
+
+    // 👇 НОВОЕ: фразы подбираются с учётом режима веса упражнения
+    final phrases = _phrasesFor(wMode);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -233,11 +260,14 @@ class ExerciseCard extends StatelessWidget {
                                       ),
                                       if (hasHistory) ...[
                                         const SizedBox(height: 6),
+                                        // 👇 ИЗМЕНЕНО: фраза из отфильтрованного
+                                        // списка phrases (без «весовых» фраз
+                                        // для безвесовых упражнений)
                                         Text(
-                                          _isolationPhrases[(ex.name.hashCode
+                                          phrases[(ex.name.hashCode
                                               .abs() +
                                               DateTime.now().day) %
-                                              _isolationPhrases.length],
+                                              phrases.length],
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w700,
@@ -255,7 +285,11 @@ class ExerciseCard extends StatelessWidget {
                                 const SizedBox(height: 6),
                                 Row(
                                   children: [
-                                    // 👇 ДОМ: паттерн (ЖИМ/ТЯГА/ПРИСЕД/...)
+                                    // 👇 ИЗМЕНЕНО: чип «НОВОЕ/СТАРОЕ» убран —
+                                    // статус упражнения показывает только
+                                    // баннер феи в круге 1. Паттерн + группы
+                                    // мышц оставляем во ВСЕХ кругах: это
+                                    // справочная информация, а не статус.
                                     if (isHome && patternOf != null) ...[
                                       Flexible(
                                         child: Container(

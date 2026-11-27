@@ -4,8 +4,8 @@ import '../../models/workout_day.dart';
 import '../../models/exercise.dart';
 import '../../models/user_profile.dart';
 import '../../services/database_helper.dart';
-import '../../data/base_exercises.dart';                    // 👈 ДОБАВЛЕНО
-import '../../services/workout_generator.dart' hide DatabaseHelper; // 👈 ДОБАВЛЕНО
+import '../../data/base_exercises.dart';
+import '../../services/workout_generator.dart' hide DatabaseHelper;
 import 'challenge_setup_screen.dart';
 import 'challenge_amrap_screen.dart';
 import 'challenge_plank_screen.dart';
@@ -32,265 +32,392 @@ class ChallengeWheelScreen extends StatefulWidget {
   State<ChallengeWheelScreen> createState() => _ChallengeWheelScreenState();
 }
 
-class _ChallengeWheelScreenState extends State<ChallengeWheelScreen> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  bool _isRolling = false;
-  ChallengeType? _result;
+class _ChallengeWheelScreenState extends State<ChallengeWheelScreen>
+    with SingleTickerProviderStateMixin {
+late AnimationController _controller;
+bool _isRolling = false;
+ChallengeType? _result;
 
-  final _types = ChallengeType.values;
+final _types = ChallengeType.values;
 
-  double _currentAngle = 0.0;
+double _currentAngle = 0.0;
 
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 3500),
-    );
-  }
+@override
+void initState() {
+super.initState();
+_controller = AnimationController(
+vsync: this,
+duration: const Duration(milliseconds: 3500),
+);
+}
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+@override
+void dispose() {
+_controller.dispose();
+super.dispose();
+}
 
-  void _spinWheel() {
-    if (_isRolling) return;
+void _spinWheel() {
+if (_isRolling) return;
 
-    final random = Random();
-    final resultIndex = random.nextInt(_types.length);
-    final resultType = _types[resultIndex];
+final random = Random();
+final resultIndex = random.nextInt(_types.length);
+final resultType = _types[resultIndex];
 
-    final sweepAngle = 2 * pi / _types.length;
-    final spins = 5 + random.nextInt(4);
-    final targetAngle = (spins * 2 * pi) - (resultIndex * sweepAngle + sweepAngle / 2);
+final sweepAngle = 2 * pi / _types.length;
+final spins = 5 + random.nextInt(4);
+final targetAngle = (spins * 2 * pi) - (resultIndex * sweepAngle + sweepAngle / 2);
 
-    setState(() {
-      _isRolling = true;
-      _result = null;
-    });
+setState(() {
+_isRolling = true;
+_result = null;
+});
 
-    final tween = Tween<double>(begin: 0, end: targetAngle);
-    final animation = tween.animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutCubic,
-    ));
+final tween = Tween<double>(begin: 0, end: targetAngle);
+final animation = tween.animate(CurvedAnimation(
+parent: _controller,
+curve: Curves.easeOutCubic,
+));
 
-    void listener() {
-      setState(() {
-        _currentAngle = animation.value;
-      });
-    }
-    animation.addListener(listener);
+void listener() {
+setState(() {
+_currentAngle = animation.value;
+});
+}
+animation.addListener(listener);
 
-    _controller.forward(from: 0).then((_) {
-      animation.removeListener(listener);
-      if (!mounted) return;
-      setState(() {
-        _isRolling = false;
-        _result = resultType;
-        _currentAngle = targetAngle % (2 * pi);
-      });
-    });
-  }
+_controller.forward(from: 0).then((_) {
+animation.removeListener(listener);
+if (!mounted) return;
+setState(() {
+_isRolling = false;
+_result = resultType;
+_currentAngle = targetAngle % (2 * pi);
+});
+});
+}
 
-  String get _title {
-    switch (_result) {
-      case ChallengeType.reps300: return 'Марафон: 300 повторений';
-      case ChallengeType.amrap: return 'Круг на время (10 минут)';
-      case ChallengeType.plank: return 'Планка-марафон (5 минут)';
-      case ChallengeType.cardio: return 'Кардио-взрыв (HIIT)';
-      case null: return '';
-    }
-  }
+String get _title {
+switch (_result) {
+case ChallengeType.reps300: return 'Марафон: 300 повторений';
+case ChallengeType.amrap: return 'Круг на время (10 минут)';
+case ChallengeType.plank: return 'Планка-марафон (5 минут)';
+case ChallengeType.cardio: return 'Кардио-взрыв (HIIT)';
+case null: return '';
+}
+}
 
-  String get _subtitle {
-    switch (_result) {
-      case ChallengeType.reps300: return '3 упражнения по 100 раз. Можно подходами.';
-      case ChallengeType.amrap: return '10 минут. Сделай как можно больше кругов.';
-      case ChallengeType.plank: return 'Суммарное время в планке и статике.';
-      case ChallengeType.cardio: return 'Интервалы высокой интенсивности.';
-      case null: return '';
-    }
-  }
+String get _subtitle {
+switch (_result) {
+case ChallengeType.reps300: return '3 упражнения по 100 раз. Можно подходами.';
+case ChallengeType.amrap: return '10 минут. Сделай как можно больше кругов.';
+case ChallengeType.plank: return 'Суммарное время в планке и статике.';
+case ChallengeType.cardio: return 'Интервалы высокой интенсивности.';
+case null: return '';
+}
+}
 
-  Color get _color {
-    switch (_result) {
-      case ChallengeType.reps300: return const Color(0xFFFFB800);
-      case ChallengeType.amrap: return const Color(0xFFE17055);
-      case ChallengeType.plank: return const Color(0xFF00B894);
-      case ChallengeType.cardio: return const Color(0xFF6C5CE7);
-      case null: return const Color(0xFF6C5CE7);
-    }
-  }
+Color get _color {
+switch (_result) {
+case ChallengeType.reps300: return const Color(0xFFFFB800);
+case ChallengeType.amrap: return const Color(0xFFE17055);
+case ChallengeType.plank: return const Color(0xFF00B894);
+case ChallengeType.cardio: return const Color(0xFF6C5CE7);
+case null: return const Color(0xFF6C5CE7);
+}
+}
 
-  Future<void> _start() async {
-    if (_result == null) return;
+Future<void> _start() async {
+if (_result == null) return;
 
-    if (_result == ChallengeType.reps300) {
-      final profile = await DatabaseHelper.instance.getProfileById(widget.profileId);
-      final allEx = await DatabaseHelper.instance.getExercises();
+if (_result == ChallengeType.reps300) {
+final profile = await DatabaseHelper.instance.getProfileById(widget.profileId);
+final allEx = await DatabaseHelper.instance.getExercises();
 
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ChallengeSetupScreen(
-            day: widget.day,
-            profile: profile,
-            allExercises: allEx,
-          ),
-        ),
-      );
-      return;
-    }
+if (!mounted) return;
+Navigator.pushReplacement(
+context,
+MaterialPageRoute(
+builder: (_) => ChallengeSetupScreen(
+day: widget.day,
+profile: profile,
+allExercises: allEx,
+),
+),
+);
+return;
+}
 
-    Widget screen;
-    switch (_result!) {
-      case ChallengeType.amrap:
-        screen = ChallengeAmrapScreen(day: widget.day, profileId: widget.profileId, items: widget.items, exerciseMap: widget.exerciseMap);
-        break;
-      case ChallengeType.plank:
-        screen = ChallengePlankScreen(day: widget.day, profileId: widget.profileId, items: widget.items, exerciseMap: widget.exerciseMap);
-        break;
-      case ChallengeType.cardio:
-        screen = ChallengeCardioScreen(day: widget.day, profileId: widget.profileId, items: widget.items, exerciseMap: widget.exerciseMap);
-        break;
-      case ChallengeType.reps300:
-        return;
-    }
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => screen));
-  }
+Widget screen;
+switch (_result!) {
+case ChallengeType.amrap:
+screen = ChallengeAmrapScreen(day: widget.day, profileId: widget.profileId, items: widget.items, exerciseMap: widget.exerciseMap);
+break;
+case ChallengeType.plank:
+screen = ChallengePlankScreen(day: widget.day, profileId: widget.profileId, items: widget.items, exerciseMap: widget.exerciseMap);
+break;
+case ChallengeType.cardio:
+screen = ChallengeCardioScreen(day: widget.day, profileId: widget.profileId, items: widget.items, exerciseMap: widget.exerciseMap);
+break;
+case ChallengeType.reps300:
+return;
+}
+Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => screen));
+}
 
-  // ══════════════════════════════════════════════════════════════════
-  // 👇 ИЗМЕНЕНО: теперь при отказе генерируем «забытые зоны»
-  // ══════════════════════════════════════════════════════════════════
-  Future<void> _decline() async {
-    final updated = widget.day.copyWith(type: 'strength');
-    await DatabaseHelper.instance.updateWorkoutDay(updated);
+// ══════════════════════════════════════════════════════════════════
+// При отказе: дом — обычная силовая по паттернам,
+// зал — «забытые зоны» (как в workout_screen.dart)
+// ══════════════════════════════════════════════════════════════════
+Future<void> _decline() async {
+final updated = widget.day.copyWith(type: 'strength');
+await DatabaseHelper.instance.updateWorkoutDay(updated);
 
-    // 👇 Загружаем профиль и генерируем упражнения, чтобы день не был пустым
-    final profile = await DatabaseHelper.instance.getProfileById(widget.profileId);
-    if (profile != null) {
-      await _generateForgottenZonesWorkout(updated, profile);
-    }
+final profile = await DatabaseHelper.instance.getProfileById(widget.profileId);
+if (profile != null) {
+if (profile.equipment == 'home') {
+// ДОМ: обычная силовая по паттернам (как генерирует WorkoutGenerator),
+// «забытые зоны» — только зал-механика
+await _generateHomeStrengthWorkout(updated, profile);
+} else {
+await _generateForgottenZonesWorkout(updated, profile);
+}
+}
 
-    if (!mounted) return;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => WorkoutDetailScreen(
-          workoutDay: updated,
-          profileId: widget.profileId,
-        ),
-      ),
-    );
-  }
+if (!mounted) return;
+Navigator.pushReplacement(
+context,
+MaterialPageRoute(
+builder: (_) => WorkoutDetailScreen(
+workoutDay: updated,
+profileId: widget.profileId,
+),
+),
+);
+}
 
-  // ══════════════════════════════════════════════════════════════════
-  // 👇 ДУБЛИКАТ МЕТОДА ИЗ workout_screen.dart
-  //    (генерирует 3 базы + до 6 изоляций на «забытые зоны»)
-  // ══════════════════════════════════════════════════════════════════
-  Future<void> _generateForgottenZonesWorkout(WorkoutDay day, UserProfile profile) async {
-    final existing = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
-    for (final e in existing) {
-      if (e.id != null) await DatabaseHelper.instance.deleteWorkoutExercise(e.id!);
-    }
+// ══════════════════════════════════════════════════════════════════
+// ЗАЛ: дубликат метода из workout_screen.dart
+// (генерирует 3 базы + до 6 изоляций на «забытые зоны»).
+// Фильтры приведены к тем же проверкам, что в WorkoutGenerator:
+// оборудование с homeEquipment, сложность, зал-исключения.
+// ══════════════════════════════════════════════════════════════════
+Future<void> _generateForgottenZonesWorkout(WorkoutDay day, UserProfile profile) async {
+final existing = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
+for (final e in existing) {
+if (e.id != null) await DatabaseHelper.instance.deleteWorkoutExercise(e.id!);
+}
 
-    final allExercises = await DatabaseHelper.instance.getExercises();
-    // 👇 v21: ограничения → зоны через карту из base_exercises.dart.
-    // Раньше 'knees'/'neck'/'shoulders' с кодами зон не совпадали
-    // и фильтр зон не срабатывал никогда.
-    final blockedZones = zonesBlockedByLimitations(profile.limitations);
+final allExercises = await DatabaseHelper.instance.getExercises();
+// Ограничения → зоны через карту из base_exercises.dart
+final blockedZones = zonesBlockedByLimitations(profile.limitations);
 
-    bool isExerciseAllowed(Exercise e) {
-      // 👇 v21: точное пересечение кодов вместо substring-матчинга
-      if (exerciseBlockedByLimitations(e, profile.limitations)) return false;
-      if (!WorkoutGenerator.matchesEquipment(e, profile.equipment)) return false;
-      if (profile.level == 'beginner') {
-        final lowerName = e.name.toLowerCase();
-        if (lowerName.contains('штанг') || lowerName.contains('на одной ноге') || lowerName.contains('в висе')) return false;
-        if (e.difficulty == 'advanced') return false;
-      }
-      return true;
-    }
+bool isExerciseAllowed(Exercise e) {
+// Точное пересечение кодов ограничений и зон упражнения
+if (exerciseBlockedByLimitations(e, profile.limitations)) return false;
+// Оборудование — с учётом домашнего инвентаря (гантели, резинки и т. д.)
+if (!WorkoutGenerator.matchesEquipment(e, profile.equipment,
+homeEquipment: profile.homeEquipment)) return false;
+// Сложность — единая логика с генератором
+if (!WorkoutGenerator.isDifficultyAllowed(e, profile.level, profile.equipment)) {
+return false;
+}
+// Зал-исключения (домашние варианты рук с манжетами и т. п.)
+if ((profile.equipment == 'gym' || profile.equipment == 'mixed') &&
+WorkoutGenerator.isExcludedForGym(e.name)) return false;
+if (profile.level == 'beginner') {
+final lowerName = e.name.toLowerCase();
+if (lowerName.contains('штанг') || lowerName.contains('на одной ноге') || lowerName.contains('в висе')) return false;
+if (e.difficulty == 'advanced') return false;
+}
+return true;
+}
 
-    final bases = allExercises.where((e) {
-      if (!isBaseExercise(e)) return false;
-      final zone = getExerciseZone(e);
-      if (blockedZones.contains(zone)) return false;
-      if (!isExerciseAllowed(e)) return false;
-      return true;
-    }).toList()..shuffle();
+final bases = allExercises.where((e) {
+if (!isBaseExercise(e)) return false;
+final zone = getExerciseZone(e);
+if (blockedZones.contains(zone)) return false;
+if (!isExerciseAllowed(e)) return false;
+return true;
+}).toList()..shuffle();
 
-    final selectedBases = bases.take(3).toList();
+final selectedBases = bases.take(3).toList();
 
-    int order = 1;
-    for (final ex in selectedBases) {
-      final we = WorkoutExercise(
-        workoutDayId: day.id!,
-        itemType: 'exercise',
-        itemId: ex.id!,
-        order: order++,
-        sets: 3,
-        reps: '10-12',
-      );
-      final newId = await DatabaseHelper.instance.addWorkoutExercise(we);
-      for (int s = 1; s <= 3; s++) {
-        await DatabaseHelper.instance.addWorkoutSet(
-          WorkoutSet(workoutExerciseId: newId, order: s, completed: false),
-        );
-      }
-    }
+int order = 1;
+for (final ex in selectedBases) {
+final we = WorkoutExercise(
+workoutDayId: day.id!,
+itemType: 'exercise',
+itemId: ex.id!,
+order: order++,
+sets: 3,
+reps: '10-12',
+);
+final newId = await DatabaseHelper.instance.addWorkoutExercise(we);
+for (int s = 1; s <= 3; s++) {
+await DatabaseHelper.instance.addWorkoutSet(
+WorkoutSet(workoutExerciseId: newId, order: s, completed: false),
+);
+}
+}
 
-    final allZones = ['chest', 'back', 'arms', 'shoulders', 'glutes', 'legs', 'abs'];
-    final focusZones = profile.focusAreas.map((e) => e.toLowerCase()).toList();
+final allZones = ['chest', 'back', 'arms', 'shoulders', 'glutes', 'legs', 'abs'];
+final focusZones = profile.focusAreas.map((e) => e.toLowerCase()).toList();
 
-    final forgottenZones = allZones.where((z) =>
-    !blockedZones.contains(z) && !focusZones.contains(z)
-    ).toList();
+final forgottenZones = allZones.where((z) =>
+!blockedZones.contains(z) && !focusZones.contains(z)
+).toList();
 
-    int added = 0;
-    final Set<int> usedIds = selectedBases.map((e) => e.id!).toSet();
+int added = 0;
+final Set<int> usedIds = selectedBases.map((e) => e.id!).toSet();
 
-    for (final zone in forgottenZones) {
-      if (added >= 6) break;
-      final zoneExs = allExercises.where((e) {
-        if (e.id == null) return false;
-        if (usedIds.contains(e.id)) return false;
-        if (isBaseExercise(e) || e.muscleGroups.contains('cardio')) return false;
-        if (!isExerciseAllowed(e)) return false;
-        return e.muscleGroups.contains(zone);
-      }).toList()..shuffle();
+for (final zone in forgottenZones) {
+if (added >= 6) break;
+final zoneExs = allExercises.where((e) {
+if (e.id == null) return false;
+if (usedIds.contains(e.id)) return false;
+if (isBaseExercise(e) || e.muscleGroups.contains('cardio')) return false;
+if (!isExerciseAllowed(e)) return false;
+return e.muscleGroups.contains(zone);
+}).toList()..shuffle();
 
-      for (final ex in zoneExs.take(2)) {
-        if (added >= 6) break;
-        usedIds.add(ex.id!);
+for (final ex in zoneExs.take(2)) {
+if (added >= 6) break;
+usedIds.add(ex.id!);
 
-        final we = WorkoutExercise(
-          workoutDayId: day.id!,
-          itemType: 'exercise',
-          itemId: ex.id!,
-          order: order++,
-          sets: 3,
-          reps: '15',
-        );
-        final newId = await DatabaseHelper.instance.addWorkoutExercise(we);
-        for (int s = 1; s <= 3; s++) {
-          await DatabaseHelper.instance.addWorkoutSet(
-            WorkoutSet(workoutExerciseId: newId, order: s, completed: false),
-          );
-        }
-        added++;
-      }
-    }
-  }
-  // ══════════════════════════════════════════════════════════════════
-  // 👆 КОНЕЦ ДУБЛИКАТА
-  // ══════════════════════════════════════════════════════════════════
+final we = WorkoutExercise(
+workoutDayId: day.id!,
+itemType: 'exercise',
+itemId: ex.id!,
+order: order++,
+sets: 3,
+reps: '15',
+);
+final newId = await DatabaseHelper.instance.addWorkoutExercise(we);
+for (int s = 1; s <= 3; s++) {
+await DatabaseHelper.instance.addWorkoutSet(
+WorkoutSet(workoutExerciseId: newId, order: s, completed: false),
+);
+}
+added++;
+}
+}
+}
+// ══════════════════════════════════════════════════════════════════
+// КОНЕЦ «ЗАБЫТЫХ ЗОН» (ЗАЛ)
+// ══════════════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════════════
+// ДОМ: обычная силовая после отказа от челленджа.
+// Те же фильтры, что у WorkoutGenerator: оборудование (с homeEquipment),
+// сложность, ограничения. Паттерны — через публичный patternOf.
+// ══════════════════════════════════════════════════════════════════
+Future<void> _generateHomeStrengthWorkout(WorkoutDay day, UserProfile profile) async {
+final existing = await DatabaseHelper.instance.getWorkoutExercises(day.id!);
+for (final e in existing) {
+if (e.id != null) await DatabaseHelper.instance.deleteWorkoutExercise(e.id!);
+}
+
+final rawExercises = await DatabaseHelper.instance.getExercises();
+// Дедупликация по имени — как в generateMonthPlan
+final Map<String, Exercise> unique = {};
+for (final ex in rawExercises) {
+final clean = ex.name
+.toLowerCase()
+.replaceAll('ё', 'е')
+.replaceAll(RegExp(r'[^a-zа-я0-9]'), '');
+unique.putIfAbsent(clean, () => ex);
+}
+final allExercises = unique.values.toList();
+
+final blockedZones = zonesBlockedByLimitations(profile.limitations);
+
+bool isAllowed(Exercise e) {
+if (exerciseBlockedByLimitations(e, profile.limitations)) return false;
+for (final m in e.muscleGroups) {
+if (blockedZones.contains(m)) return false;
+}
+if (!WorkoutGenerator.matchesEquipment(e, profile.equipment,
+homeEquipment: profile.homeEquipment)) {
+return false;
+}
+if (!WorkoutGenerator.isDifficultyAllowed(e, profile.level, profile.equipment)) {
+return false;
+}
+return true;
+}
+
+final usedIds = <int>{};
+final usedFamilies = <String>{};
+final picked = <Exercise>[];
+
+// Основные паттерны — как в генераторе: hinge, push, pull, squat, core
+const patternOrder = ['hinge', 'push', 'pull', 'squat', 'lunge', 'core'];
+for (final pattern in patternOrder) {
+if (picked.length >= 5) break;
+final candidates = allExercises.where((e) {
+if (e.id == null || usedIds.contains(e.id)) return false;
+if (!isBaseExercise(e)) return false;
+if (usedFamilies.contains(familyOf(e))) return false;
+if (WorkoutGenerator.patternOf(e) != pattern) return false;
+return isAllowed(e);
+}).toList()..shuffle();
+if (candidates.isEmpty) continue;
+final pick = candidates.first;
+picked.add(pick);
+usedIds.add(pick.id!);
+usedFamilies.add(familyOf(pick));
+}
+
+// Добираем изоляцией по фокус-зонам
+final focusZones = profile.focusAreas.map((z) => z.toLowerCase()).toList();
+for (final zone in focusZones) {
+if (zone == 'cardio') continue;
+if (picked.length >= 7) break;
+final candidates = allExercises.where((e) {
+if (e.id == null || usedIds.contains(e.id)) return false;
+if (isBaseExercise(e)) return false;
+if (e.muscleGroups.contains('cardio')) return false;
+if (usedFamilies.contains(familyOf(e))) return false;
+if (!e.muscleGroups.contains(zone)) return false;
+return isAllowed(e);
+}).toList()..shuffle();
+if (candidates.isEmpty) continue;
+final pick = candidates.first;
+picked.add(pick);
+usedIds.add(pick.id!);
+usedFamilies.add(familyOf(pick));
+}
+
+if (picked.isEmpty) return; // совсем пусто — день останется пустым, но не залом
+
+int order = 1;
+for (final ex in picked) {
+final lowerName = ex.name.toLowerCase();
+final isTimed = WorkoutGenerator.patternOf(ex) == 'core' &&
+(lowerName.contains('планк') || lowerName.contains('стульчик') || lowerName.contains('лодочк'));
+final repsStr = isTimed
+? (profile.level == 'beginner' ? '30 сек' : '60 сек')
+: (profile.level == 'beginner' ? '10-12' : '15');
+
+final newId = await DatabaseHelper.instance.addWorkoutExercise(WorkoutExercise(
+workoutDayId: day.id!,
+itemType: 'exercise',
+itemId: ex.id!,
+order: order++,
+sets: 3,
+reps: repsStr,
+));
+for (int s = 1; s <= 3; s++) {
+await DatabaseHelper.instance.addWorkoutSet(
+WorkoutSet(workoutExerciseId: newId, order: s, completed: false),
+);
+}
+}
+}
+// ══════════════════════════════════════════════════════════════════
+// КОНЕЦ ДОМАШНЕЙ СИЛОВОЙ
+// ══════════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -554,4 +681,4 @@ class _WheelCustomPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
-// ⏸ КОНЕЦ ФАЙЛА challenge_dice_screen.dart
+// ═══ КОНЕЦ ФАЙЛА challenge_dice_screen.dart ═══

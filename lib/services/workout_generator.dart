@@ -62,7 +62,9 @@ final lower = exerciseName.toLowerCase();
 const excludedWords = [
 'полотенц', 'мячик', 'пальц', 'внешней стороне стопы', 'вакуум',
 'танц', 'бой с тенью',
-'джеки', 'джампинг джек'
+'джеки', 'джампинг джек',
+// Домашние варианты рук с манжетами — в зале вместо них гантели
+'махи руками', 'ytw-разведения', 'наклоне с утяжел',
 ];
 return excludedWords.any((w) => lower.contains(w));
 }
@@ -200,15 +202,35 @@ baseToKeepByDay[dayIdx] = dayBases;
 await DatabaseHelper.instance.deleteUnfinishedWorkoutDays(profile.id!);
 
 final focusGroups = _getFocusGroups(profile);
-// 👇 НОВОЕ: флаг дома — нужен для всех ветвлений ниже
 final bool isHome = profile.equipment == 'home';
+// Минимум повторов для дома + продвинутый (см. _enforceMinReps)
+final bool enforceMinRepsHome =
+isHome && profile.level == 'advanced';
+// Прогрессия повторов для дома + продвинутый.
+// Растёт 20 → 22 → 25, на 4-й неделе разгрузка обратно к 20.
+final Map<int, String> advancedHomeReps = {
+1: '20',
+2: '22',
+3: '25',
+4: '20',
+};
+// Прогрессия таймед (планки, стульчик и т. п.) для дома +
+// продвинутый: 120 → 140 → 160 сек, на 4-й неделе разгрузка к 120.
+final Map<int, int> advancedHomeTimedSeconds = {
+1: 120,
+2: 140,
+3: 160,
+4: 120,
+};
+
+isHome && profile.level == 'advanced';
 final cardioMode = _computeCardioMode(focusGroups, profile.goal);
 final dayPlans = _createDayTemplates(
 focusGroups,
 profile.daysPerWeek,
 profile.limitations,
-equipment: profile.equipment,          // 👈 НОВОЕ
-bodyType: profile.bodyType,            // 👈 НОВОЕ
+equipment: profile.equipment,
+bodyType: profile.bodyType,
 );
 
 final Map<String, Exercise> uniqueExercisesMap = {};
@@ -235,7 +257,6 @@ maxBases = 2;
 }
 
 for (int i = 0; i < dayPlans.length; i++) {
-// 👇 ДОМ: паттерны вместо зон, без изоляции и доборов
 if (isHome) {
 final patterns = dayPlans[i];
 if (patterns.length == 1 && patterns.first == 'cardio') {
@@ -265,7 +286,6 @@ monthBases.add(bases);
 continue;
 }
 
-// ═══ ЗАЛ: старая логика без изменений ═══
 var bases = _pickBasesForDay(
 allExercises: allExercises,
 baseToKeep: baseToKeepByDay[i] ?? [],
@@ -314,8 +334,6 @@ usedFamiliesInMonth.add(familyOf(ex));
 
 monthBases.add(bases);
 }
-
-// ═══ КОНЕЦ ЧАСТИ 1 ═══
 final createdDays = <WorkoutDay>[];
 
 final List<Set<int>> recentIsolationIds = [];
@@ -356,7 +374,6 @@ homeEquipment: profile.homeEquipment))
 if (warmupCardioList.isNotEmpty) warmupCardioEx = warmupCardioList.first;
 }
 
-// 👇 ДОМ: изоляции нет, паттерны уже дали 5-7 упражнений
 final isolationExercises = isHome
 ? <Exercise>[]
 : _pickIsolationForDay(
@@ -417,12 +434,12 @@ profile.goal.contains('weight') ||
 profile.goal.contains('lose');
 final int baseCardioCount = isLoseWeight ? 3 : 1;
 
-// 👇 ДОМ: кардио — финишер, 1 упражнение
+// ДОМ: для похудения даём 2 кардио (одно в середину, одно в конец)
 final int cardioCount;
 if (isCardioOnlyDay) {
 cardioCount = (profile.sessionMinutes / 10).round().clamp(2, 6);
 } else if (isHome) {
-cardioCount = 1;
+cardioCount = isLoseWeight ? 2 : 1;
 } else if (profile.level == 'beginner') {
 cardioCount = isLoseWeight ? 2 : 1;
 } else {
@@ -458,8 +475,6 @@ uniqueExercises.add(ex);
 final strengthList = uniqueExercises.where((e) => !_isCardio(e)).toList();
 final cardioList = uniqueExercises.where((e) => _isCardio(e)).toList();
 
-// 👇 Для дома не обрезаем до targetStrength — там 5 паттернов + 1-2 фокуса,
-// их не надо резать. Логику добора/обрезки применяем только для зала.
 if (!isHome) {
 if (strengthList.length > targetStrength) {
 strengthList.removeRange(targetStrength, strengthList.length);
@@ -510,7 +525,8 @@ targetCardio = 5;
 } else if (cardioMode == 'off') {
 targetCardio = 0;
 } else if (isHome) {
-targetCardio = 1; // 👈 Дом — финишер
+// ДОМ: для похудения — 2 кардио, для тонуса — 1 финишер
+targetCardio = isLoseWeightTarget ? 2 : 1;
 } else if (profile.level == 'beginner') {
 targetCardio = isLoseWeightTarget ? 2 : 1;
 } else {
@@ -547,8 +563,8 @@ cardioList.sort((a, b) =>
 _getExerciseWeight(a).compareTo(_getExerciseWeight(b)));
 
 final List<Exercise?> finalOrder = [];
-if (!isHome && isLoseWeightTarget && strengthList.isNotEmpty) {
-// Зал + похудение: интервальная вставка кардио
+// И зал, и дом при похудении вставляют кардио между силовыми
+if (isLoseWeightTarget && strengthList.isNotEmpty) {
 final int numBlocks = (strengthList.length / 3).ceil();
 final Exercise? lastCardio =
 cardioList.isNotEmpty ? cardioList.last : null;
@@ -569,10 +585,10 @@ finalOrder.add(cardioBetween[cIdx++]);
 while (cIdx < cardioBetween.length) {
 finalOrder.add(cardioBetween[cIdx++]);
 }
-finalOrder.add(null);
+finalOrder.add(null); // слот для бонуса (для дома пустой)
 if (lastCardio != null) finalOrder.add(lastCardio);
 } else {
-// Дом или обычный режим: силовые → финишер в конце
+// Тонус (дом или зал): силовые → финишер в конце
 finalOrder.addAll(strengthList);
 finalOrder.add(null);
 finalOrder.addAll(cardioList);
@@ -589,7 +605,6 @@ weekdaySlots[dayIndex % weekdaySlots.length]));
 bool isChallengeDay = (week == 3 && dayIndex == 1);
 final dayType = isChallengeDay ? 'challenge' : 'strength';
 
-// 👇 Названия: дом → «Всё тело A/B/C», зал → «День N: зоны»
 String dayName;
 if (isChallengeDay) {
 dayName = 'Неделя $week: День Челленджа';
@@ -654,7 +669,9 @@ completed: false),
 }
 
 int order = 1;
-final warmup = _pickWarmup(allStretches, dayGroups, 8);
+// Передаём ограничения профиля в разминку
+final warmup = _pickWarmup(allStretches, dayGroups, 8,
+limitations: profile.limitations);
 for (final stretch in warmup) {
 final warmupExId = await DatabaseHelper.instance.addWorkoutExercise(
 WorkoutExercise(
@@ -724,7 +741,11 @@ minutes = 10;
 repsStr = '$minutes мин';
 } else if (_isTimedExercise(ex.name)) {
 localSetsCount = setsCount;
-int secs = progression.timedSeconds;
+// Дом + продвинутый — своя волна: планка и
+// остальные таймед стартуют с 2 минут (120 сек).
+int secs = enforceMinRepsHome
+? (advancedHomeTimedSeconds[week] ?? 120)
+: progression.timedSeconds;
 if (lowerName.contains('боковая планка')) {
 secs = (secs * 0.7).round();
 }
@@ -741,6 +762,13 @@ repsStr = progression.reps;
 } else {
 repsStr = '15';
 }
+}
+
+// Дом + продвинутый — не минимум, а своя
+// прогрессия по неделям: 20 → 22 → 25 → 20 (разгрузка).
+// Заменяет и базовую прогрессию, и «15» для не-баз.
+if (enforceMinRepsHome) {
+repsStr = advancedHomeReps[week] ?? '20';
 }
 }
 
@@ -802,7 +830,6 @@ completed: false),
 }
 }
 
-// ═══ БОНУС НА «ЗАБЫТУЮ ЗОНУ» — только для зала ═══
 if (!isHome) {
 final allZones = [
 'chest', 'back', 'arms', 'shoulders', 'glutes', 'legs', 'abs'
@@ -935,7 +962,9 @@ break;
 }
 }
 
-final coolDown = _pickCoolDown(allStretches, dayGroups, 5);
+// Передаём ограничения профиля в заминку
+final coolDown = _pickCoolDown(allStretches, dayGroups, 5,
+limitations: profile.limitations);
 for (final stretch in coolDown) {
 final stretchExId =
 await DatabaseHelper.instance.addWorkoutExercise(
@@ -977,7 +1006,7 @@ memoryLimit, recentIsolationFamilies.length);
 return createdDays;
 }
 
-// ═══ КОНЕЦ ЧАСТИ 2 ═══
+// ═══ КОНЕЦ ЧАСТИ 1 ═══
 // ═══ РАСКЛАДКА ПО ВЫБРАННЫМ ДНЯМ НЕДЕЛИ ═══
 
 static Future<bool> _hasWorkoutToday(int profileId) async {
@@ -1015,7 +1044,6 @@ final off = (w - todayWeekday) % 7;
 if (off == 0 && hasWorkoutToday) continue;
 offsets.add(off);
 }
-
 for (int off = 1; off < 7 && offsets.length < profile.daysPerWeek; off++) {
 offsets.add(off);
 }
@@ -1059,8 +1087,7 @@ return [0, ...offsets.take(daysPerWeek - 1)];
 
 /// Паттерн движения упражнения. Отвечает на «как двигаемся?»,
 /// а не «какие мышцы качаем?». Нужен для home-режима.
-static String _patternOf(Exercise e)
-{
+static String _patternOf(Exercise e) {
 if (isCardioOf(e)) return 'cardio';
 final n = e.name.toLowerCase();
 
@@ -1132,9 +1159,10 @@ return 'core';
 
 return 'core';
 }
-// 👇 ВОТ СЮДА вставить:
-        /// Публичный доступ к паттерну упражнения (для экранов и карточек).
-        static String patternOf(Exercise e) => _patternOf(e);
+
+/// Публичный доступ к паттерну упражнения (для экранов и карточек).
+static String patternOf(Exercise e) => _patternOf(e);
+
 /// Шаблоны дней для дома. Три варианта full-body A/B/C.
 static List<List<String>> _createHomePatternTemplates(
 List<String> focus, int days, List<String> limitations,
@@ -1182,7 +1210,7 @@ return plans;
 static List<List<String>> _createDayTemplates(
 List<String> focus, int days, List<String> limitations,
 {String equipment = 'gym', String? bodyType}) {
-// 👇 Дом: другая логика — по паттернам, не по зонам
+// Дом: другая логика — по паттернам, не по зонам
 if (equipment == 'home') {
 return _createHomePatternTemplates(
 focus, days, limitations, bodyType: bodyType);
@@ -1585,64 +1613,79 @@ return weighted.first;
 }
 }
 
+// ДОМ + утяжелители: предпочитаем упражнения,
+// где вес опционален (махи, отведения, подъёмы ног):
+// у владельца манжет они дают реальную прогрессию, без них
+// те же упражнения работают на собственном весе.
+if (level != 'beginner' &&
+equipment == 'home' &&
+homeEquipment.contains('ankle_weights')) {
+final ankleFriendly =
+candidates.where((e) => weightModeOf(e) == 1).toList();
+if (ankleFriendly.isNotEmpty) {
+ankleFriendly.shuffle(_random);
+return ankleFriendly.first;
+}
+}
+
 candidates.shuffle(_random);
 return candidates.first;
 }
 
-// ═══ ФОКУС ═══
-static List<String> _getFocusGroups(UserProfile profile) {
-List<String> focus = [];
+// ═══ КОНЕЦ ЧАСТИ 2 ═══
+        // ═══ ФОКУС ═══
+        static List<String> _getFocusGroups(UserProfile profile) {
+                List<String> focus = [];
 
-if (profile.focusAreas.isNotEmpty) {
-focus = profile.focusAreas.map(_norm).toList();
-} else if (profile.bodyType != null) {
-switch (profile.bodyType) {
-case 'pear':
-focus = ['glutes', 'legs', 'shoulders'];
-break;
-case 'inverted_triangle':
-focus = ['glutes', 'legs', 'abs'];
-break;
-case 'rectangle':
-focus = ['glutes', 'shoulders', 'legs'];
-break;
-case 'apple':
-focus = ['abs', 'legs'];
-break;
-case 'hourglass':
-focus = ['glutes', 'abs', 'legs'];
-break;
-default:
-break;
-}
-}
+                if (profile.focusAreas.isNotEmpty) {
+                        focus = profile.focusAreas.map(_norm).toList();
+                } else if (profile.bodyType != null) {
+                        switch (profile.bodyType) {
+                                case 'pear':
+                                        focus = ['glutes', 'legs', 'shoulders'];
+                                        break;
+                                case 'inverted_triangle':
+                                        focus = ['glutes', 'legs', 'abs'];
+                                        break;
+                                case 'rectangle':
+                                        focus = ['glutes', 'shoulders', 'legs'];
+                                        break;
+                                case 'apple':
+                                        focus = ['abs', 'legs'];
+                                        break;
+                                case 'hourglass':
+                                        focus = ['glutes', 'abs', 'legs'];
+                                        break;
+                                default:
+                                        break;
+                        }
+                }
 
-if (focus.isEmpty) {
-if (profile.goal == 'lose_weight') {
-focus = ['glutes', 'abs', 'legs'];
-if (!focus.contains('cardio')) focus.add('cardio');
-} else if (profile.gender == 'female') {
-focus = ['glutes', 'abs', 'legs'];
-} else {
-focus = ['chest', 'back', 'arms', 'legs'];
-}
-}
+                if (focus.isEmpty) {
+                        if (profile.goal == 'lose_weight') {
+                                focus = ['glutes', 'abs', 'legs'];
+                                if (!focus.contains('cardio')) focus.add('cardio');
+                        } else if (profile.gender == 'female') {
+                                focus = ['glutes', 'abs', 'legs'];
+                        } else {
+                                focus = ['chest', 'back', 'arms', 'legs'];
+                        }
+                }
 
-// 👇 Обрезка: дом → 2, зал → 2/3 по уровню
-final int maxFocus;
-if (profile.equipment == 'home') {
-maxFocus = 2;
-} else {
-maxFocus = profile.level == 'beginner' ? 2 : 3;
-}
-if (focus.length > maxFocus) {
-focus = focus.take(maxFocus).toList();
-}
+                // Обрезка: дом → 2, зал → 2/3 по уровню
+                final int maxFocus;
+                if (profile.equipment == 'home') {
+                        maxFocus = 2;
+                } else {
+                        maxFocus = profile.level == 'beginner' ? 2 : 3;
+                }
+                if (focus.length > maxFocus) {
+                        focus = focus.take(maxFocus).toList();
+                }
 
-return focus;
-}
+                return focus;
+        }
 
-// ═══ КОНЕЦ ЧАСТИ 3 ═══
         static String _computeCardioMode(List<String> focus, String goal) {
                 if (goal == 'strength' || goal == 'gain_mass') return 'off';
                 if (focus.contains('cardio')) return 'every_day';
@@ -1685,16 +1728,6 @@ return focus;
 
         static bool _isCardio(Exercise ex) => isCardioOf(ex);
 
-        /// Проверяет, подходит ли упражнение под оборудование профиля.
-        ///
-        /// Обратная совместимость (для тестов и мигрированных профилей):
-        /// - 'gym' / 'mixed' / 'both' / 'any' → всё доступно
-        /// - 'bodyweight' → только своё тело
-        /// - 'dumbbells' → тело + гантели + резинка (legacy до миграции)
-        ///
-        /// Новая логика:
-        /// - 'home' + homeEquipment → строго: ВСЕ требования упражнения
-        ///   должны быть в {bodyweight} ∪ homeEquipment.
         static bool matchesEquipment(
             Exercise e,
             String equipment, {
@@ -1702,7 +1735,6 @@ return focus;
             }) {
                 final lowerName = e.name.toLowerCase();
 
-                // Зал (и legacy-значения) — доступно всё
                 if (equipment == 'gym' ||
                     equipment == 'mixed' ||
                     equipment == 'both' ||
@@ -1710,16 +1742,16 @@ return focus;
                         return true;
                 }
 
-                // Legacy: чистое тело (для тестов и до-миграционных профилей)
                 if (equipment == 'bodyweight') {
-                        final iron = ['гантел', 'штанг', 'гирей', 'блин', 'гриф', 'резинк'];
+                        // «В висе» — упражнения требуют турника,
+                        // в чистом bodyweight-профиле (без инвентаря) недоступны
+                        final iron = ['гантел', 'штанг', 'гирей', 'блин', 'гриф', 'резинк', 'в висе'];
                         for (final word in iron) {
                                 if (lowerName.contains(word)) return false;
                         }
                         return e.equipment.contains('bodyweight');
                 }
 
-                // Legacy: дом с гантелями
                 if (equipment == 'dumbbells') {
                         final heavy = ['штанг', 'гирей', 'блин', 'гриф'];
                         for (final word in heavy) {
@@ -1731,7 +1763,6 @@ return focus;
                 }
 
                 if (equipment == 'home') {
-                        // 👇 Машинное кардио: не «только зал», а «есть дома».
                         const machineCardioMap = <String, String>{
                                 'дорожк': 'treadmill',
                                 'велотренаж': 'bike',
@@ -1744,8 +1775,19 @@ return focus;
                                         return homeEquipment.contains(entry.value);
                                 }
                         }
+                        // Упражнения «в висе» требуют турника/брусьев.
+                        // Без них в доме недоступны, даже если в БД тег bodyweight.
+                        const hangingWords = [
+                                'подтягиван', 'в висе', 'турник', 'перекладин', 'на брусьях',
+                        ];
+                        if (hangingWords.any((w) => lowerName.contains(w))) {
+                                // Подтягивания/вис на турнике — нужен турник.
+                                if (lowerName.contains('брусьях')) {
+                                        return homeEquipment.contains('dip_bar');
+                                }
+                                return homeEquipment.contains('pullup_bar');
+                        }
 
-                        // Тренажёры и зальное железо — по-прежнему только зал
                         const gymOnly = [
                                 'тренажер', 'тренажёр', 'блок', 'кроссовер', 'смит', 'т-гриф',
                                 'бабочка', 'тумбу', 'тумба', 'платформ', 'паттерн', 'босу', 'полусфер',
@@ -1755,7 +1797,6 @@ return focus;
                                 if (lowerName.contains(word)) return false;
                         }
 
-                        // Строгая проверка: КАЖДОЕ требование упражнения удовлетворено
                         final allowed = <String>{'bodyweight', ...homeEquipment};
                         if (e.equipment.isEmpty) return true;
                         return e.equipment.every(allowed.contains);
@@ -1763,6 +1804,14 @@ return focus;
 
                 return true;
         }
+
+        // 👇 ПУБЛИЧНЫЕ обёртки: экранам вне генератора нужен доступ
+        // к проверкам сложности и зал-исключениям
+        static bool isDifficultyAllowed(Exercise e, String level, String equipment) =>
+            _isDifficultyAllowed(e, level, equipment);
+
+        static bool isExcludedForGym(String exerciseName) =>
+            _isExcludedForGym(exerciseName);
 
         static bool _isDifficultyAllowed(Exercise e, String level, String equipment) {
                 final lowerName = e.name.toLowerCase();
@@ -1795,7 +1844,6 @@ return focus;
                         ];
                         if (hardCoreKeywords.any((word) => lowerName.contains(word))) return false;
 
-                        // Дом без инвентаря (и legacy bodyweight) — не отсекаем «легкие»
                         if (equipment != 'bodyweight' && equipment != 'home') {
                                 const tooEasyKeywords = ['с собственным весом', 'с колен', 'без веса'];
                                 if (tooEasyKeywords.any((word) => lowerName.contains(word))) {
@@ -1852,7 +1900,6 @@ return focus;
                         'lats': 'широчайшие', 'traps': 'трапеции', 'lower_back': 'поясница',
                         'core': 'кор', 'full_body': 'всё тело', 'cardio': 'кардио',
                         'feet': 'стопы', 'adductors': 'приводящие',
-                        // 👇 Паттерны (для логов и на будущее)
                         'push': 'жим', 'pull': 'тяга', 'squat': 'присед',
                         'hinge': 'мостик/тяга', 'lunge': 'выпад',
                 };
@@ -1860,23 +1907,74 @@ return focus;
         }
 
         // ═══ РАЗМИНКА / ЗАМИНКА ═══
+        // Растяжка нарушает ограничения профиля?
+        // Учитывает и расширение зон (quads закрывается блоком legs и т. п.)
+        static bool _stretchBlocked(
+            String muscleGroup, Set<String> blockedZones) {
+                if (blockedZones.contains(muscleGroup)) return true;
+                for (final zone in blockedZones) {
+                        if ((_zoneExpand[zone] ?? const <String>[]).contains(muscleGroup)) {
+                                return true;
+                        }
+                }
+                return false;
+        }
+
         static List<Stretch> _pickCoolDown(
-            List<Stretch> all, List<String> groups, int max) {
+            List<Stretch> all, List<String> groups, int max,
+            {List<String> limitations = const []}) {
+                final blockedZones = zonesBlockedByLimitations(limitations).toSet();
                 final rel = all
                     .where((s) =>
                 s.category == 'classic' &&
                     (groups.contains(s.muscleGroup) ||
                         s.muscleGroup == 'full_body' ||
-                        s.muscleGroup == 'back'))
+                        s.muscleGroup == 'back') &&
+                    // Заминка не трогает заблокированные зоны
+                    !_stretchBlocked(s.muscleGroup, blockedZones) &&
+                    // Бабочка/Лягушка при коленях — позиция
+                    // нагружает коленный сустав, блокируем точечно
+                    !(blockedZones.contains('legs') &&
+                        s.muscleGroup == 'adductors'))
                     .toList();
                 rel.shuffle(_random);
                 return rel.take(max).toList();
         }
 
         static List<Stretch> _pickWarmup(
-            List<Stretch> all, List<String> dayGroups, int max) {
+            List<Stretch> all, List<String> dayGroups, int max,
+            {List<String> limitations = const []}) {
+                final blockedZones = zonesBlockedByLimitations(limitations).toSet();
                 final warmups = all.where((s) => s.category == 'warmup').toList();
                 if (warmups.isEmpty) return [];
+
+                // Элемент разминки нарушает ограничения профиля?
+                // Коды зон — из kLimitationZones: knees→legs+glutes,
+                // back→back+lower_back, shoulders→shoulders, neck→ничего.
+                bool blockedByName(String name) {
+                        if (blockedZones.contains('legs')) {
+                                // махи/вращения ногами и коленями, приседания — ударная и осевая
+                                // нагрузка на колени
+                                if (name.contains('ногами') ||
+                                    name.contains('коленями') ||
+                                    name.contains('Приседания')) {
+                                        return true;
+                                }
+                        }
+                        if (blockedZones.contains('glutes') && name.contains('Мостик')) {
+                                return true;
+                        }
+                        if (blockedZones.contains('shoulders') &&
+                            (name.contains('плечами') || name.contains('руками'))) {
+                                return true;
+                        }
+                        if ((blockedZones.contains('back') ||
+                            blockedZones.contains('lower_back')) &&
+                            name.contains('Наклоны корпуса')) {
+                                return true;
+                        }
+                        return false;
+                }
 
                 const baseNames = [
                         'Вращения головой', 'Вращения плечами', 'Махи руками',
@@ -1886,6 +1984,7 @@ return focus;
 
                 final result = <Stretch>[];
                 for (final name in baseNames) {
+                        if (blockedByName(name)) continue;
                         final match = warmups.where((s) => s.name == name).toList();
                         if (match.isNotEmpty) result.add(match.first);
                 }
@@ -1928,8 +2027,16 @@ return focus;
                 }
 
                 if (targetName != null) {
-                        final match = warmups.where((s) => s.name == targetName).toList();
-                        if (match.isNotEmpty && !result.any((s) => s.name == targetName)) {
+                        // Целевую разминку тоже проверяем на ограничения
+                        final bool targetBlocked = blockedByName(targetName) ||
+                            (blockedZones.contains('legs') &&
+                                targetName.contains('Джек'));
+                        final match = blockedByName(targetName)
+                            ? const <Stretch>[]
+                            : warmups.where((s) => s.name == targetName).toList();
+                        if (!targetBlocked &&
+                            match.isNotEmpty &&
+                            !result.any((s) => s.name == targetName)) {
                                 result.add(match.first);
                         }
                 }
@@ -2048,6 +2155,31 @@ return focus;
                 final match = RegExp(r'(\d+)').firstMatch(repsStr);
                 if (match == null) return null;
                 return int.tryParse(match.group(1) ?? '');
+        }
+
+        // ═══ МИНИМУМ ПОВТОРОВ ДЛЯ ДОМА + ПРОДВИНУТЫЙ ═══
+        // Поднимает каждое число в строке повторов до минимума:
+        // '15' → '20', '12-15' → '20-20'. Диапазоны с обеими границами
+        // >= min не трогает. Форматы «60 сек» / «2 мин» возвращает как есть
+        // (не парсятся как чистое число).
+        static String _enforceMinReps(String reps, int min) {
+                final s = reps.trim();
+                // Диапазон вида '12-15'
+                final rangeMatch = RegExp(r'^(\d+)\s*-\s*(\d+)$').firstMatch(s);
+                if (rangeMatch != null) {
+                        final lo = int.parse(rangeMatch.group(1)!);
+                        final hi = int.parse(rangeMatch.group(2)!);
+                        final newLo = lo < min ? min : lo;
+                        final newHi = hi < newLo ? newLo : hi;
+                        return '$newLo-$newHi';
+                }
+                // Одиночное число
+                final single = int.tryParse(s);
+                if (single != null) {
+                        return single < min ? '$min' : s;
+                }
+                // Нестандартный формат — не трогаем
+                return s;
         }
 }
 

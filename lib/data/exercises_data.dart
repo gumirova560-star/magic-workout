@@ -225,6 +225,29 @@ List<Exercise> getExercisesPart1() {
       tips: '• 20 повторений\n• Сожмите ягодицы в верхней точке',
       imagePath: 'assets/exercises/frog_pump.jpg',
     ),
+    Exercise(
+      name: 'Отведение ноги в сторону с утяжелителями',
+      muscleGroups: ['glutes'],
+      equipment: ['ankle_weights'],
+      difficulty: 'intermediate',
+      description: 'Изоляция средней ягодичной мышцы с манжетами на ногах.',
+      technique: '1. Манжеты на щиколотках\n2. Встаньте прямо, придерживайтесь за опору\n3. Отведите ногу в сторону\n4. Задержитесь и медленно вернитесь',
+      mistakes: '❌ Наклон корпуса в сторону\n❌ Мах с инерцией',
+      tips: '• 15 повторений на ногу\n• Вес небольшой: 0,5–2 кг\n• Держите корпус ровно',
+      imagePath: 'assets/exercises/ankle_abduction_standing.jpg',
+    ),
+    Exercise(
+      name: 'Махи ногой назад с утяжелителями',
+      muscleGroups: ['glutes'],
+      equipment: ['ankle_weights'],
+      difficulty: 'intermediate',
+      description: 'Изоляция большой ягодичной мышцы с манжетами.',
+      technique: '1. Манжета на щиколотке\n2. Встаньте на четвереньки или возьмитесь за опору\n3. Поднимите ногу назад\n4. Сожмите ягодицу и вернитесь',
+      mistakes: '❌ Прогиб в пояснице\n❌ Раскачивание корпуса',
+      tips: '• 12–15 повторений на ногу\n• Сожмите ягодицу в верхней точке\n• Вес 0,5–2 кг',
+      imagePath: 'assets/exercises/ankle_kickback.jpg',
+    ),
+
     // ═══════════════════════════════════════════════════════════
     //  НОГИ
     // ═══════════════════════════════════════════════════════════
@@ -515,6 +538,49 @@ List<Exercise> getExercisesPart1() {
       imagePath: 'assets/exercises/bulgarian_split_squat.jpg',
     ),
     Exercise(
+      name: 'Приседания на одной ноге',
+      muscleGroups: ['quads', 'glutes'],
+      equipment: ['bodyweight'],
+      difficulty: 'advanced',
+      description: 'Пистолетик — продвинутое упражнение для силы ног без инвентаря.',
+      technique: '1. Встаньте прямо, поднимите одну ногу вперёд\n'
+          '2. Приседайте на опорной ноге, удерживая равновесие\n'
+          '3. Руки вытяните перед собой для баланса\n'
+          '4. Колено не заваливается внутрь\n'
+          '5. Вернитесь в исходное положение',
+      mistakes: '❌ Заваливание колена внутрь\n'
+          '❌ Круглая спина\n'
+          '❌ Отрыв пятки от пола',
+      tips: '• Начните с 3–5 повторений на ногу\n'
+          '• Держитесь за стену для страховки\n'
+          '• Спина прямая',
+      imagePath: 'assets/exercises/single_leg_squat.jpg',
+    ),
+
+    Exercise(
+      name: 'Выпады назад с утяжелителями',
+      muscleGroups: ['quads', 'glutes'],
+      equipment: ['ankle_weights'],
+      difficulty: 'intermediate',
+      description: 'Щадящий вариант выпадов с манжетами на щиколотках.',
+      technique: '1. Манжеты на щиколотках\n2. Сделайте шаг назад\n3. Опуститесь до прямого угла\n4. Вернитесь',
+      mistakes: '❌ Заваливание колена внутрь\n❌ Наклон корпуса вперед',
+      tips: '• 10–12 повторений на ногу\n• Вес небольшой: 0,5–2 кг на каждую ногу\n• Спина прямая',
+      imagePath: 'assets/exercises/reverse_lunge_ankle.jpg',
+    ),
+    Exercise(
+      name: 'Подъёмы на носки с утяжелителями',
+      muscleGroups: ['calves'],
+      equipment: ['ankle_weights'],
+      difficulty: 'intermediate',
+      description: 'Икры с дополнительным весом на щиколотках.',
+      technique: '1. Манжеты на щиколотках\n2. Поднимитесь на носки\n3. Задержитесь\n4. Медленно опуститесь',
+      mistakes: '❌ Резкие движения\n❌ Неполная амплитуда',
+      tips: '• 15–20 повторений\n• Вес 0,5–2 кг',
+      imagePath: 'assets/exercises/calf_raise_ankle.jpg',
+    ),
+
+    Exercise(
       name: 'Боковые выпады с гантелями',
       muscleGroups: ['quads', 'glutes', 'adductors'],
       equipment: ['dumbbells'],
@@ -782,6 +848,25 @@ List<Exercise> getExercisesPart2() {
       tips: '• 20 поворотов',
       imagePath: 'assets/exercises/torso_twist.jpg',
     ),
+    Exercise(
+      name: 'Подъём ног в висе',
+      muscleGroups: ['abs'],
+      equipment: ['bodyweight'],
+      difficulty: 'intermediate',
+      description: 'Упражнение на нижнюю часть пресса с прямыми ногами.',
+      technique: '1. Повисните на турнике, хват на ширине плеч\n'
+          '2. Поднимите прямые ноги до уровня таза\n'
+          '3. Задержитесь в верхней точке\n'
+          '4. Медленно опустите, не раскачиваясь',
+      mistakes: '❌ Раскачивание корпуса\n'
+          '❌ Инерция маха\n'
+          '❌ Сгибание коленей вместо прямых ног',
+      tips: '• 8–12 повторений\n'
+          '• Начните с согнутых коленей, если тяжело\n'
+          '• Контролируйте опускание',
+      imagePath: 'assets/exercises/hanging_leg_raise.jpg',
+    ),
+
     Exercise(
       name: 'Подъём ног в висе на турнике (согнутые)',
       muscleGroups: ['abs'],
@@ -1170,6 +1255,26 @@ List<Exercise> getExercisesPart3() {
       tips: '• 10-12 повторений',
       imagePath: 'assets/exercises/superman.jpg',
     ),
+    Exercise(
+      name: 'Обратная планка',
+      muscleGroups: ['back', 'lower_back', 'glutes'],
+      equipment: ['bodyweight'],
+      difficulty: 'beginner',
+      description: 'Обратное планочное раскрытие: укрепляет разгибатели спины и заднюю цепь.',
+      technique: '1. Сядьте на пол, ноги вытянуты вперёд\n'
+          '2. Ладони на полу за бёдрами, пальцы вперёд\n'
+          '3. Поднимите таз так, чтобы тело стало прямой линией\n'
+          '4. Напрягите ягодицы и живот\n'
+          '5. Держите позицию, дышите ровно',
+      mistakes: '❌ Провисание таза\n'
+          '❌ Запрокидывание головы назад\n'
+          '❌ Переразгибание в пояснице',
+      tips: '• Начните с 20–30 секунд\n'
+          '• Плечи над запястьями\n'
+          '• Смотрите прямо перед собой',
+      imagePath: 'assets/exercises/reverse_plank.jpg',
+    ),
+
     Exercise(
       name: 'Тяга нижнего блока к поясу',
       muscleGroups: ['lats', 'back'],
@@ -1636,6 +1741,53 @@ List<Exercise> getExercisesPart4() {
       mistakes: '❌ Поднимать плечо\n❌ Рывки',
       tips: '• 12-15 повторений на руку',
       imagePath: 'assets/exercises/cable_lateral_raise.jpg',
+    ),
+    // ═══════════════════════════════════════════════════════════
+    //  ПЛЕЧИ/РУКИ — ДОМАШНИЕ ВАРИАНТЫ С МАНЖЕТАМИ
+    // ═══════════════════════════════════════════════════════════
+    Exercise(
+      name: 'Махи руками в стороны с утяжелителями',
+      muscleGroups: ['shoulders'],
+      equipment: ['ankle_weights'],
+      difficulty: 'beginner',
+      description: 'Изоляция средней дельты с равномерной нагрузкой по амплитуде.',
+      technique: '1. Манжеты на запястьях\n2. Стоя прямо, слегка согните локти\n3. Поднимите руки в стороны до уровня плеч\n4. Задержитесь 1 секунду, медленно опустите',
+      mistakes: '❌ Раскачивание корпуса\n❌ Слишком большой вес\n❌ Подъём плеч к ушам',
+      tips: '• 12–15 повторений\n• Держите лопатки опущенными\n• Вес 0,5–1,5 кг на каждую руку',
+      imagePath: 'assets/exercises/lateral_raise_ankle.jpg',
+    ),
+    Exercise(
+      name: 'Махи руками перед собой с утяжелителями',
+      muscleGroups: ['shoulders'],
+      equipment: ['ankle_weights'],
+      difficulty: 'beginner',
+      description: 'Нагрузка на переднюю дельту без хвата — манжеты вместо гантели.',
+      technique: '1. Манжеты на запястьях\n2. Стоя, руки вдоль тела\n3. Поднимайте прямые руки перед собой до уровня плеч\n4. Медленно вернитесь в исходное положение',
+      mistakes: '❌ Прогиб в пояснице\n❌ Инерция махом\n❌ Вес слишком тяжёлый',
+      tips: '• 12–15 повторений\n• Темп 2–0–2 (2 сек вниз, без паузы, 2 сек вверх)\n• Не поднимайте плечи',
+      imagePath: 'assets/exercises/front_raise_ankle.jpg',
+    ),
+    Exercise(
+      name: 'Разведения в наклоне с утяжелителями',
+      muscleGroups: ['shoulders'],
+      equipment: ['ankle_weights'],
+      difficulty: 'intermediate',
+      description: 'Акцент на заднюю дельту без гантелей.',
+      technique: '1. Манжеты на запястьях\n2. Наклонитесь вперёд, спина ровная, колени чуть согнуты\n3. Разводите руки в стороны\n4. В верхней точке сожмите лопатки, медленно вернитесь',
+      mistakes: '❌ Круглая спина\n❌ Рывки\n❌ Локти смотрят вниз',
+      tips: '• 12 повторений\n• Небольшой вес: 0,5–1 кг\n• Лопатки сведены, корпус стабилен',
+      imagePath: 'assets/exercises/bent_over_lateral_ankle.jpg',
+    ),
+    Exercise(
+      name: 'YTW-разведения с утяжелителями',
+      muscleGroups: ['shoulders', 'traps'],
+      equipment: ['ankle_weights'],
+      difficulty: 'beginner',
+      description: 'Комплексная активация плеч и верха спины для осанки.',
+      technique: '1. Манжеты на запястьях\n2. Наклон вперёд, спина прямая\n3. Y — руки под 45° вверх\n4. T — руки в стороны параллельно полу\n5. W — локти согнуты, лопатки сведены\n6. Выполняйте каждую букву по 8–10 раз или чередуйте по кругу',
+      mistakes: '❌ Сутулость\n❌ Резкие махи\n❌ Большой вес',
+      tips: '• Делайте медленно, чувствуя мышцы\n• 2–3 круга по всем буквам\n• Вес минимальный: 0,25–0,5 кг',
+      imagePath: 'assets/exercises/ytw_ankle.jpg',
     ),
 
     // ═══════════════════════════════════════════════════════════

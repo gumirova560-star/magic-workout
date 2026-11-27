@@ -32,6 +32,9 @@ const Map<String, ExerciseMeta> kAbsoluteExerciseDictionary = {
   'Разгибание бедра в тренажёре': ExerciseMeta('glutes', ExerciseType.isolation),
   'Тяга ноги назад с нижнего блока': ExerciseMeta('glutes', ExerciseType.isolation),
   'Фрог-памп': ExerciseMeta('glutes', ExerciseType.isolation),
+  // 👇 НОВОЕ: варианты с утяжелителями (манжеты на ноги)
+  'Отведение ноги в сторону с утяжелителями': ExerciseMeta('glutes', ExerciseType.isolation),
+  'Махи ногой назад с утяжелителями': ExerciseMeta('glutes', ExerciseType.isolation),
 
   // ═══ НОГИ ═══
   'Приседания со штангой': ExerciseMeta('legs', ExerciseType.base),
@@ -51,7 +54,13 @@ const Map<String, ExerciseMeta> kAbsoluteExerciseDictionary = {
   'Боковые выпады с собственным весом': ExerciseMeta('legs', ExerciseType.base),
   'Приседания сумо с собственным весом': ExerciseMeta('legs', ExerciseType.base),
   'Гакк-приседания': ExerciseMeta('legs', ExerciseType.base),
+  // 👇 НОВОЕ: точное имя из сид-данных — иначе упражнение
+  // не матчится со словарём и падает в изоляцию
+  'Гакк-приседания (Hack Squat)': ExerciseMeta('legs', ExerciseType.base),
   'Приседания в тренажере Смита': ExerciseMeta('legs', ExerciseType.base),
+  // 👇 НОВОЕ: варианты с утяжелителями
+  'Выпады назад с утяжелителями': ExerciseMeta('legs', ExerciseType.base),
+  'Подъёмы на носки с утяжелителями': ExerciseMeta('legs', ExerciseType.isolation),
 
   'Подъёмы на носки стоя': ExerciseMeta('legs', ExerciseType.base),
   'Подъёмы на носки сидя': ExerciseMeta('legs', ExerciseType.base),
@@ -134,6 +143,11 @@ const Map<String, ExerciseMeta> kAbsoluteExerciseDictionary = {
   'Тяга резинки к лицу': ExerciseMeta('shoulders', ExerciseType.isolation),
   'Обратная бабочка': ExerciseMeta('shoulders', ExerciseType.isolation),
   'Махи в сторону на нижнем блоке': ExerciseMeta('shoulders', ExerciseType.isolation),
+  // 👇 НОВОЕ: домашние варианты с манжетами (зал использует гантели)
+  'Махи руками в стороны с утяжелителями': ExerciseMeta('shoulders', ExerciseType.isolation),
+  'Махи руками перед собой с утяжелителями': ExerciseMeta('shoulders', ExerciseType.isolation),
+  'Разведения в наклоне с утяжелителями': ExerciseMeta('shoulders', ExerciseType.isolation),
+  'YTW-разведения с утяжелителями': ExerciseMeta('shoulders', ExerciseType.isolation),
 
   // ═══ СПИНА ═══
   'Шраги с гантелями': ExerciseMeta('back', ExerciseType.base),
@@ -143,6 +157,8 @@ const Map<String, ExerciseMeta> kAbsoluteExerciseDictionary = {
   'Тяга штанги в наклоне': ExerciseMeta('back', ExerciseType.base),
   'Тяга нижнего блока к поясу': ExerciseMeta('back', ExerciseType.base),
   'Тяга Т-грифа': ExerciseMeta('back', ExerciseType.base),
+  // 👇 НОВОЕ: точное имя из сид-данных
+  'Тяга Т-грифа (T-Bar Row)': ExerciseMeta('back', ExerciseType.base),
   'Тяга штанги в наклоне обратным хватом': ExerciseMeta('back', ExerciseType.isolation),
   'Разведения в наклоне на трапеции': ExerciseMeta('back', ExerciseType.isolation),
   // 👇 ИЗМЕНЕНО: тяга гантели — это compound (спина + бицепс), а не изоляция
@@ -152,13 +168,19 @@ const Map<String, ExerciseMeta> kAbsoluteExerciseDictionary = {
   'Пуловер с гантелью': ExerciseMeta('back', ExerciseType.isolation),
   'Пулловер на верхнем блоке': ExerciseMeta('back', ExerciseType.isolation),
   'Лодочка': ExerciseMeta('back', ExerciseType.isolation),
+  // 👇 НОВОЕ: bodyweight-упражнение на спину — второй кандидат
+  // в pull-фолбэк для дома без инвентаря (турник/резинка не выбраны).
+  // «Супермен» отдельно не добавляем — это та же «Лодочка» (imagePath
+  // в сид-данных совпадает), а «Упражнение YTW» уже есть в базе.
+  'Обратная планка': ExerciseMeta('back', ExerciseType.isolation),
 
   // ═══ ГРУДЬ ═══
   'Жим штанги лёжа': ExerciseMeta('chest', ExerciseType.base),
   'Жим гантелей лёжа': ExerciseMeta('chest', ExerciseType.base),
   'Отжимания от пола': ExerciseMeta('chest', ExerciseType.base),
   'Жим штанги на наклонной скамье': ExerciseMeta('chest', ExerciseType.base),
-  'Жим в тренажере (Chest Press)': ExerciseMeta('chest', ExerciseType.base),
+    // 👇 НОВОЕ: точное имя из сид-данных
+  'Жим в тренажере на плечи (Shoulder Press)': ExerciseMeta('shoulders', ExerciseType.base),
   'Отжимания на брусьях (акцент на грудь)': ExerciseMeta('chest', ExerciseType.base),
   'Жим штанги лежа в Смите': ExerciseMeta('chest', ExerciseType.base),
   'Разведения гантелей лёжа': ExerciseMeta('chest', ExerciseType.isolation),
@@ -221,11 +243,19 @@ String getZoneLabel(String zoneCode) {
 String getExerciseFamily(String name) {
   final lower = name.toLowerCase();
 
+  // 👇 НОВОЕ: обратная планка — ДО общего правила «планка»,
+  // иначе слилась бы в семейство plank с обычной планкой и не могла
+  // бы соседствовать с ней в одном дне
+  if (lower.contains('обратная планка')) return 'reverse_plank';
+
   // Ягодицы: Мосты
   if (lower.contains('ягодичный мост') || lower.contains('хип-траст') || lower.contains('hip thrust') || lower.contains('фрог-памп')) return 'glute_bridge';
   // Ягодицы: Отведения назад
+  // 👇 «Махи ногой назад с утяжелителями» покрыты той же подстрокой —
+  // отдельная запись в семействах не нужна
   if (lower.contains('отведение ноги назад') || lower.contains('тяга ноги назад') || lower.contains('махи ногой назад')) return 'hip_extension_back';
   // Ягодицы: Отведения в сторону
+  // 👇 «Отведение ноги в сторону с утяжелителями» покрыто подстрокой
   if (lower.contains('отведение ноги в сторону') || lower.contains('отведение ноги в кроссовере') || lower.contains('разведение ног') || lower.contains('разгибание бедра') || lower.contains('махи ногой в сторону') || lower.contains('отведение ноги лежа') || lower.contains('ходьба с резинкой')) return 'hip_abduction_side';
 
   // Новые ягодичные
@@ -240,10 +270,12 @@ String getExerciseFamily(String name) {
   // сведение ног (приводящие)
   if (lower.contains('сведение ног')) return 'adduction';
   // Голень: Подъёмы на носки
+  // 👇 «Подъёмы на носки с утяжелителями» покрыты подстрокой «носки»
   if (lower.contains('носки') || lower.contains('жим носками')) return 'calf_raise';
   // Ноги: Приседания и Жим ногами
   if (lower.contains('приседания') || lower.contains('жим ногами') || lower.contains('гакк-приседания')) return 'squat';
   // Ноги: Выпады
+  // 👇 «Выпады назад с утяжелителями» покрыты подстрокой «выпады»
   if (lower.contains('выпады') || lower.contains('болгарский')) return 'lunge';
   // Ноги: Румынская тяга и наклоны
   if (lower.contains('румынская тяга') || lower.contains('наклоны со штангой')) return 'hinge';
@@ -255,7 +287,7 @@ String getExerciseFamily(String name) {
   if (lower.contains('подтягивания') || lower.contains('тяга верхнего блока')) return 'back_row_vertical';
   // Спина: Шраги
   if (lower.contains('шраги') || lower.contains('разведения в наклоне на трапеции')) return 'shrug';
-  // Спина: Поясница
+  // Спина: Поясница (Лодочка = «супермен» из сид-данных)
   if (lower.contains('гиперэкстензия') || lower.contains('лодочка')) return 'lower_back';
   // Спина: Пулловеры
   if (lower.contains('пуловер') || lower.contains('пулловер')) return 'pullover';
@@ -273,10 +305,17 @@ String getExerciseFamily(String name) {
   // Плечи: Жимы
   if (lower.contains('жим гантелей сидя') || lower.contains('жим штанги стоя') || lower.contains('жим арнольда') || lower.contains('жим гантелей в тренажёре') || lower.contains('жим в тренажере на плечи')) return 'shoulder_press';
   // Плечи: Средняя дельта
+  // 👇 НОВОЕ: домашние варианты с манжетами — те же семейства,
+  // что у гантельных аналогов, чтобы не дублировались в одном дне.
+  // ВАЖНО: до общих правил «разведения гантелей в стороны» —
+  // «махи руками» не должны проваливаться дальше по цепочке
+  if (lower.contains('махи руками в стороны')) return 'shoulder_side';
+  if (lower.contains('махи руками перед собой')) return 'shoulder_front';
   if (lower.contains('разведения гантелей в стороны') || lower.contains('махи гантелями в стороны сидя') || lower.contains('махи в сторону на нижнем блоке')) return 'shoulder_side';
   // Плечи: Передняя дельта
   if (lower.contains('махи гантелями перед собой')) return 'shoulder_front';
   // Плечи: Задняя дельта
+  // 👇 «Разведения в наклоне с утяжелителями» покрыты подстрокой «разведения в наклоне»
   if (lower.contains('разведения в наклоне') || lower.contains('махи гантелью в наклоне') || lower.contains('обратные разведения') || lower.contains('разведения гантелей на заднюю дельту') || lower.contains('тяга резинки к лицу') || lower.contains('обратная бабочка')) return 'shoulder_rear';
   // Плечи: Тяга к подбородку
   if (lower.contains('тяга штанги к подбородку') || lower.contains('тяга гантелей к подбородку')) return 'upright_row';
@@ -296,6 +335,10 @@ String getExerciseFamily(String name) {
   // Пресс: Косые
   if (lower.contains('боковые скручивания') || lower.contains('наклоны в сторону') || lower.contains('повороты корпуса') || lower.contains('русский твист')) return 'crunch_side';
 
+  // 👇 YTW-вариант — общее семейство (ловит и «Упражнение YTW»,
+  // и «YTW-разведения с утяжелителями»)
+  if (lower.contains('ytw')) return 'ytw';
+
   // Если ничего не подошло — уникальное семейство (по имени)
   return name.toLowerCase();
 }
@@ -311,6 +354,8 @@ const Set<String> _timedNames = {
   'Стульчик у стены', 'Балансировка на одной ноге',
   'Ходьба на внешней стороне стопы', 'Мячик под стопой (ролл)',
   'Сбор полотенца пальцами ног', 'Вакуум живота', 'Лодочка',
+  // 👇 НОВОЕ: обратная планка — изометрическая поза, счёт в секундах
+  'Обратная планка',
 };
 
 const Set<String> _optionalWeightNames = {
@@ -327,6 +372,7 @@ const Set<String> _optionalWeightNames = {
 
 const Set<String> _weightEquipment = {
   'barbell', 'dumbbells', 'machine', 'cable',
+  'ankle_weights', // 👈 НОВОЕ: утяжелители (манжеты) — снаряд
 };
 
 int weightModeFor(Exercise e) {
@@ -338,14 +384,18 @@ int weightModeFor(Exercise e) {
     'бой с тенью',
   ];
   if (cardioWords.any(n.contains)) return 0;
+  // 👇 НОВОЕ: страховка по названию — упражнение «… с утяжелителями»
+  // требует манжеты, поле веса показываем всегда (режим 2),
+  // даже если тег ankle_weights в БД не проставлен
+  if (n.contains('с утяжелител')) return 2;
   if (_optionalWeightNames.contains(e.name)) return 1;
   if (n.contains('гиперэкстензия') && !n.contains('с весом')) return 1;
   return e.equipment.any(_weightEquipment.contains) ? 2 : 0;
 }
 
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════
 //  ЕДИНАЯ КЛАССИФИКАЦИЯ (миграция v20)
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════
 // Источник истины — данные в базе (exType / family / weightMode),
 // их заполняет syncExercises(). Функции ниже сначала читают поле,
 // а если оно пустое (своё упражнение или база до синхронизации) —
@@ -407,6 +457,8 @@ const Map<String, List<String>> kContraindications = {
     'Приседания сумо', 'Приседания сумо с собственным весом',
     'Гакк-приседания (Hack Squat)', 'Приседания в тренажере Смита',
     'Выпады вперёд с гантелями', 'Выпады назад с гантелями',
+    // 👇 НОВОЕ: зеркально гантельному варианту
+    'Выпады назад с утяжелителями',
     'Реверанс-выпад', 'Болгарский выпад',
     'Боковые выпады с гантелями', 'Боковые выпады с собственным весом',
     'Обратные выпады с собственным весом',
@@ -435,6 +487,10 @@ const Map<String, List<String>> kContraindications = {
     'Отжимания на брусьях (акцент на грудь)',
     'Французский жим лёжа', 'Разгибание руки из-за головы',
     'Гребной тренажер',
+    // 👇 НОВОЕ: YTW с манжетами — ротация в плечевом суставе,
+    // при ограничении «плечи» не даём (обычный «Упражнение YTW»
+    // лёжа на животе оставляем — там ротации нет)
+    'YTW-разведения с утяжелителями',
   ],
   // Шея: прямых нагружателей шеи в каталоге нет
   'neck': [],

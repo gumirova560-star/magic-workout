@@ -39,6 +39,12 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   int _currentWeekWorkouts = 0;
   int _currentWeekMinutes = 0;
 
+  // 👇 Гендер и имя для фраз Феи
+  String get _name => _activeProfile?.name ?? 'друг';
+  bool get _isMale => _activeProfile?.gender == 'male';
+  String get _ready => _isMale ? 'Готов' : 'Готова';
+  String get _tired => _isMale ? 'Устал' : 'Устала';
+
   @override
   void initState() {
     super.initState();
@@ -71,9 +77,12 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 
   // ═══ 👈 ИЗМЕНЕНО: trainingWeekdays участвует в хеше профиля ═══
-  // Иначе смена расписания (выбранные дни) не предложит обновить план.
   String _computeProfileHash(UserProfile p) {
-    return [p.gender, p.age, p.height, p.weight, p.level, p.goal, p.equipment, p.daysPerWeek, p.sessionMinutes, p.trainingWeekdays.join(','), p.focusAreas.join(','), p.limitations.join(',')].join('|');
+    return [
+      p.gender, p.age, p.height, p.weight, p.level, p.goal, p.equipment,
+      p.daysPerWeek, p.sessionMinutes, p.trainingWeekdays.join(','),
+      p.focusAreas.join(','), p.limitations.join(','),
+    ].join('|');
   }
 
   String _profileHashKey(int profileId) => 'workout_plan_profile_hash_$profileId';
@@ -121,8 +130,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     if (profiles.isNotEmpty) {
       final active = profiles.first;
       // 👇 ЕЖЕДНЕВНЫЙ ВХОД: +5⚡ один раз в календарный день.
-      // Вызов безопасен: сам сервис защищён UNIQUE-констрейнтом и кэшем,
-      // поэтому можно звать при каждом обновлении экрана.
       if (active.id != null) {
         await EnergyService.grantDailyLogin(active.id!);
       }
@@ -182,17 +189,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         _loading = false;
       });
 
-      final shouldHold = await _shouldSuggestPlanUpdate(active);
-      if (shouldHold) FairyReactionService().holdScreenPhrases();
+      // 👇 ИЗМЕНЕНО: вместо holdScreenPhrases() и баннера — нативный диалог
+      final shouldAsk = await _shouldSuggestPlanUpdate(active);
       await FairyReactionService().setActiveProfile(active.id, active.name, gender: active.gender);
 
-      if (shouldHold) {
+      if (shouldAsk) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _showProfileChangedBannerNow(active);
-          } else {
-            FairyReactionService().releaseScreenPhrases();
-          }
+          if (mounted) _showProfileChangedDialog(active);
         });
       }
     } else {
@@ -213,50 +216,184 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     }
   }
 
-  Future<void> _showProfileChangedBannerNow(UserProfile profile) async {
-    if (!mounted) { FairyReactionService().releaseScreenPhrases(); return; }
-    await FairyReactionService().setActiveProfile(profile.id, profile.name, gender: profile.gender);
-    if (!mounted) { FairyReactionService().releaseScreenPhrases(); return; }
-    await FairyReactionService().trigger('profile_changed_ask', mood: FairyMood.think);
-    await Future.delayed(const Duration(seconds: 4));
-    await _saveProfileHashAsDismissed(profile);
-    FairyReactionService().releaseScreenPhrases();
+  // 👇 ИЗМЕНЕНО: настоящий диалог вместо исчезающего баннера феи
+  Future<void> _showProfileChangedDialog(UserProfile profile) async {
+    final update = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(children: [
+          Icon(Icons.tune_rounded, color: Color(0xFF6C5CE7), size: 32),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text('Настройки изменились', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ),
+        ]),
+        content: Text(
+          'Ты ${_isMale ? 'изменил' : 'изменила'} профиль — вес, цель или расписание. '
+              'Обновить план тренировок под новые настройки?',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Позже')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C5CE7)),
+            child: const Text('Обновить план'),
+          ),
+        ],
+      ),
+    );
+
+    if (update == true) {
+      await _generatePlan(isUpdate: true);
+    } else {
+      await _saveProfileHashAsDismissed(profile);
+    }
   }
 
+  // ═══ НОВОЕ: считаем РЕАЛЬНО завершённые циклы ═══
+  Future<int> _countCompletedCycles(int profileId, int daysPerWeek) async {
+    try {
+      final days = await DatabaseHelper.instance.getWorkoutDays(
+        profileId: profileId,
+        limit: 500,
+      );
+      final Map<int, List<WorkoutDay>> byCycle = {};
+      for (final d in days) {
+        final c = d.cycleNumber;
+        if (c == null) continue;
+        byCycle.putIfAbsent(c, () => []).add(d);
+      }
+      final int fullCycleSize = daysPerWeek * 4;
+      int completed = 0;
+      byCycle.forEach((cycle, list) {
+        if (list.isNotEmpty &&
+            list.length >= fullCycleSize &&
+            list.every((d) => d.status == 'completed')) {
+          completed++;
+        }
+      });
+      return completed;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  // ═══ ИЗМЕНЕНО: для дома — повышение уровня, для зала — ротация баз.
+  // Триггеры FairyReactionService убраны: диалоги самодостаточны. ═══
   Future<void> _generatePlan({bool isUpdate = false}) async {
     if (_activeProfile == null) { _showMessage('Сначала создайте профиль'); return; }
 
+    bool levelUpgraded = false;
+
     final maxCycle = await DatabaseHelper.instance.getMaxCycleNumber(_activeProfile!.id!);
-    if (maxCycle >= 2 && maxCycle % 2 == 0) {
+    final completedCycles = await _countCompletedCycles(
+      _activeProfile!.id!,
+      _activeProfile!.daysPerWeek,
+    );
+    if (completedCycles >= 2 && completedCycles % 2 == 0) {
       final prefs = await SharedPreferences.getInstance();
-      final key = 'base_update_asked_${_activeProfile!.id}_$maxCycle';
+      final key = 'base_update_asked_${_activeProfile!.id}_cc$completedCycles';
       final alreadyAsked = prefs.getBool(key) ?? false;
 
       if (!alreadyAsked) {
-        if (mounted) {
-          await FairyReactionService().trigger('base_update_ask', mood: FairyMood.think);
+        final profile = _activeProfile!;
+        final bool isHome = profile.equipment == 'home';
+        final String? nextLevel = isHome && profile.level == 'beginner'
+            ? 'intermediate'
+            : isHome && profile.level == 'intermediate'
+            ? 'advanced'
+            : null;
+
+        if (nextLevel != null) {
+          // 👇 ДОМ: предложение повышения уровня
+          final String levelLabel = nextLevel == 'intermediate' ? 'Средний' : 'Опытный';
+          final String dialogText = nextLevel == 'intermediate'
+              ? 'Ты стабильно занимаешься уже 2 месяца — время усложнить тренировки! '
+              'Перейти на уровень «Средний»? Появятся новые упражнения, '
+              'больше подходов и выше нагрузка.'
+              : 'Ты отлично держишь темп уже 4 месяца! Перейти на уровень '
+              '«Опытный»? Тренировки станут заметно сложнее — новые упражнения, '
+              'больше подходов и меньше отдыха.';
+
+          final confirmed = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: Row(children: [
+                Image.asset(FairyMood.party.asset, width: 44, height: 44, fit: BoxFit.contain),
+                const SizedBox(width: 10),
+                const Expanded(child: Text('Пора расти! 🎉', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+              ]),
+              content: Text(dialogText),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Пока на этом уровне')),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE17055)),
+                  child: Text('Повысить до «$levelLabel»'),
+                ),
+              ],
+            ),
+          );
+
+          await prefs.setBool(key, true);
+
+          if (confirmed == true) {
+            final updated = UserProfile(
+              id: profile.id,
+              name: profile.name,
+              gender: profile.gender,
+              age: profile.age,
+              height: profile.height,
+              weight: profile.weight,
+              level: nextLevel,
+              goal: profile.goal,
+              focusAreas: profile.focusAreas,
+              limitations: profile.limitations,
+              equipment: profile.equipment,
+              homeEquipment: profile.homeEquipment,
+              daysPerWeek: profile.daysPerWeek,
+              trainingWeekdays: profile.trainingWeekdays,
+              sessionMinutes: profile.sessionMinutes,
+              timeRangeLabel: profile.timeRangeLabel,
+              createdAt: profile.createdAt,
+              avatarPath: profile.avatarPath,
+              beforePhotoPath: profile.beforePhotoPath,
+              beforeSidePath: profile.beforeSidePath,
+              beforeBackPath: profile.beforeBackPath,
+              bodyType: profile.bodyType,
+            );
+            await DatabaseHelper.instance.updateProfile(updated);
+            await prefs.setBool('allow_base_change_${profile.id}_$maxCycle', true);
+            if (mounted) setState(() => _activeProfile = updated);
+            levelUpgraded = true;
+          }
+        } else {
+          // 👇 ЗАЛ (и продвинутый дом) — прежний диалог ротации баз
+          final confirmed = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: Row(children: [
+                Image.asset(FairyMood.think.asset, width: 44, height: 44, fit: BoxFit.contain),
+                const SizedBox(width: 10),
+                const Expanded(child: Text('Пора обновить базы! 🧚‍♀️', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+              ]),
+              content: const Text('Ты занимаешься уже 2 месяца. Мышцы привыкают к одним и тем же упражнениям. Давай обновим базы, чтобы прогресс не остановился!'),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Оставить старые')),
+                ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE17055)), child: const Text('Обновить базы')),
+              ],
+            ),
+          );
+
+          await prefs.setBool(key, true);
+          await prefs.setBool('allow_base_change_${_activeProfile!.id}_$maxCycle', confirmed == true);
         }
-
-        final confirmed = await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            title: Row(children: [
-              Image.asset(FairyMood.think.asset, width: 44, height: 44, fit: BoxFit.contain),
-              const SizedBox(width: 10),
-              const Expanded(child: Text('Пора обновить базы! 🧚‍♀️', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
-            ]),
-            content: const Text('Ты занимаешься уже 2 месяца. Мышцы привыкают к одним и тем же упражнениям. Давай обновим базы, чтобы прогресс не остановился!'),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Оставить старые')),
-              ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE17055)), child: const Text('Обновить базы')),
-            ],
-          ),
-        );
-
-        await prefs.setBool(key, true);
-        await prefs.setBool('allow_base_change_${_activeProfile!.id}_$maxCycle', confirmed == true);
       }
     }
 
@@ -283,15 +420,19 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       });
 
       await _saveProfileHashAsAccepted(freshProfile);
-      FairyReactionService().trigger(isUpdate ? 'plan_updated' : 'plan_generated', mood: FairyMood.party);
-
-      if (isUpdate) _showMessage('План обновлён! Базы заменены на новые.');
+      // 👇 ИЗМЕНЕНО: вместо триггера феи — SnackBar
+      if (isUpdate) {
+        _showMessage(levelUpgraded
+            ? 'Уровень повышен — план пересобран под новую сложность!'
+            : 'План обновлён! Базы заменены на новые.');
+      }
     } catch (e) {
       setState(() => _generating = false);
       _showMessage('Ошибка: $e');
     }
   }
   // ═══ КОНЕЦ ЧАСТИ 1 ═══
+
   Future<void> _openDay(WorkoutDay day) async {
     final isUnlocked = _isWeekUnlocked(day.weekNumber ?? 1);
     if (!isUnlocked) {
@@ -360,11 +501,15 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         final updated = day.copyWith(type: 'strength');
         await DatabaseHelper.instance.updateWorkoutDay(updated);
 
-        if (_activeProfile != null) {
+        // 👇 ИЗМЕНЕНО: «забытые зоны» — только для зала
+        if (_activeProfile != null && _activeProfile!.equipment != 'home') {
           await _generateForgottenZonesWorkout(updated, _activeProfile!);
         }
 
         if (!mounted) return;
+
+        // 👇 ИЗМЕНЕНО: вопрос о самочувствии убран — он теперь в кнопке
+        // «Начать тренировку» (workout_detail_screen.dart)
         final result = await Navigator.push(
           context,
           MaterialPageRoute(
@@ -382,6 +527,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       return;
     }
 
+    // 👇 ИЗМЕНЕНО: вопрос о самочувствии убран — он теперь в кнопке
+    // «Начать тренировку» (workout_detail_screen.dart)
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -402,27 +549,17 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     }
 
     final allExercises = await DatabaseHelper.instance.getExercises();
-    // 👇 v21: ограничения → зоны через карту из base_exercises.dart.
-    // Раньше 'knees'/'neck'/'shoulders' с кодами зон не совпадали
-    // и фильтр зон не срабатывал никогда.
+    // 👇 v21: ограничения → зоны через карту из base_exercises.dart
     final blockedZones = zonesBlockedByLimitations(profile.limitations);
 
-    // 👇 ФИЛЬТР: ПРОВЕРЯЕМ ПОДХОДИТ ЛИ УПРАЖНЕНИЕ
     bool isExerciseAllowed(Exercise e) {
-      // Ограничения по здоровью: точное пересечение кодов
-      // вместо substring-матчинга
       if (exerciseBlockedByLimitations(e, profile.limitations)) return false;
-
-      // Оборудование
       if (!WorkoutGenerator.matchesEquipment(e, profile.equipment)) return false;
-
-      // Уровень (новичкам не даем штангу и сложные элементы)
       if (profile.level == 'beginner') {
         final lowerName = e.name.toLowerCase();
         if (lowerName.contains('штанг') || lowerName.contains('на одной ноге') || lowerName.contains('в висе')) return false;
         if (e.difficulty == 'advanced') return false;
       }
-
       return true;
     }
 
@@ -470,7 +607,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         if (e.id == null) return false;
         if (usedIds.contains(e.id)) return false;
         if (isBaseExercise(e) || e.muscleGroups.contains('cardio')) return false;
-        if (!isExerciseAllowed(e)) return false; // 👈 ПРИМЕНЯЕМ ФИЛЬТР И ЗДЕСЬ
+        if (!isExerciseAllowed(e)) return false;
         return e.muscleGroups.contains(zone);
       }).toList()..shuffle();
 
@@ -557,11 +694,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               'assets/flowers/garden_icon.png',
               width: 32,
               height: 32,
-              cacheWidth: 80, // 👈 Сжимаем иконку для скорости
+              cacheWidth: 80,
               fit: BoxFit.contain,
             ),
             onPressed: () async {
-              // 👇 ПРЕДЗАГРУЗКА ФОНА, ЧТОБЫ САД ОТКРЫВАЛСЯ МГНОВЕННО
               await precacheImage(const AssetImage('assets/flowers/grass_bg.png'), context);
               if (!mounted) return;
 
@@ -590,7 +726,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             },
           ),
 
-          // 👇 НОВОЕ: «Обновить план» в шапке — только если план существует
+          // 👇 «Обновить план» в шапке — только если план существует
           if (_monthDays.isNotEmpty)
             IconButton(
               tooltip: 'Обновить план',
@@ -641,6 +777,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     );
   }
   // ═══ КОНЕЦ ЧАСТИ 2 ═══
+
   Widget _buildWeekChips(BuildContext context) {
     final theme = Theme.of(context);
     return SingleChildScrollView(
@@ -791,7 +928,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               const SizedBox(width: 12),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFFDCB6E), Color(0xFFE17055)]), borderRadius: BorderRadius.circular(10), boxShadow: [BoxShadow(color: const Color(0xFFFDCB6E).withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 3))]),
+                decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFFDCB6E), Color(0xFFE17055)]), borderRadius: BorderRadius.circular(10), boxShadow: [BoxShadow(color: Color(0xFFFDCB6E).withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 3))]),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [const Text('🔥', style: TextStyle(fontSize: 14)), const SizedBox(width: 4), Text('$_streak ${_streakWord(_streak)} подряд', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))]),
               ),
             ],
@@ -818,7 +955,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   // ═══ ДАТЫ И ПЕРЕНОС ═══
 
   String _fmtDate(WorkoutDay day) {
-    // Выполненная тренировка показывает факт, остальные — план
     if (day.status == 'completed' && day.completedAt != null) {
       return 'Выполнено: ${_fmtPlain(day.completedAt!)}';
     }
@@ -858,7 +994,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       return;
     }
 
-    // Не даём встать на день, где уже запланирована другая тренировка
     final occupied = _monthDays.any((d) =>
     d.id != day.id &&
         d.status == 'planned' &&

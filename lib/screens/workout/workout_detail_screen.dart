@@ -1246,7 +1246,7 @@ mainAxisSize: MainAxisSize.min,
 children: [
 // 👇 Фея приветствует — над текстом вопроса
 Image.asset(
-'assets/images/fairy/fairy_happy.png',
+'assets/fairy/fairy_happy.png',
 width: 100,
 height: 100,
 fit: BoxFit.contain,
